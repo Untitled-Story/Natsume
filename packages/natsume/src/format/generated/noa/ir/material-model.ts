@@ -6,5 +6,7 @@ export enum MaterialModel {
   Unknown = 0,
   ParticleUnlit = 1,
   ParticleAddAlpha = 2,
-  ParticleMultiply = 3
+  ParticleMultiply = 3,
+  LegacyParticleAdditive = 4,
+  LegacyParticleAlphaBlend = 5
 }

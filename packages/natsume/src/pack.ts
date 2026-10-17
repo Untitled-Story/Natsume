@@ -109,6 +109,14 @@ export class EffectPack {
       }
     }
     visit(this.document);
+    if (
+      this.document.features.some(
+        (f) => f.name === 'host.legacy-particle-environment' && f.required,
+      )
+    ) {
+      slots.add('source-scene-fog');
+      slots.add('source-soft-particles');
+    }
     return freeze({
       counts: {
         nodes: this.nodes.length,

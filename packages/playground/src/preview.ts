@@ -192,7 +192,11 @@ export function clearPreview(): void {
 export async function showPreview(pack: EffectPack, signal: AbortSignal): Promise<void> {
   await init();
   if (signal.aborted) return;
-  const created = await runtime!.instantiate(pack, { seed: 12345, approximateNoise: true });
+  const created = await runtime!.instantiate(pack, {
+    seed: 12345,
+    approximateNoise: true,
+    particleEnvironment: { fog: { mode: 'none' } },
+  });
   if (signal.aborted) {
     created.destroy();
     return;

@@ -61,6 +61,12 @@ export const KNOWN_FEATURES: Readonly<Record<string, number>> = Object.freeze(
       'particle.renderer',
       'particle.emission',
       'particle.shape.circle',
+      'particle.shape.sphere',
+      'particle.shape.hemisphere',
+      'particle.shape.box',
+      'particle.shape.cone',
+      'particle.shape.cone-volume',
+      'particle.shape.edge',
       'particle.color',
       'particle.size',
       'particle.rotation',
@@ -73,6 +79,9 @@ export const KNOWN_FEATURES: Readonly<Record<string, number>> = Object.freeze(
       'color.authored',
       'material.particle-add-alpha',
       'material.particle-unlit',
+      'material.unity-legacy-particle-additive',
+      'material.unity-legacy-particle-alpha-blend',
+      'host.legacy-particle-environment',
       'mesh.nomesh',
     ].map((name) => [name, 1]),
   ),
@@ -212,6 +221,22 @@ export function validateDocument(document: DocumentT): void {
       `Missing required ${name}@1 declaration`,
     );
   const checkTable = (name: string, o: ObjectValue) => {
+    const extent = (key: string) => {
+      const p = object(o[key]);
+      if (p.mode === 0) check(number(p, 'constantMax') >= 0, 'SEMANTIC', 'Negative shape extent');
+      if (p.mode === 2)
+        check(
+          number(p, 'constantMin') >= 0 && number(p, 'constantMax') >= 0,
+          'SEMANTIC',
+          'Negative shape extent',
+        );
+    };
+    const arc = () =>
+      check(
+        number(o, 'arcRadians') >= 0 && number(o, 'arcRadians') <= Math.PI * 2 + 2e-7,
+        'SEMANTIC',
+        'Invalid shape arc',
+      );
     switch (name) {
       case 'Transform':
         present(o, 'position', 'rotation', 'scale');
@@ -300,11 +325,51 @@ export function validateDocument(document: DocumentT): void {
       case 'ParticleModule':
         check(o.dataType !== 0 && o.data, 'SEMANTIC', 'Missing particle module');
         break;
-      case 'ShapeModule':
+      case 'ShapeModule': {
         check(o.geometryType !== 0 && o.geometry, 'SEMANTIC', 'Missing shape geometry');
+        const g = object(o.geometry);
+        const feature = [
+          '',
+          'circle',
+          'box',
+          g.hemisphere ? 'hemisphere' : 'sphere',
+          g.region === 1 ? 'cone-volume' : 'cone',
+          'edge',
+        ][Number(o.geometryType)];
+        requireFeature(`particle.shape.${feature}`);
+        unit(number(o, 'randomDirection'), 'random direction');
+        unit(number(o, 'sphericalDirection'), 'spherical direction');
+        check(number(o, 'randomPosition') >= 0, 'SEMANTIC', 'Negative shape jitter');
         break;
+      }
       case 'CircleShape':
+      case 'ConeShape':
+        extent('radius');
         unit(number(o, 'radiusThickness'), 'radius thickness');
+        unit(number(o, 'arcSpread'), 'arc spread');
+        unit(number(o, 'radiusSpread'), 'radius spread');
+        arc();
+        if (name === 'ConeShape')
+          check(
+            number(o, 'angleRadians') >= 0 &&
+              number(o, 'angleRadians') <= Math.PI / 2 + 1e-7 &&
+              number(o, 'length') >= 0,
+            'SEMANTIC',
+            'Invalid cone',
+          );
+        break;
+      case 'SphereShape':
+        extent('radius');
+        unit(number(o, 'radiusThickness'), 'radius thickness');
+        break;
+      case 'BoxShape': {
+        const t = object(o.thickness);
+        for (const axis of ['x', 'y', 'z']) unit(number(t, axis), 'box thickness');
+        break;
+      }
+      case 'EdgeShape':
+        extent('halfLength');
+        unit(number(o, 'spread'), 'edge spread');
         break;
       case 'NoiseModule':
         check(
@@ -459,6 +524,16 @@ export function validateDocument(document: DocumentT): void {
     }
   };
   visit('Document', document);
+  for (const material of document.materials)
+    if (material.model === 4 || material.model === 5) {
+      requireFeature(
+        material.model === 4
+          ? 'material.unity-legacy-particle-additive'
+          : 'material.unity-legacy-particle-alpha-blend',
+      );
+      requireFeature('host.legacy-particle-environment');
+      check(material.shaderDataAssetId > 0, 'SEMANTIC', 'Legacy material requires a shader recipe');
+    }
   if (document.components.some((value) => value.dataType === 3)) requireFeature('color.authored');
 }
 

@@ -4,7 +4,9 @@
 
 import * as flatbuffers from 'flatbuffers';
 
+import { ConeRegion } from '../../noa/ir/cone-region.js';
 import { ScalarParameter, ScalarParameterT } from '../../noa/ir/scalar-parameter.js';
+import { ShapeSweep } from '../../noa/ir/shape-sweep.js';
 
 
 export class ConeShape implements flatbuffers.IUnpackableObject<ConeShapeT> {
@@ -40,8 +42,53 @@ length():number {
   return offset ? this.bb!.readFloat32(this.bb_pos + offset) : 0.0;
 }
 
+region():ConeRegion {
+  const offset = this.bb!.__offset(this.bb_pos, 10);
+  return offset ? this.bb!.readUint8(this.bb_pos + offset) : ConeRegion.Base;
+}
+
+radiusThickness():number {
+  const offset = this.bb!.__offset(this.bb_pos, 12);
+  return offset ? this.bb!.readFloat32(this.bb_pos + offset) : 1.0;
+}
+
+arcRadians():number {
+  const offset = this.bb!.__offset(this.bb_pos, 14);
+  return offset ? this.bb!.readFloat32(this.bb_pos + offset) : 6.2831853;
+}
+
+radiusMode():ShapeSweep {
+  const offset = this.bb!.__offset(this.bb_pos, 16);
+  return offset ? this.bb!.readUint8(this.bb_pos + offset) : ShapeSweep.Random;
+}
+
+radiusSpeed(obj?:ScalarParameter):ScalarParameter|null {
+  const offset = this.bb!.__offset(this.bb_pos, 18);
+  return offset ? (obj || new ScalarParameter()).__init(this.bb!.__indirect(this.bb_pos + offset), this.bb!) : null;
+}
+
+radiusSpread():number {
+  const offset = this.bb!.__offset(this.bb_pos, 20);
+  return offset ? this.bb!.readFloat32(this.bb_pos + offset) : 0.0;
+}
+
+arcMode():ShapeSweep {
+  const offset = this.bb!.__offset(this.bb_pos, 22);
+  return offset ? this.bb!.readUint8(this.bb_pos + offset) : ShapeSweep.Random;
+}
+
+arcSpeed(obj?:ScalarParameter):ScalarParameter|null {
+  const offset = this.bb!.__offset(this.bb_pos, 24);
+  return offset ? (obj || new ScalarParameter()).__init(this.bb!.__indirect(this.bb_pos + offset), this.bb!) : null;
+}
+
+arcSpread():number {
+  const offset = this.bb!.__offset(this.bb_pos, 26);
+  return offset ? this.bb!.readFloat32(this.bb_pos + offset) : 0.0;
+}
+
 static startConeShape(builder:flatbuffers.Builder) {
-  builder.startObject(3);
+  builder.startObject(12);
 }
 
 static addRadius(builder:flatbuffers.Builder, radiusOffset:flatbuffers.Offset) {
@@ -56,24 +103,62 @@ static addLength(builder:flatbuffers.Builder, length:number) {
   builder.addFieldFloat32(2, length, 0.0);
 }
 
+static addRegion(builder:flatbuffers.Builder, region:ConeRegion) {
+  builder.addFieldInt8(3, region, ConeRegion.Base);
+}
+
+static addRadiusThickness(builder:flatbuffers.Builder, radiusThickness:number) {
+  builder.addFieldFloat32(4, radiusThickness, 1.0);
+}
+
+static addArcRadians(builder:flatbuffers.Builder, arcRadians:number) {
+  builder.addFieldFloat32(5, arcRadians, 6.2831853);
+}
+
+static addRadiusMode(builder:flatbuffers.Builder, radiusMode:ShapeSweep) {
+  builder.addFieldInt8(6, radiusMode, ShapeSweep.Random);
+}
+
+static addRadiusSpeed(builder:flatbuffers.Builder, radiusSpeedOffset:flatbuffers.Offset) {
+  builder.addFieldOffset(7, radiusSpeedOffset, 0);
+}
+
+static addRadiusSpread(builder:flatbuffers.Builder, radiusSpread:number) {
+  builder.addFieldFloat32(8, radiusSpread, 0.0);
+}
+
+static addArcMode(builder:flatbuffers.Builder, arcMode:ShapeSweep) {
+  builder.addFieldInt8(9, arcMode, ShapeSweep.Random);
+}
+
+static addArcSpeed(builder:flatbuffers.Builder, arcSpeedOffset:flatbuffers.Offset) {
+  builder.addFieldOffset(10, arcSpeedOffset, 0);
+}
+
+static addArcSpread(builder:flatbuffers.Builder, arcSpread:number) {
+  builder.addFieldFloat32(11, arcSpread, 0.0);
+}
+
 static endConeShape(builder:flatbuffers.Builder):flatbuffers.Offset {
   const offset = builder.endObject();
   return offset;
 }
 
-static createConeShape(builder:flatbuffers.Builder, radiusOffset:flatbuffers.Offset, angleRadians:number, length:number):flatbuffers.Offset {
-  ConeShape.startConeShape(builder);
-  ConeShape.addRadius(builder, radiusOffset);
-  ConeShape.addAngleRadians(builder, angleRadians);
-  ConeShape.addLength(builder, length);
-  return ConeShape.endConeShape(builder);
-}
 
 unpack(): ConeShapeT {
   return new ConeShapeT(
     (this.radius() !== null ? this.radius()!.unpack() : null),
     this.angleRadians(),
-    this.length()
+    this.length(),
+    this.region(),
+    this.radiusThickness(),
+    this.arcRadians(),
+    this.radiusMode(),
+    (this.radiusSpeed() !== null ? this.radiusSpeed()!.unpack() : null),
+    this.radiusSpread(),
+    this.arcMode(),
+    (this.arcSpeed() !== null ? this.arcSpeed()!.unpack() : null),
+    this.arcSpread()
   );
 }
 
@@ -82,6 +167,15 @@ unpackTo(_o: ConeShapeT): void {
   _o.radius = (this.radius() !== null ? this.radius()!.unpack() : null);
   _o.angleRadians = this.angleRadians();
   _o.length = this.length();
+  _o.region = this.region();
+  _o.radiusThickness = this.radiusThickness();
+  _o.arcRadians = this.arcRadians();
+  _o.radiusMode = this.radiusMode();
+  _o.radiusSpeed = (this.radiusSpeed() !== null ? this.radiusSpeed()!.unpack() : null);
+  _o.radiusSpread = this.radiusSpread();
+  _o.arcMode = this.arcMode();
+  _o.arcSpeed = (this.arcSpeed() !== null ? this.arcSpeed()!.unpack() : null);
+  _o.arcSpread = this.arcSpread();
 }
 }
 
@@ -89,17 +183,38 @@ export class ConeShapeT implements flatbuffers.IGeneratedObject {
 constructor(
   public radius: ScalarParameterT|null = null,
   public angleRadians: number = 0.0,
-  public length: number = 0.0
+  public length: number = 0.0,
+  public region: ConeRegion = ConeRegion.Base,
+  public radiusThickness: number = 1.0,
+  public arcRadians: number = 6.2831853,
+  public radiusMode: ShapeSweep = ShapeSweep.Random,
+  public radiusSpeed: ScalarParameterT|null = null,
+  public radiusSpread: number = 0.0,
+  public arcMode: ShapeSweep = ShapeSweep.Random,
+  public arcSpeed: ScalarParameterT|null = null,
+  public arcSpread: number = 0.0
 ){}
 
 
 pack(builder:flatbuffers.Builder): flatbuffers.Offset {
   const radius = (this.radius !== null ? this.radius!.pack(builder) : 0);
+  const radiusSpeed = (this.radiusSpeed !== null ? this.radiusSpeed!.pack(builder) : 0);
+  const arcSpeed = (this.arcSpeed !== null ? this.arcSpeed!.pack(builder) : 0);
 
-  return ConeShape.createConeShape(builder,
-    radius,
-    this.angleRadians,
-    this.length
-  );
+  ConeShape.startConeShape(builder);
+  ConeShape.addRadius(builder, radius);
+  ConeShape.addAngleRadians(builder, this.angleRadians);
+  ConeShape.addLength(builder, this.length);
+  ConeShape.addRegion(builder, this.region);
+  ConeShape.addRadiusThickness(builder, this.radiusThickness);
+  ConeShape.addArcRadians(builder, this.arcRadians);
+  ConeShape.addRadiusMode(builder, this.radiusMode);
+  ConeShape.addRadiusSpeed(builder, radiusSpeed);
+  ConeShape.addRadiusSpread(builder, this.radiusSpread);
+  ConeShape.addArcMode(builder, this.arcMode);
+  ConeShape.addArcSpeed(builder, arcSpeed);
+  ConeShape.addArcSpread(builder, this.arcSpread);
+
+  return ConeShape.endConeShape(builder);
 }
 }

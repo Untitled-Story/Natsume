@@ -52,6 +52,29 @@ Stretch 已测范围：`cameraVelocityScale=0`、`velocityScale=0`、`rotateWith
 
 已知差异：Unity 中速度与生命周期尺寸随机值存在约 0.12–0.13 的弱相关，Natsume 未拟合；零半径 Shape 在 Unity 中仍有约 10⁻⁴ 半径，Natsume 使用精确 0。
 
+## 基础 Shape 扩展
+
+新增 31 组原生采样，每组 16,384 粒子；其中 30 组参与 Natsume 分布比较，Align to Direction 仅保留原生数据，尚未实现。位置和速度均在 Shape TRS 之前比较，不要求随机序列逐粒子一致。
+
+| 项目                      | Unity 实测语义                                                               | 差异说明          |
+| ------------------------- | ---------------------------------------------------------------------------- | ----------------- |
+| Sphere / Hemisphere       | 球体体积按半径立方采样；Hemisphere 位于 +Z 半球                              | 下列合计统计范围  |
+| Box Volume / Shell / Edge | 体积、面、边分别采样；Shell / Edge 厚度向负角收缩                            | 下列合计统计范围  |
+| Cone Base / Volume        | 底面按平方半径采样；Volume 沿归一化发射方向均匀取长度                        | 下列合计统计范围  |
+| Edge                      | 沿 X 轴采样，默认初速度 +Y；三组厚度下初速度均值 / 最小 / 最大均为 `(0,1,0)` | 方向与 Unity 一致 |
+| 随机 / 球面方向           | 对局部初速度方向插值后归一化                                                 | 下列合计统计范围  |
+
+30 组、Natsume 种子 12345 的最大实测统计差：各轴均值 **0.01741**、二阶矩 **0.02191**，半径均值 **0.00582**、半径二阶矩 **0.00916**。包含位置与单位速度，均为绝对差，不能解释为逐粒子误差或百分比。对应回归容差依次为 0.025、0.035、0.025、0.045。
+
+## 旋转与预热
+
+| 项目                   | 已测范围                                                                                   | 差异说明                                             |
+| ---------------------- | ------------------------------------------------------------------------------------------ | ---------------------------------------------------- |
+| Rotation over Lifetime | Z / XYZ 常量角速度，以及生命周期线性曲线；取步进前的粒子年龄采样，dt=1/60                  | 各轴角度绝对差回归容差 < 10⁻⁵ rad                    |
+| 循环预热               | 5 组直接 Play，duration 为 1 / 3 秒，常量寿命为 1 / 2 / 4 秒；预模拟完整周期至覆盖最大寿命 | 已测计数差 ≤ 2 粒；剩余寿命中位数差回归容差 < 0.12 s |
+
+预热的发射与死亡边界仍有差异，不保证逐粒子年龄或随机序列相同。曲线寿命预热尚未支持；`Simulate(0, restart=true)` 后 Play 的启动状态与直接 Play 不同，不计入上述比较。
+
 ## 发射与序列帧
 
 | 项目             | 已对齐行为                                                                                    | 剩余差异                                                                               |
@@ -77,4 +100,6 @@ Stretch 已测范围：`cameraVelocityScale=0`、`velocityScale=0`、`rotateWith
 - [unity-boundaries.json](../../packages/natsume/tests/fixtures/unity-boundaries.json)：发射、运动、外观、顶点及 UV 的原生数值摘录。
 - [unity-random.json](../../packages/natsume/tests/fixtures/unity-random.json)：随机分布、均值、方差与相关性。
 - [unity-shape.json](../../packages/natsume/tests/fixtures/unity-shape.json)：位置扰动统计与 Burst Spread 坐标。
+- [unity-basic-shapes.json](../../packages/natsume/tests/fixtures/unity-basic-shapes.json)：基础 Shape、厚度与方向分布。
+- [unity-rotation-prewarm.json](../../packages/natsume/tests/fixtures/unity-rotation-prewarm.json)：旋转与预热的原生数值。
 - 完整本地采样位于仓库 data/unity-baselines/，不提交 Git。

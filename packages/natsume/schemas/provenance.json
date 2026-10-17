@@ -1,9 +1,12 @@
 {
   "repository": "https://github.com/Untitled-Story/Noa",
-  "commit": "86b25b0552f183f9b51852f50a7fbfae14c160ac",
+  "commit": "d3859cd0e13b930bcf35a260fe6106564e5b5b74",
+  "localCorrections": [
+    "Edge +Y direction comment verified against Unity 2022.3.21f1; no binary layout change"
+  ],
   "flatc": "25.12.19",
   "sha256": {
-    "noir.fbs": "ac42a46543616b377b0943a34440cb6787f61d315dc9269196111c84b3152b72",
+    "noir.fbs": "e14dda463ea329d10d139ba03b9260c493e0e2a260bc12d06ed53f332e281c1b",
     "mesh.fbs": "557d1dc6029a9c3ff537fad08c45bd75bb10d1c0881425385217b25484127c99"
   }
 }

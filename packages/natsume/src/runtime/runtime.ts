@@ -18,8 +18,11 @@ import {
 } from '../rendering/particle-mesh.js';
 import { Simulation, type SimulationOptions } from './simulation.js';
 import type { SceneNode } from './scene.js';
+import { copyEnvironment, type ParticleEnvironment } from '../rendering/particle-environment.js';
 
 export interface InstanceOptions extends SimulationOptions {
+  /** Host fog and soft-particle inputs; required for Unity legacy particle materials. */
+  readonly particleEnvironment?: ParticleEnvironment;
   readonly sourceColorSpace?: SourceColorSpace;
   /** Column-major affine transform into Pixi local coordinates, including clip-depth Z. */
   readonly displayMatrix?: ArrayLike<number>;
@@ -110,12 +113,14 @@ export class EffectInstance {
   private disposed = false;
   private destroying = false;
   private colorSpace: SourceColorSpace;
+  private environment: ParticleEnvironment | undefined;
   constructor(
     readonly simulation: Simulation,
     private readonly runtime: NatsumeRuntime,
     private readonly releaseTextures: () => void,
     options: InstanceOptions,
   ) {
+    this.environment = copyEnvironment(options.particleEnvironment);
     this.colorSpace =
       options.sourceColorSpace ??
       (simulation.pack.document.colorContext?.projectColorSpace === ColorSpace.Linear
@@ -184,6 +189,14 @@ export class EffectInstance {
     this.assertAlive();
     check(value === 'gamma' || value === 'linear', 'HOST', 'Unknown color space');
     this.colorSpace = value;
+    this.render();
+  }
+  /** Replaces fog/depth inputs. Host depth textures remain borrowed. */
+  setParticleEnvironment(value: ParticleEnvironment): void {
+    this.assertAlive();
+    const next = copyEnvironment(value);
+    this.environment = next;
+    for (const mesh of this.meshes) mesh.environment = next;
     this.render();
   }
   setDisplayMatrix(matrix: ArrayLike<number>): void {
@@ -308,6 +321,7 @@ export class EffectInstance {
     }
   }
   /** @internal */ addMesh(mesh: ParticleMesh): void {
+    mesh.environment = this.environment;
     this.meshes.push(mesh);
     this.container.addChild(mesh);
   }
@@ -400,6 +414,8 @@ export class NatsumeRuntime {
   }
   async instantiate(pack: EffectPack, options: InstanceOptions = {}): Promise<EffectInstance> {
     check(!this.disposed, 'DISPOSED', 'Runtime has been destroyed');
+    const environment = copyEnvironment(options.particleEnvironment);
+    options = { ...options, ...(environment ? { particleEnvironment: environment } : {}) };
     const simulation = new Simulation(pack, options),
       releases: (() => void)[] = [];
     const instance = new EffectInstance(
@@ -443,7 +459,9 @@ export class NatsumeRuntime {
         releases.push(lease.release);
         const texture = await lease.promise;
         check(!this.disposed, 'DISPOSED', 'Runtime was destroyed during instantiation');
-        instance.addMesh(new ParticleMesh(emitter, data, material, texture, pack));
+        instance.addMesh(
+          new ParticleMesh(emitter, data, material, texture, pack, options.particleEnvironment),
+        );
       }
       instance.initializeScripts();
       this.instances.add(instance);

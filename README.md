@@ -55,6 +55,28 @@ app.destroy();
 
 也可以通过 `new NatsumeRuntime(renderer)` 手动管理运行时。当前包为私有 workspace 包，尚未发布到 npm。
 
+## 粒子绘制环境
+
+Legacy Additive / Alpha Blended 材质需要显式提供环境。普通二维预览可关闭雾效；未提供 `depth` 时使用 `effect.container.zIndex`，负值按零处理：
+
+```ts
+const effect = await runtime.instantiate(pack, {
+  particleEnvironment: { fog: { mode: 'none' } },
+});
+effect.container.zIndex = 10;
+
+// 可在暂停时更新；颜色使用源项目工作色彩空间。
+effect.setParticleEnvironment({
+  fog: { mode: 'linear', color: [0.5, 0.5, 0.5], start: 5, end: 30 },
+  depth: 10,
+  softParticles: { depthTexture: sceneDepthTexture },
+});
+```
+
+雾效支持 `none`、`linear`、`exp`、`exp2`。`depth` 也可传 `[a, b, c, d]`，以 Unity 世界坐标计算 `ax + by + cz + d`。当前采用固定 +Z 观察与仿射深度，不提供完整 Unity 相机。
+
+软粒子需要宿主提供背景深度纹理：R 通道存线性观察距离，与粒子 `depth` 使用相同单位；未提供纹理则关闭软粒子。纹理按屏幕左上原点的归一化 UV 采样，可用 `uvTransform: [sx, sy, ox, oy]` 调整。Natsume 借用纹理，由宿主管理其更新和销毁；`zIndex` 仅是默认的逻辑深度，不会生成背景深度图。
+
 ## Script Bridge
 
 在实例化前，用包内 MonoBehaviour 的真实身份注册行为。以下示例将该组件所在节点及其子树绘制到父节点原点，保留粒子模拟与深度：
@@ -86,7 +108,7 @@ runtime.registerScript(
 
 ## 模块支持状态
 
-按 [Unity 2022.3 粒子系统模块](https://docs.unity3d.com/2022.3/Documentation/Manual/ParticleSystemModules.html) 分类：Supported 2 项、Partial 9 项、Unsupported 13 项。以下指 Natsume 的运行能力；包能读取不代表其中的配置都能执行。
+按 [Unity 2022.3 粒子系统模块](https://docs.unity3d.com/2022.3/Documentation/Manual/ParticleSystemModules.html) 分类：Supported 2 项、Partial 10 项、Unsupported 12 项。以下指 Natsume 的运行能力；包能读取不代表其中的配置都能执行。
 
 ### Supported
 
@@ -99,17 +121,20 @@ runtime.registerScript(
 
 ### Partial
 
-| 模块                         | 已支持                                                                                     | 未支持                                                                                                |
-| ---------------------------- | ------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
-| Main                         | 循环、初始寿命 / 速度 / 尺寸 / 旋转 / 颜色、种子；Local 模拟与缩放                         | 重力、启动延迟、预热、旋转翻转；World / Custom 模拟、Hierarchy / Shape 缩放；非 1 的 Simulation Speed |
-| Emission                     | Rate over Time、Burst（含正间隔无限重复）                                                  | Rate over Distance；零间隔无限 Burst                                                                  |
-| Shape                        | Circle、随机弧、Burst Spread、位置扰动、Shape TRS                                          | 其他形状、方向修饰、Loop / PingPong 扫描、Spread 量化                                                 |
-| Velocity over Lifetime       | Local 线性 / 轨道 / 径向速度、Speed Multiplier                                             | World 空间                                                                                            |
-| Limit Velocity over Lifetime | Local 标量限速、Dampen                                                                     | 分轴限速、World 空间、Drag                                                                            |
-| Noise                        | 显式启用的 Curl Noise 近似：High、1 octave、仅位置扰动                                     | 其他 Quality、多 octave、Scroll、Remap、旋转 / 尺寸扰动；Unity 同种子轨迹                             |
-| Texture Sheet Animation      | Lifetime、Whole Sheet、UV0                                                                 | Single Row、Speed / FPS 时间模式、Sprites 模式、其他 UV 通道                                          |
-| Custom Data                  | Custom1.x Vector                                                                           | 完整 Vector / Color、Custom2                                                                          |
-| Renderer                     | World Billboard、有限 Stretched Billboard、World / View 单 Mesh 与单材质；ParticleAddAlpha | 其他对齐方式、横 / 竖 Billboard、粒子排序、Pivot / Flip、最小尺寸、多 Mesh / 材质、其他材质模型       |
+| 模块                         | 已支持                                                                                                                                                                  | 未支持                                                                                          |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| Main                         | 循环、初始寿命 / 速度 / 尺寸 / 旋转 / 颜色、种子；Local 模拟与缩放；有限预热                                                                                            | 重力、启动延迟、旋转翻转；World / Custom 模拟、Hierarchy / Shape 缩放；非 1 的 Simulation Speed |
+| Emission                     | Rate over Time、Burst（含正间隔无限重复）                                                                                                                               | Rate over Distance；零间隔无限 Burst                                                            |
+| Shape                        | Circle、Sphere / Hemisphere、Box 体积 / 壳 / 边、Cone 底面 / 体积、Edge；随机弧、Burst Spread、位置 / 方向扰动、Shape TRS                                               | 其他形状、Align to Direction、Loop / PingPong 扫描、Spread 量化                                 |
+| Rotation over Lifetime       | Z 或分轴角速度、生命周期曲线积分                                                                                                                                        | 已测范围以外的步长与原生积分差异                                                                |
+| Velocity over Lifetime       | Local 线性 / 轨道 / 径向速度、Speed Multiplier                                                                                                                          | World 空间                                                                                      |
+| Limit Velocity over Lifetime | Local 标量限速、Dampen                                                                                                                                                  | 分轴限速、World 空间、Drag                                                                      |
+| Noise                        | 显式启用的 Curl Noise 近似：High、1 octave、仅位置扰动                                                                                                                  | 其他 Quality、多 octave、Scroll、Remap、旋转 / 尺寸扰动；Unity 同种子轨迹                       |
+| Texture Sheet Animation      | Lifetime、Whole Sheet、UV0                                                                                                                                              | Single Row、Speed / FPS 时间模式、Sprites 模式、其他 UV 通道                                    |
+| Custom Data                  | Custom1.x Vector                                                                                                                                                        | 完整 Vector / Color、Custom2                                                                    |
+| Renderer                     | World / 固定 +Z View Billboard、有限 Stretched Billboard、World / View 单 Mesh 与单材质；ParticleAddAlpha、ParticleUnlit、Legacy Additive / Alpha Blended、雾效与软粒子 | 其他对齐方式、横 / 竖 Billboard、粒子排序、Pivot / Flip、最小尺寸、多 Mesh / 材质、其他材质模型 |
+
+预热限循环系统、Constant / Two Constants 寿命，按完整周期覆盖最大寿命；每发射器最多预模拟 30 秒，并限制总计算量。曲线寿命预热暂不支持。
 
 Stretched Billboard 仅支持非 Freeform、`rotateWithStretchDirection=true`、`cameraVelocityScale=velocityScale=0`；按 Unity +Z 观察及 XY 速度平面计算。
 
@@ -124,7 +149,6 @@ Stretched Billboard 仅支持非 Freeform、`rotateWithStretchDirection=true`、
 | Force over Lifetime       | 生命周期内施加力       |
 | Color by Speed            | 根据速度改变颜色       |
 | Size by Speed             | 根据速度改变尺寸       |
-| Rotation over Lifetime    | 生命周期内持续旋转     |
 | Rotation by Speed         | 根据速度改变旋转速度   |
 | External Forces           | 外部力场               |
 | Collision                 | 平面及场景碰撞         |

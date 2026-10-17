@@ -4,7 +4,7 @@ import { createServer } from 'vite';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { resolve } from 'node:path';
+import { resolve, relative } from 'node:path';
 import { cpus } from 'node:os';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
@@ -124,7 +124,11 @@ try {
       0,
     );
     const single = snapshot();
-    const second = await runtime.instantiate(pack, { seed: 12345, approximateNoise: true });
+    const second = await runtime.instantiate(pack, {
+      seed: 12345,
+      approximateNoise: true,
+      particleEnvironment: { fog: { mode: 'none' } },
+    });
     app.stage.addChild(second.container);
     const shared = snapshot();
     second.destroy();
@@ -134,7 +138,11 @@ try {
     const released = snapshot();
     const cycles = [];
     for (let i = 0; i < 3; i++) {
-      const instance = await runtime.instantiate(pack, { seed: 12345, approximateNoise: true });
+      const instance = await runtime.instantiate(pack, {
+        seed: 12345,
+        approximateNoise: true,
+        particleEnvironment: { fog: { mode: 'none' } },
+      });
       app.stage.addChild(instance.container);
       instance.play();
       instance.update(1 / 60);
@@ -184,12 +192,16 @@ try {
     );
   }
   const report = {
-    scenario: 'kirakira-preview-v1',
+    scenario: 'particle-preview-v1',
     measuredAt: new Date().toISOString(),
     node: process.version,
     cpu: cpus()[0]?.model,
     chromium: browser.version(),
-    sample: { sha256: createHash('sha256').update(bytes).digest('hex'), bytes: bytes.byteLength },
+    sample: {
+      file: relative(root, sample),
+      sha256: createHash('sha256').update(bytes).digest('hex'),
+      bytes: bytes.byteLength,
+    },
     sourceHash: createHash('sha256')
       .update(await readFile(resolve(root, 'packages/natsume/src/rendering/particle-mesh.ts')))
       .digest('hex'),
@@ -197,7 +209,7 @@ try {
   };
   await mkdir(resolve(root, 'data/performance'), { recursive: true });
   await writeFile(
-    resolve(root, 'data/performance/t0-preview.json'),
+    resolve(root, 'data/performance/preview-current.json'),
     `${JSON.stringify(report, null, 2)}\n`,
   );
   console.log(JSON.stringify(report));

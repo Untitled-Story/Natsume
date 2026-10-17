@@ -5,6 +5,7 @@
 import { BoxShape, BoxShapeT } from '../../noa/ir/box-shape.js';
 import { CircleShape, CircleShapeT } from '../../noa/ir/circle-shape.js';
 import { ConeShape, ConeShapeT } from '../../noa/ir/cone-shape.js';
+import { EdgeShape, EdgeShapeT } from '../../noa/ir/edge-shape.js';
 import { SphereShape, SphereShapeT } from '../../noa/ir/sphere-shape.js';
 
 
@@ -13,34 +14,37 @@ export enum ShapeGeometry {
   CircleShape = 1,
   BoxShape = 2,
   SphereShape = 3,
-  ConeShape = 4
+  ConeShape = 4,
+  EdgeShape = 5
 }
 
 export function unionToShapeGeometry(
   type: ShapeGeometry,
-  accessor: (obj:BoxShape|CircleShape|ConeShape|SphereShape) => BoxShape|CircleShape|ConeShape|SphereShape|null
-): BoxShape|CircleShape|ConeShape|SphereShape|null {
+  accessor: (obj:BoxShape|CircleShape|ConeShape|EdgeShape|SphereShape) => BoxShape|CircleShape|ConeShape|EdgeShape|SphereShape|null
+): BoxShape|CircleShape|ConeShape|EdgeShape|SphereShape|null {
   switch(ShapeGeometry[type]) {
-    case 'NONE': return null; 
+    case 'NONE': return null;
     case 'CircleShape': return accessor(new CircleShape())! as CircleShape;
     case 'BoxShape': return accessor(new BoxShape())! as BoxShape;
     case 'SphereShape': return accessor(new SphereShape())! as SphereShape;
     case 'ConeShape': return accessor(new ConeShape())! as ConeShape;
+    case 'EdgeShape': return accessor(new EdgeShape())! as EdgeShape;
     default: return null;
   }
 }
 
 export function unionListToShapeGeometry(
-  type: ShapeGeometry, 
-  accessor: (index: number, obj:BoxShape|CircleShape|ConeShape|SphereShape) => BoxShape|CircleShape|ConeShape|SphereShape|null, 
+  type: ShapeGeometry,
+  accessor: (index: number, obj:BoxShape|CircleShape|ConeShape|EdgeShape|SphereShape) => BoxShape|CircleShape|ConeShape|EdgeShape|SphereShape|null,
   index: number
-): BoxShape|CircleShape|ConeShape|SphereShape|null {
+): BoxShape|CircleShape|ConeShape|EdgeShape|SphereShape|null {
   switch(ShapeGeometry[type]) {
-    case 'NONE': return null; 
+    case 'NONE': return null;
     case 'CircleShape': return accessor(index, new CircleShape())! as CircleShape;
     case 'BoxShape': return accessor(index, new BoxShape())! as BoxShape;
     case 'SphereShape': return accessor(index, new SphereShape())! as SphereShape;
     case 'ConeShape': return accessor(index, new ConeShape())! as ConeShape;
+    case 'EdgeShape': return accessor(index, new EdgeShape())! as EdgeShape;
     default: return null;
   }
 }

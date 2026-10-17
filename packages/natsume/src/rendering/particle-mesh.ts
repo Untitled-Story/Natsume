@@ -26,6 +26,7 @@ import { VertexSemantic } from '../format/generated/noa/ir/vertex-semantic.js';
 import { mat4 } from 'gl-matrix';
 import { color, random, scalar, sheetFrame } from '../runtime/parameters.js';
 import type { Emitter } from '../runtime/emitter.js';
+import type { ParticleEnvironment } from './particle-environment.js';
 
 /** Dedicated pipe changes the two states Mesh's standard State cannot express,
  * and restores them so interleaved Pixi siblings/masks remain valid. */
@@ -40,11 +41,33 @@ class ParticleAdaptor extends GlMeshAdaptor {
     // The shader premultiplies the sampled straight-alpha PNG itself.
     // MeshPipe's automatic texture-alpha adjustment must not apply it again.
     mesh.state.blendMode = 'normal';
+    const particle = mesh as unknown as ParticleMesh;
+    particle.prepareEnvironment();
     // A parent Pixi ColorMask may narrow the material's write mask.
     renderer.colorMask.setMask(write & previous);
     gl.depthFunc(gl.LEQUAL);
     try {
-      super.execute(pipe, mesh);
+      if (particle.straightAlpha) {
+        renderer.state.set(mesh.state);
+        const srcRgb = gl.getParameter(gl.BLEND_SRC_RGB),
+          dstRgb = gl.getParameter(gl.BLEND_DST_RGB),
+          srcAlpha = gl.getParameter(gl.BLEND_SRC_ALPHA),
+          dstAlpha = gl.getParameter(gl.BLEND_DST_ALPHA);
+        try {
+          gl.blendFuncSeparate(
+            gl.SRC_ALPHA,
+            particle.additive ? gl.ONE : gl.ONE_MINUS_SRC_ALPHA,
+            gl.SRC_ALPHA,
+            particle.additive ? gl.ONE : gl.ONE_MINUS_SRC_ALPHA,
+          );
+          const shader = mesh.shader!;
+          shader.groups[100] = renderer.globalUniforms.bindGroup;
+          shader.groups[101] = pipe.localUniformsBindGroup;
+          renderer.encoder.draw({ geometry: mesh.geometry, shader });
+        } finally {
+          gl.blendFuncSeparate(srcRgb, dstRgb, srcAlpha, dstAlpha);
+        }
+      } else super.execute(pipe, mesh);
     } finally {
       renderer.colorMask.setMask(previous);
       gl.depthFunc(depth);
@@ -70,9 +93,14 @@ uniform mat3 uTransformMatrix;
 uniform vec4 uWorldColorAlpha;
 uniform vec4 uColor;
 uniform float uMaxSize;
+uniform float uModel;
+uniform float uDepthMode;
+uniform float uDepthConstant;
 out vec2 vUV;
 out vec4 vColor;
 out float vCustom;
+out float vDepth;
+out vec2 vScreenUV;
 void main(){
   mat3 transform=uProjectionMatrix*uWorldTransformMatrix*uTransformMatrix;
   vec3 p=transform*vec3(aPosition.xy,1.0);
@@ -81,6 +109,8 @@ void main(){
   float factor=min(1.0,uMaxSize/max(max(extent.x,extent.y)*0.5,0.000001));
   p.xy=center+(p.xy-center)*factor;
   gl_Position=vec4(p.xy,aPosition.z,1.0);
+  vScreenUV=vec2(p.x*0.5+0.5,0.5-p.y*0.5);
+  vDepth=max(0.0,uDepthMode>0.5?aCustom:uDepthConstant);
   vec4 host=uColor*uWorldColorAlpha;
   vec3 tint=host.a>0.0?host.rgb/host.a:vec3(0.0);
   vUV=aUV;vColor=aColor*vec4(tint,host.a);vCustom=aCustom;
@@ -89,10 +119,20 @@ const fragment = `#version 300 es
 in vec2 vUV;
 in vec4 vColor;
 in float vCustom;
+in float vDepth;
+in vec2 vScreenUV;
 uniform sampler2D uTexture;
 uniform float uLinear;
 uniform float uTextureSRGB;
 uniform float uVertexSRGB;
+uniform float uModel;
+uniform vec4 uTint;
+uniform vec4 uFog;
+uniform vec3 uFogColor;
+uniform float uSoft;
+uniform float uInvFade;
+uniform sampler2D uSceneDepth;
+uniform vec4 uDepthUV;
 out vec4 finalColor;
 vec3 toLinear(vec3 c){return mix(c/12.92,pow((c+0.055)/1.055,vec3(2.4)),step(vec3(0.04045),c));}
 void main(){
@@ -100,13 +140,30 @@ void main(){
   vec4 color=vColor;
   if(uLinear>0.5){if(uTextureSRGB>0.5)texel.rgb=toLinear(texel.rgb);if(uVertexSRGB>0.5)color.rgb=toLinear(color.rgb);}
   vec4 c=texel*color;
-  finalColor=vec4(c.rgb*c.a,vCustom<=0.5?c.a:0.0);
+  if(uModel>0.5){
+    vec4 tint=uTint;
+    if(uLinear>0.5)tint.rgb=toLinear(tint.rgb);
+    c*=tint;
+    if(uModel>1.5){
+      if(uSoft>0.5)c.a*=clamp(uInvFade*(texture(uSceneDepth,vScreenUV*uDepthUV.xy+uDepthUV.zw).r-vDepth),0.0,1.0);
+      c*=2.0;c.a=clamp(c.a,0.0,1.0);
+      float f=1.0;
+      if(uFog.x>0.5&&uFog.x<1.5)f=clamp((uFog.z-vDepth)/(uFog.z-uFog.y),0.0,1.0);
+      else if(uFog.x>1.5&&uFog.x<2.5)f=exp(-uFog.w*vDepth);
+      else if(uFog.x>2.5)f=exp(-pow(uFog.w*vDepth,2.0));
+      c.rgb=mix(uModel<2.5?vec3(0.0):uFogColor,c.rgb,f);
+    }
+    finalColor=c;
+  }else finalColor=vec4(c.rgb*c.a,vCustom<=0.5?c.a:0.0);
 }`;
 
 export type SourceColorSpace = 'gamma' | 'linear';
 export class ParticleMesh extends Mesh<Geometry, Shader> {
   override readonly renderPipeId = 'natsumeParticles';
   readonly colorWriteMask: number;
+  readonly straightAlpha: boolean;
+  readonly additive: boolean;
+  environment: ParticleEnvironment | undefined;
   private readonly vertices: Float32Array;
   private readonly vertexBuffer: Buffer;
   private readonly indexBuffer: Buffer;
@@ -126,12 +183,23 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
     readonly materialDefinition: R<MaterialT>,
     texture: Texture,
     pack: EffectPack,
+    environment?: ParticleEnvironment,
   ) {
     const material = materialDefinition;
+    const legacy =
+      material.model === MaterialModel.LegacyParticleAdditive ||
+      material.model === MaterialModel.LegacyParticleAlphaBlend;
+    const straight = legacy || material.model === MaterialModel.ParticleUnlit;
+    const additive = material.model === MaterialModel.LegacyParticleAdditive;
     check(
-      material.model === MaterialModel.ParticleAddAlpha,
+      material.model === MaterialModel.ParticleAddAlpha || straight,
       'CAPABILITY',
-      'Initial renderer supports ParticleAddAlpha',
+      'Unsupported particle material model',
+    );
+    check(
+      !legacy || environment,
+      'HOST',
+      'Legacy particles require an explicit particleEnvironment',
     );
     check(
       definition.mode === RenderMode.Billboard ||
@@ -142,7 +210,8 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
     );
     check(
       (definition.alignment === Alignment.World ||
-        (definition.mode === RenderMode.Mesh && definition.alignment === Alignment.View)) &&
+        ((definition.mode === RenderMode.Mesh || definition.mode === RenderMode.Billboard) &&
+          definition.alignment === Alignment.View)) &&
         definition.sort === 0 &&
         definition.sortingFudge === 0 &&
         !definition.pivot?.x &&
@@ -184,10 +253,10 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
           VertexSemantic.Position,
           VertexSemantic.Color,
           VertexSemantic.UV0,
-          VertexSemantic.Custom1,
+          ...(!straight ? [VertexSemantic.Custom1] : []),
         ].every((semantic) => definition.vertexStreams.some((s) => s.semantic === semantic)),
       'CAPABILITY',
-      'ParticleAddAlpha requires Position3/Color4/UV0_2/Custom1_1 vertex streams',
+      'Material requires compatible Position3/Color4/UV0_2 and optional Custom1_1 streams',
     );
     check(
       material.textures.length === 1 && material.textures[0]!.uvSet === 0,
@@ -201,15 +270,15 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
     );
     const state = material.renderState!;
     check(
-      state.srcRgb === B.One &&
-        state.dstRgb === B.OneMinusSrcAlpha &&
-        state.srcAlpha === B.One &&
-        state.dstAlpha === B.OneMinusSrcAlpha &&
+      state.srcRgb === (straight ? B.SrcAlpha : B.One) &&
+        state.dstRgb === (additive ? B.One : B.OneMinusSrcAlpha) &&
+        state.srcAlpha === (straight ? B.SrcAlpha : B.One) &&
+        state.dstAlpha === (additive ? B.One : B.OneMinusSrcAlpha) &&
         state.rgbOp === 0 &&
         state.alphaOp === 0 &&
         state.depthTest === CompareOp.LessEqual &&
         !state.depthWrite &&
-        state.cull === 0,
+        (state.cull === 0 || (material.model === MaterialModel.ParticleUnlit && state.cull === 2)),
       'CAPABILITY',
       'Unsupported material render state',
     );
@@ -283,7 +352,28 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
       glProgram: GlProgram.from({ name: 'natsume-particle-add-alpha', vertex, fragment }),
       resources: {
         uTexture: texture.source,
+        uSceneDepth: Texture.WHITE.source,
         colorUniforms: {
+          uModel: { value: legacy ? (additive ? 2 : 3) : straight ? 1 : 0, type: 'f32' },
+          uTint: {
+            value: new Float32Array([
+              material.tint?.r ?? 1,
+              material.tint?.g ?? 1,
+              material.tint?.b ?? 1,
+              material.tint?.a ?? 1,
+            ]),
+            type: 'vec4<f32>',
+          },
+          uDepthMode: { value: 0, type: 'f32' },
+          uDepthConstant: { value: 0, type: 'f32' },
+          uFog: { value: new Float32Array(4), type: 'vec4<f32>' },
+          uFogColor: { value: new Float32Array(3), type: 'vec3<f32>' },
+          uSoft: { value: 0, type: 'f32' },
+          uInvFade: {
+            value: material.floats.find((p) => p.name === '_InvFade')?.value ?? 1,
+            type: 'f32',
+          },
+          uDepthUV: { value: new Float32Array([1, 1, 0, 0]), type: 'vec4<f32>' },
           uVertexSRGB: { value: definition.applyActiveColorSpace ? 1 : 0, type: 'f32' },
           uMaxSize: {
             value: definition.mode !== RenderMode.Mesh ? definition.maxSize : 1e20,
@@ -300,8 +390,11 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
     const pixiState = new State();
     pixiState.depthTest = true;
     pixiState.depthMask = false;
-    pixiState.cullMode = 'none';
+    pixiState.cullMode = state.cull === 2 ? 'back' : 'none';
     super({ geometry, shader, state: pixiState, texture });
+    this.straightAlpha = straight;
+    this.additive = additive;
+    this.environment = environment;
     this.vertices = vertices;
     this.vertexBuffer = vertexBuffer;
     this.indexBuffer = indexBuffer;
@@ -315,6 +408,34 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
     this.label = `Natsume renderer ${emitter.id}`;
     this.visible = false;
   }
+  /** @internal Refreshes host inputs immediately before each draw, including paused instances. */
+  prepareEnvironment(): void {
+    const env = this.environment,
+      fog = env?.fog,
+      u = this.shader!.resources.colorUniforms.uniforms;
+    u.uDepthMode = Array.isArray(env?.depth) ? 1 : 0;
+    u.uDepthConstant = typeof env?.depth === 'number' ? env.depth : (this.parent?.zIndex ?? 0);
+    check(
+      Number.isFinite(u.uDepthConstant),
+      'HOST',
+      'Container zIndex must be finite for particle depth',
+    );
+    const f = u.uFog as Float32Array;
+    f.fill(0);
+    if (fog && fog.mode !== 'none') {
+      f[0] = fog.mode === 'linear' ? 1 : fog.mode === 'exp' ? 2 : 3;
+      if (fog.mode === 'linear') {
+        f[1] = fog.start;
+        f[2] = fog.end;
+      } else f[3] = fog.density;
+      (u.uFogColor as Float32Array).set(fog.color);
+    }
+    const soft = env?.softParticles;
+    check(!soft?.depthTexture.destroyed, 'HOST', 'Host depth texture has been destroyed');
+    u.uSoft = soft ? 1 : 0;
+    this.shader!.resources.uSceneDepth = soft?.depthTexture.source ?? Texture.WHITE.source;
+    (u.uDepthUV as Float32Array).set(soft?.uvTransform ?? [1, 1, 0, 0]);
+  }
   sync(matrix: ArrayLike<number>, colorSpace: SourceColorSpace): void {
     const e = this.emitter,
       n = e.count;
@@ -325,7 +446,7 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
       v = this.vertices,
       stride = this.basePositions.length,
       material = this.materialDefinition,
-      tint = material.tint;
+      tint = this.straightAlpha ? null : material.tint;
     mat4.fromQuat(this.rotationMatrix, e.node.worldRotation);
     const rotation = this.rotationMatrix,
       localScale = e.node.source.transform!.scale!,
@@ -442,7 +563,11 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
         v[k + 6] = e.startColors[i * 4 + 1]! * this.scratchColor[1]! * (tint?.g ?? 1);
         v[k + 7] = e.startColors[i * 4 + 2]! * this.scratchColor[2]! * (tint?.b ?? 1);
         v[k + 8] = e.startColors[i * 4 + 3]! * this.scratchColor[3]! * (tint?.a ?? 1);
-        v[k + 9] = custom;
+        const depth = this.environment?.depth;
+        v[k + 9] =
+          this.straightAlpha && Array.isArray(depth)
+            ? depth[0]! * wx + depth[1]! * wy + depth[2]! * wz + depth[3]!
+            : custom;
       }
       if (this.definition.mode !== RenderMode.Mesh) {
         const k = i * stride * 16,

@@ -21,6 +21,8 @@ pnpm probe:unity
 pnpm probe:unity --boundaries   # 发射、运动、外观与 BakeMesh 边界
 pnpm probe:unity --random       # 随机分布与参数相关性
 pnpm probe:unity --shape        # 位置扰动与 Burst Spread
+pnpm probe:unity --basic-shapes     # 基础 Shape 区域、厚度、初速度分布
+pnpm probe:unity --rotation-prewarm  # 生命周期旋转和预热
 pnpm probe:unity --noise-fit    # 执行本地提供的 Noise 采样输入
 pnpm probe:unity --prefab-layout # 原始 prefab 布局
 ```
@@ -37,6 +39,8 @@ pnpm probe:unity --prefab-layout # 原始 prefab 布局
 pnpm probe:unity --boundaries --update-fixtures
 pnpm probe:unity --random --update-fixtures
 pnpm probe:unity --shape --update-fixtures
+pnpm probe:unity --basic-shapes --update-fixtures
+pnpm probe:unity --rotation-prewarm --update-fixtures
 pnpm test
 ```
 

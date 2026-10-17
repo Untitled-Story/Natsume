@@ -4,7 +4,7 @@ import type { DeepReadonly as R } from '../pack.js';
 import type { ParticleSystemT } from '../format/generated/noa/ir/particle-system.js';
 import type { EmissionModuleT } from '../format/generated/noa/ir/emission-module.js';
 import type { ShapeModuleT } from '../format/generated/noa/ir/shape-module.js';
-import type { CircleShapeT } from '../format/generated/noa/ir/circle-shape.js';
+import type { RotationModuleT } from '../format/generated/noa/ir/rotation-module.js';
 import type { ColorModuleT } from '../format/generated/noa/ir/color-module.js';
 import type { SizeModuleT } from '../format/generated/noa/ir/size-module.js';
 import type { VelocityModuleT } from '../format/generated/noa/ir/velocity-module.js';
@@ -16,7 +16,7 @@ import { ParticleModuleData as M } from '../format/generated/noa/ir/particle-mod
 import { Space } from '../format/generated/noa/ir/space.js';
 import { ScalingMode } from '../format/generated/noa/ir/scaling-mode.js';
 import { SeedMode } from '../format/generated/noa/ir/seed-mode.js';
-import { ShapeGeometry } from '../format/generated/noa/ir/shape-geometry.js';
+import { sampleShape, validateShape } from './shapes.js';
 import { NoiseQuality } from '../format/generated/noa/ir/noise-quality.js';
 import { SheetTime } from '../format/generated/noa/ir/sheet-time.js';
 import { SheetAnimation } from '../format/generated/noa/ir/sheet-animation.js';
@@ -31,6 +31,19 @@ export interface Diagnostic {
   readonly componentId?: number;
 }
 
+/** Warm complete cycles until constant/ranged birth lifetimes can reach steady state. */
+export function prewarmDuration(main: NonNullable<R<ParticleSystemT>['main']>): number {
+  if (!main.prewarm || !main.loop) return 0;
+  const p = main.lifetime;
+  check(
+    p && (p.mode === 0 || p.mode === 2),
+    'CAPABILITY',
+    'Prewarm requires Constant/TwoConstants lifetime',
+  );
+  const lifetime = Math.max(1e-6, scalar(p, 0, 0), scalar(p, 0, 1));
+  return Math.ceil(lifetime / main.durationSeconds) * main.durationSeconds;
+}
+
 /** Dense SoA particle storage. Random channels persist through compaction via serial IDs. */
 export class Emitter {
   readonly main: NonNullable<R<ParticleSystemT>['main']>;
@@ -38,6 +51,7 @@ export class Emitter {
   readonly shape: R<ShapeModuleT> | undefined;
   readonly colorModule: R<ColorModuleT> | undefined;
   readonly sizeModule: R<SizeModuleT> | undefined;
+  readonly rotationModule: R<RotationModuleT> | undefined;
   readonly velocityModule: R<VelocityModuleT> | undefined;
   readonly limit: R<LimitVelocityModuleT> | undefined;
   readonly noise: R<NoiseModuleT> | undefined;
@@ -54,14 +68,18 @@ export class Emitter {
   readonly serials: Uint32Array;
   readonly seed: number;
   readonly field: CurlNoiseField | undefined;
+  readonly prewarmSeconds: number;
+  readonly delaySeconds: number;
   readonly shapeMatrix = mat4.create();
   private readonly scratch = new Float64Array(3);
   private readonly direction = vec3.create();
+  private readonly birth = new Float64Array(6);
   private nextSerial = 0;
   private time = 0;
   private carry = 0;
   private enabledLast = false;
   private started = false;
+  private delayRemaining = 0;
   count = 0;
   emitting = true;
   constructor(
@@ -77,22 +95,34 @@ export class Emitter {
     this.main = main;
     validateParameters(source);
     check(
-      main.space === Space.Local && main.scaling === ScalingMode.Local && !main.prewarm,
+      main.space === Space.Local && main.scaling === ScalingMode.Local,
       'CAPABILITY',
-      `System ${id}: initial playback supports local simulation/scaling without prewarm`,
+      `System ${id}: playback supports local simulation/scaling`,
     );
     check(
-      constantZero(main.gravityMultiplier) &&
-        constantZero(main.startDelay) &&
-        main.flipRotationProbability === 0,
+      constantZero(main.gravityMultiplier),
       'CAPABILITY',
-      `System ${id}: gravity, delay or flip rotation unsupported`,
+      `System ${id}: gravity is not supported`,
     );
+    check(
+      main.flipRotationProbability === 0,
+      'CAPABILITY',
+      `System ${id}: rotation flip is not supported`,
+    );
+    this.delaySeconds = Math.max(0, scalar(main.startDelay, 0, random(instanceSeed, id, 70)));
+    this.delayRemaining = this.delaySeconds;
     check(main.maxParticles <= 100_000, 'LIMIT', 'Emitter capacity exceeds playback limit');
     check(
       main.durationSeconds >= 1 / 60 && main.simulationSpeed === 1,
       'CAPABILITY',
       'Initial playback requires duration >= 1/60 second and simulation speed 1',
+    );
+    this.prewarmSeconds = prewarmDuration(main);
+    check(
+      this.prewarmSeconds <= 30 &&
+        main.maxParticles * Math.ceil(this.prewarmSeconds * 60) <= 10_000_000,
+      'LIMIT',
+      'Prewarm work exceeds playback budget',
     );
     for (const m of source.modules) {
       switch (m.dataType) {
@@ -107,6 +137,9 @@ export class Emitter {
           break;
         case M.SizeModule:
           this.sizeModule = m.data as R<SizeModuleT>;
+          break;
+        case M.RotationModule:
+          this.rotationModule = m.data as R<RotationModuleT>;
           break;
         case M.VelocityModule:
           this.velocityModule = m.data as R<VelocityModuleT>;
@@ -153,20 +186,8 @@ export class Emitter {
       'Too many burst repetitions',
     );
     if (this.shape) {
-      const s = this.shape,
-        c = s.geometry as R<CircleShapeT>;
-      check(
-        s.geometryType === ShapeGeometry.CircleShape &&
-          !s.alignToDirection &&
-          !s.randomDirection &&
-          !s.sphericalDirection &&
-          (c.arcMode === 0 || c.arcMode === 3) &&
-          c.radiusMode === 0 &&
-          !c.arcSpread &&
-          !c.radiusSpread,
-        'CAPABILITY',
-        'Initial playback supports random/Burst Spread circles without direction modifiers or spread quantization',
-      );
+      const s = this.shape;
+      validateShape(s);
       const t = s.transform!,
         q = t.rotation!,
         p = t.position!,
@@ -250,6 +271,7 @@ export class Emitter {
     this.time = 0;
     this.carry = 0;
     this.started = false;
+    this.delayRemaining = this.delaySeconds;
     this.enabledLast = false;
     this.emitting = true;
   }
@@ -263,6 +285,7 @@ export class Emitter {
     if (!active) {
       this.clear();
       this.started = false;
+      this.delayRemaining = this.delaySeconds;
       this.time = 0;
       this.carry = 0;
     } else if (this.main.playOnEnable && this.emitting) this.start();
@@ -270,7 +293,12 @@ export class Emitter {
   start(): void {
     if (this.started) return;
     this.started = true;
+    if (this.delayRemaining > 0) return;
     this.bursts(-Number.EPSILON, 0);
+    if (this.prewarmSeconds) {
+      const steps = Math.ceil(this.prewarmSeconds * 60);
+      for (let i = 0; i < steps; i++) this.step(Math.min(1 / 60, this.prewarmSeconds - i / 60));
+    }
   }
   private bursts(from: number, to: number): void {
     const duration = this.main.durationSeconds;
@@ -338,36 +366,14 @@ export class Emitter {
         dy = 0,
         dz = 1;
       if (this.shape) {
-        const c = this.shape.geometry as R<CircleShapeT>,
-          // Partial arcs include both ends; a full circle excludes the duplicate end.
-          denominator = Math.max(1, amount - (Math.abs(c.arcRadians - Math.PI * 2) < 1e-6 ? 0 : 1)),
-          angle = (c.arcMode === 3 ? n / denominator : rnd(1)) * c.arcRadians;
-        const outer = scalar(c.radius, t, rnd(2)),
-          inner = outer * (1 - c.radiusThickness),
-          radius = Math.sqrt(inner * inner + (outer * outer - inner * inner) * rnd(3));
-        // Unity's zero-angle circle direction is +X. Shape scale affects birth position.
-        dx = Math.cos(angle);
-        dy = Math.sin(angle);
-        dz = 0;
-        let px = dx * radius,
-          py = dy * radius,
-          pz = 0;
-        if (this.shape.randomPosition) {
-          // Native randomPositionAmount is a surface-sphere offset before Shape TRS.
-          const height = rnd(12) * 2 - 1,
-            azimuth = rnd(13) * Math.PI * 2,
-            planar = Math.sqrt(Math.max(0, 1 - height * height)),
-            amount = this.shape.randomPosition;
-          px += Math.cos(azimuth) * planar * amount;
-          py += Math.sin(azimuth) * planar * amount;
-          pz = height * amount;
-        }
+        sampleShape(this.shape, this.seed, serial, t, n, amount, this.birth);
+        const [px, py, pz, bx, by, bz] = this.birth;
         const m = this.shapeMatrix;
-        x = m[0]! * px + m[4]! * py + m[8]! * pz + m[12]!;
-        y = m[1]! * px + m[5]! * py + m[9]! * pz + m[13]!;
-        z = m[2]! * px + m[6]! * py + m[10]! * pz + m[14]!;
+        x = m[0]! * px! + m[4]! * py! + m[8]! * pz! + m[12]!;
+        y = m[1]! * px! + m[5]! * py! + m[9]! * pz! + m[13]!;
+        z = m[2]! * px! + m[6]! * py! + m[10]! * pz! + m[14]!;
         const q = this.shape.transform!.rotation!;
-        vec3.transformQuat(this.direction, [dx, dy, dz], [q.x, q.y, q.z, q.w]);
+        vec3.transformQuat(this.direction, [bx!, by!, bz!], [q.x, q.y, q.z, q.w]);
         dx = this.direction[0]!;
         dy = this.direction[1]!;
         dz = this.direction[2]!;
@@ -398,7 +404,19 @@ export class Emitter {
   }
   step(delta: number): void {
     if (!this.enabledLast) return;
-    const dt = delta * this.main.simulationSpeed;
+    let dt = delta * this.main.simulationSpeed;
+    if (this.delayRemaining > 0) {
+      this.delayRemaining -= dt;
+      if (this.delayRemaining > 0) return;
+      dt = -this.delayRemaining;
+      this.delayRemaining = 0;
+      this.bursts(-Number.EPSILON, 0);
+      if (this.prewarmSeconds) {
+        const steps = Math.ceil(this.prewarmSeconds * 60);
+        for (let i = 0; i < steps; i++) this.step(Math.min(1 / 60, this.prewarmSeconds - i / 60));
+      }
+      if (dt <= 0) return;
+    }
     const limitDecay = this.limit ? Math.pow(1 - this.limit.dampen, dt * 30) : 1;
     for (let i = 0; i < this.count; ) {
       const age = this.ages[i]! + dt;
@@ -410,6 +428,18 @@ export class Emitter {
         serial = this.serials[i]!,
         o = i * 3,
         rnd = (ch: number) => random(this.seed, serial, ch);
+      if (this.rotationModule) {
+        const r = this.rotationModule,
+          rotationTime = this.ages[i]! / this.lifetimes[i]!;
+        if (r.separateAxes) {
+          this.rotations[o] =
+            this.rotations[o]! + scalar(r.angularVelocity?.x, rotationTime, rnd(60)) * dt;
+          this.rotations[o + 1] =
+            this.rotations[o + 1]! + scalar(r.angularVelocity?.y, rotationTime, rnd(61)) * dt;
+        }
+        this.rotations[o + 2] =
+          this.rotations[o + 2]! + scalar(r.angularVelocity?.z, rotationTime, rnd(62)) * dt;
+      }
       let x = this.positions[o]!,
         y = this.positions[o + 1]!,
         z = this.positions[o + 2]!;

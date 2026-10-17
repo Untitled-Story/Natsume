@@ -37,6 +37,20 @@ beforeAll(async () => {
   scene = new Scene(await loadPack(await archive()), [1]);
 });
 
+it('holds emission during the authored start delay', () => {
+  const source = particleSource();
+  source.main!.startDelay = constant(0.2);
+  source.modules.push(new ParticleModuleT(M.EmissionModule, new EmissionModuleT(constant(60))));
+  const emitter = new Emitter(3, scene.nodes.get(1)!, source, true, 1, false, []);
+  emitter.sync();
+  for (let i = 0; i < 12; i++) {
+    emitter.step(1 / 60);
+    expect(emitter.count).toBe(0);
+  }
+  emitter.step(1 / 60);
+  expect(emitter.count).toBeGreaterThan(0);
+});
+
 for (const label of ['burst-zero', 'burst-loop', 'burst-end']) {
   it(`matches native ${label} counts at fixed-step boundaries`, () => {
     const source = particleSource();

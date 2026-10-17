@@ -4,6 +4,7 @@
 
 import * as flatbuffers from 'flatbuffers';
 
+import { BoxRegion } from '../../noa/ir/box-region.js';
 import { Vec3, Vec3T } from '../../noa/ir/vec3.js';
 
 
@@ -30,12 +31,21 @@ thickness(obj?:Vec3):Vec3|null {
   return offset ? (obj || new Vec3()).__init(this.bb_pos + offset, this.bb!) : null;
 }
 
+region():BoxRegion {
+  const offset = this.bb!.__offset(this.bb_pos, 6);
+  return offset ? this.bb!.readUint8(this.bb_pos + offset) : BoxRegion.Volume;
+}
+
 static startBoxShape(builder:flatbuffers.Builder) {
-  builder.startObject(1);
+  builder.startObject(2);
 }
 
 static addThickness(builder:flatbuffers.Builder, thicknessOffset:flatbuffers.Offset) {
   builder.addFieldStruct(0, thicknessOffset, 0);
+}
+
+static addRegion(builder:flatbuffers.Builder, region:BoxRegion) {
+  builder.addFieldInt8(1, region, BoxRegion.Volume);
 }
 
 static endBoxShape(builder:flatbuffers.Builder):flatbuffers.Offset {
@@ -43,33 +53,38 @@ static endBoxShape(builder:flatbuffers.Builder):flatbuffers.Offset {
   return offset;
 }
 
-static createBoxShape(builder:flatbuffers.Builder, thicknessOffset:flatbuffers.Offset):flatbuffers.Offset {
+static createBoxShape(builder:flatbuffers.Builder, thicknessOffset:flatbuffers.Offset, region:BoxRegion):flatbuffers.Offset {
   BoxShape.startBoxShape(builder);
   BoxShape.addThickness(builder, thicknessOffset);
+  BoxShape.addRegion(builder, region);
   return BoxShape.endBoxShape(builder);
 }
 
 unpack(): BoxShapeT {
   return new BoxShapeT(
-    (this.thickness() !== null ? this.thickness()!.unpack() : null)
+    (this.thickness() !== null ? this.thickness()!.unpack() : null),
+    this.region()
   );
 }
 
 
 unpackTo(_o: BoxShapeT): void {
   _o.thickness = (this.thickness() !== null ? this.thickness()!.unpack() : null);
+  _o.region = this.region();
 }
 }
 
 export class BoxShapeT implements flatbuffers.IGeneratedObject {
 constructor(
-  public thickness: Vec3T|null = null
+  public thickness: Vec3T|null = null,
+  public region: BoxRegion = BoxRegion.Volume
 ){}
 
 
 pack(builder:flatbuffers.Builder): flatbuffers.Offset {
   return BoxShape.createBoxShape(builder,
-    (this.thickness !== null ? this.thickness!.pack(builder) : 0)
+    (this.thickness !== null ? this.thickness!.pack(builder) : 0),
+    this.region
   );
 }
 }

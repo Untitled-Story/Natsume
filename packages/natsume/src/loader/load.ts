@@ -18,12 +18,65 @@ function validateShader(bytes: Uint8Array, path: string) {
     record(shader) &&
       shader.format === 'noa-shader-data' &&
       shader.version === 1 &&
-      shader.model === 'particle-add-alpha' &&
       shader.revision === 1,
     'VERSION',
     'Unsupported shader recipe',
     path,
   );
+  if (
+    shader.model === 'unity-legacy-particle-additive' ||
+    shader.model === 'unity-legacy-particle-alpha-blend'
+  ) {
+    const additive = shader.model === 'unity-legacy-particle-additive';
+    const exact = (value: unknown, keys: string[]): value is Record<string, unknown> =>
+      record(value) &&
+      Object.keys(value).length === keys.length &&
+      keys.every((key) => key in value);
+    const environment = shader.environment;
+    check(
+      exact(shader, [
+        'format',
+        'version',
+        'model',
+        'revision',
+        'source_builtin',
+        'source_revision',
+        'color_formula',
+        'rgb_premultiply',
+        'output_policy',
+        'outputs',
+        'environment',
+      ]) &&
+        exact(shader.source_builtin, ['guid', 'file_id']) &&
+        shader.source_builtin.guid === '0000000000000000f000000000000000' &&
+        shader.source_builtin.file_id === (additive ? '10720' : '10721') &&
+        shader.source_revision === 'unity-2022.3.21f1' &&
+        typeof shader.color_formula === 'string' &&
+        shader.rgb_premultiply === false &&
+        shader.output_policy === 'primary-color' &&
+        JSON.stringify(shader.outputs) === '[0]' &&
+        exact(environment, ['fog', 'soft_particles']) &&
+        exact(environment.fog, ['host_slot', 'required', 'target']) &&
+        environment.fog.host_slot === 'source-scene-fog' &&
+        environment.fog.required === true &&
+        environment.fog.target === (additive ? 'black' : 'scene-fog-color') &&
+        exact(environment.soft_particles, [
+          'host_slot',
+          'required',
+          'formula',
+          'depth_required_when_enabled',
+        ]) &&
+        environment.soft_particles.host_slot === 'source-soft-particles' &&
+        environment.soft_particles.required === true &&
+        typeof environment.soft_particles.formula === 'string' &&
+        environment.soft_particles.depth_required_when_enabled === true,
+      'SEMANTIC',
+      'Invalid legacy particle recipe',
+      path,
+    );
+    return shader.model;
+  }
+  check(shader.model === 'particle-add-alpha', 'VERSION', 'Unsupported shader recipe', path);
   const allowed = [
     'format',
     'version',
@@ -80,6 +133,7 @@ function validateShader(bytes: Uint8Array, path: string) {
     'Unsupported shader alpha mode',
     path,
   );
+  return shader.model;
 }
 
 async function download(url: string | URL, signal: AbortSignal | undefined, maxBytes: number) {
@@ -154,6 +208,7 @@ export async function loadPack(
     'NOIR/manifest asset sets differ',
   );
   const meshes = new Map<number, MeshT>();
+  const shaderModels = new Map<number, string>();
   for (const asset of document.assets) {
     const file = manifest.files.find((file) => file.asset_id === asset.id);
     check(
@@ -169,7 +224,7 @@ export async function loadPack(
       validateMesh(mesh);
       meshes.set(asset.id, mesh);
     }
-    if (asset.kind === 3) validateShader(data, file.path);
+    if (asset.kind === 3) shaderModels.set(asset.id, validateShader(data, file.path));
     if (asset.kind === 1)
       check(
         data.length >= 24 &&
@@ -179,6 +234,19 @@ export async function loadPack(
         'SEMANTIC',
         'Invalid PNG header',
         file.path,
+      );
+  }
+  for (const material of document.materials) {
+    const expected: Record<number, string> = {
+      2: 'particle-add-alpha',
+      4: 'unity-legacy-particle-additive',
+      5: 'unity-legacy-particle-alpha-blend',
+    };
+    if (material.model === 4 || material.model === 5 || material.shaderDataAssetId)
+      check(
+        shaderModels.get(material.shaderDataAssetId) === expected[material.model],
+        'SEMANTIC',
+        'Material and shader recipe models differ',
       );
   }
   options.signal?.throwIfAborted();
