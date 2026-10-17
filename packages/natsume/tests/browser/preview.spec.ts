@@ -389,6 +389,31 @@ test('isolates failing script behaviors and keeps pause/active lifecycle distinc
   });
 });
 
+test('owns one runtime per Pixi application and releases instances on application destruction', async ({
+  page,
+}) => {
+  await page.goto('/');
+  await page
+    .locator('#file')
+    .setInputFiles(fileURLToPath(new URL('../../../../data/kirakira.noap', import.meta.url)));
+  await expect(page.locator('#status')).toHaveText('预览就绪');
+  const result = await page.evaluate(
+    async (fixturePath) => {
+      const { checkApplicationPlugin } = await import(`/@fs${fixturePath}`);
+      return checkApplicationPlugin();
+    },
+    new URL('./render-fixture.ts', import.meta.url).pathname,
+  );
+  expect(result).toEqual({
+    distinct: true,
+    stable: true,
+    destroyed: true,
+    rejected: true,
+    isolated: true,
+    detached: true,
+  });
+});
+
 test('applies public node render offsets with inheritance, validation and Bridge lifecycle', async ({
   page,
 }) => {

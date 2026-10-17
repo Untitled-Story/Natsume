@@ -2,8 +2,9 @@ import { createServer } from 'vite';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
-import { deserialize, serialize } from 'node:v8';
 import { fileURLToPath } from 'node:url';
+import { cpus, platform, arch } from 'node:os';
+import { createHash } from 'node:crypto';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const outputDirectory = resolve(root, 'data/performance');
@@ -15,16 +16,22 @@ const server = await createServer({
   server: { middlewareMode: true },
 });
 try {
-  const { loadPack } = await server.ssrLoadModule('/src/loader/load.ts');
-  const { Simulation } = await server.ssrLoadModule('/src/runtime/simulation.ts');
   const { Emitter } = await server.ssrLoadModule('/src/runtime/emitter.ts');
-  const pack = await loadPack(new Uint8Array(await readFile(resolve(root, 'data/kirakira.noap'))));
-  const simulation = new Simulation(pack, { seed: 123, approximateNoise: true });
-  simulation.play();
-  const original = simulation.emitters.get(76);
-  const source = deserialize(serialize(original.source));
+  const { particleSource } = await server.ssrLoadModule('/tests/particle-fixtures.ts');
+  const { Scene } = await server.ssrLoadModule('/src/runtime/scene.ts');
+  const { minimalDocument } = await server.ssrLoadModule('/tests/helpers.ts');
+  const document = minimalDocument();
+  const scene = new Scene(
+    {
+      nodes: document.nodes,
+      components: [],
+      getNode: (id) => document.nodes.find((n) => n.id === id),
+    },
+    [1],
+  );
+  const source = particleSource('motion-limit-combined');
   source.main.maxParticles = 20_000;
-  const emitter = new Emitter(76, original.node, source, true, 123, false, []);
+  const emitter = new Emitter(3, scene.nodes.get(1), source, true, 123, false, []);
   emitter.sync();
   emitter.emitting = false;
   emitter.count = source.main.maxParticles;
@@ -41,7 +48,30 @@ try {
   }
   milliseconds.sort((a, b) => a - b);
   const report = {
+    scenario: 'synthetic-motion-limit-combined-v1',
+    measuredAt: new Date().toISOString(),
+    environment: {
+      node: process.version,
+      platform: platform(),
+      arch: arch(),
+      cpu: cpus()[0]?.model,
+    },
+    fixedDelta: 1 / 60,
+    warmupSteps: 80,
+    sourceHash: createHash('sha256')
+      .update(await readFile(resolve(root, 'packages/natsume/src/runtime/emitter.ts')))
+      .digest('hex'),
     particles: emitter.count,
+    storageBytes: [
+      emitter.positions,
+      emitter.velocities,
+      emitter.startSizes,
+      emitter.rotations,
+      emitter.startColors,
+      emitter.ages,
+      emitter.lifetimes,
+      emitter.serials,
+    ].reduce((sum, array) => sum + array.byteLength, 0),
     framesPerRun: 120,
     runs: 7,
     medianMsPerStep: milliseconds[3],

@@ -1,8 +1,10 @@
-import { Application, Mesh, type WebGLRenderer } from 'pixi.js';
-import { NatsumeRuntime, type EffectPack, type EffectInstance } from 'natsume';
+import { Application, Mesh, extensions } from 'pixi.js';
+import { NatsumePlugin, type NatsumeRuntime, type EffectPack, type EffectInstance } from 'natsume';
 import { log } from './console.js';
 import { OverlayView } from './overlay.js';
 import type { ParticleMesh } from '../../natsume/src/rendering/particle-mesh.js';
+
+extensions.add(NatsumePlugin);
 
 const viewport = document.getElementById('viewport')!;
 const playbackStatus = document.getElementById('playback-status')!;
@@ -39,7 +41,7 @@ async function init(): Promise<void> {
         autoDensity: true,
         resolution: Math.min(devicePixelRatio, 2),
       });
-      runtime = new NatsumeRuntime(next.renderer as WebGLRenderer);
+      runtime = next.natsume;
       app = next;
       viewport.prepend(next.canvas);
       observer = new ResizeObserver(() => {

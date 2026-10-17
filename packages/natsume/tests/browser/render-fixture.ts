@@ -1,4 +1,5 @@
-import { Container, Graphics, RenderTexture, Texture } from 'pixi.js';
+import { Application, Container, Graphics, RenderTexture, Texture, extensions } from 'pixi.js';
+import { NatsumePlugin } from '../../src/index.js';
 import { getPreview } from '../../../playground/src/preview.js';
 import { ParticleMesh } from '../../src/rendering/particle-mesh.js';
 import { Emitter } from '../../src/runtime/emitter.js';
@@ -15,6 +16,47 @@ import { ParticleModuleT } from '../../src/format/generated/noa/ir/particle-modu
 import { ParticleModuleData as M } from '../../src/format/generated/noa/ir/particle-module-data.js';
 import { VelocityModuleT } from '../../src/format/generated/noa/ir/velocity-module.js';
 import { QuaternionT } from '../../src/format/generated/noa/ir/quaternion.js';
+
+export async function checkApplicationPlugin() {
+  const { app, effect } = getPreview();
+  if (!app || !effect) throw new Error('Missing preview');
+  effect.pause();
+  // Re-registration is idempotent in Pixi's extension registry.
+  extensions.add(NatsumePlugin);
+  const other = new Application();
+  await other.init({
+    preference: 'webgl',
+    preferWebGLVersion: 2,
+    autoStart: false,
+    width: 32,
+    height: 32,
+  });
+  const runtime = other.natsume;
+  const distinct = runtime !== app.natsume;
+  const stable = runtime === other.natsume;
+  const instance = await runtime.instantiate(effect.simulation.pack, { approximateNoise: true });
+  other.stage.addChild(instance.container);
+  instance.play();
+  other.destroy();
+  let rejected = false;
+  try {
+    await runtime.instantiate(effect.simulation.pack);
+  } catch {
+    rejected = true;
+  }
+  effect.play();
+  effect.update(1 / 60);
+  const isolated = !effect.destroyed && effect.state === 'playing';
+  effect.pause();
+  return {
+    distinct,
+    stable,
+    destroyed: instance.destroyed,
+    rejected,
+    isolated,
+    detached: !Object.hasOwn(other, 'natsume'),
+  };
+}
 
 export function measureLifetimeSizeRandomness(seed: number) {
   const { effect } = getPreview();

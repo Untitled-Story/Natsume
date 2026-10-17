@@ -17,11 +17,16 @@ Unity Prefab → Noa → NOAP (Noa Package) → Natsume → PixiJS
 在已有 PixiJS 应用中加载 `.noap` 文件并创建实例：
 
 ```ts
-import { type WebGLRenderer } from 'pixi.js';
-import { loadPack, NatsumeRuntime } from 'natsume';
+import { Application, extensions } from 'pixi.js';
+import { loadPack, NatsumePlugin } from 'natsume';
 
-// app 为已初始化的 PixiJS Application，使用 WebGL2。
-const runtime = new NatsumeRuntime(app.renderer as WebGLRenderer);
+extensions.add(NatsumePlugin);
+
+const app = new Application();
+await app.init({ preference: 'webgl', preferWebGLVersion: 2 });
+document.body.append(app.canvas);
+
+const runtime = app.natsume;
 const pack = await loadPack('/effects/example.noap');
 const effect = await runtime.instantiate(pack);
 
@@ -43,10 +48,12 @@ app.ticker.add(tick);
 app.ticker.remove(tick);
 effect.destroy();
 pack.dispose();
-runtime.destroy();
+app.destroy();
 ```
 
-Natsume 不创建或销毁宿主的 Application、画布和 Renderer。当前包为私有 workspace 包，尚未发布到 npm。
+扩展为每个 Application 创建独立运行时，并随应用销毁；同一应用的实例共享纹理与 Bridge 注册。扩展不自动推进模拟，由宿主调用 `effect.update()`。注册需要在 `app.init()` 前完成，且应用必须使用 WebGL2。
+
+也可以通过 `new NatsumeRuntime(renderer)` 手动管理运行时。当前包为私有 workspace 包，尚未发布到 npm。
 
 ## Script Bridge
 
@@ -76,6 +83,55 @@ runtime.registerScript(
 ```
 
 `setRenderOffset()` 使用特效容器局部坐标，父子偏移相加；传 `null` 清除当前节点的偏移。设置立即生效，重播保留。宿主也可以通过 `effect.getNode(id)` 调用此接口；`effect.renderedNodes` 返回含已启用渲染器组件的节点，包括当前失活的节点。
+
+## 模块支持状态
+
+按 [Unity 2022.3 粒子系统模块](https://docs.unity3d.com/2022.3/Documentation/Manual/ParticleSystemModules.html) 分类：Supported 2 项、Partial 9 项、Unsupported 13 项。以下指 Natsume 的运行能力；包能读取不代表其中的配置都能执行。
+
+### Supported
+
+以下模块的主要行为已实现，仍受下方共享参数限制。
+
+| 模块                | 支持范围                                           |
+| ------------------- | -------------------------------------------------- |
+| Color over Lifetime | 生命周期颜色；Blend / Fixed 渐变及双渐变随机插值   |
+| Size over Lifetime  | 生命周期尺寸；统一或分轴缩放，三轴共用随机插值因子 |
+
+### Partial
+
+| 模块                         | 已支持                                                                                     | 未支持                                                                                                |
+| ---------------------------- | ------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
+| Main                         | 循环、初始寿命 / 速度 / 尺寸 / 旋转 / 颜色、种子；Local 模拟与缩放                         | 重力、启动延迟、预热、旋转翻转；World / Custom 模拟、Hierarchy / Shape 缩放；非 1 的 Simulation Speed |
+| Emission                     | Rate over Time、Burst（含正间隔无限重复）                                                  | Rate over Distance；零间隔无限 Burst                                                                  |
+| Shape                        | Circle、随机弧、Burst Spread、位置扰动、Shape TRS                                          | 其他形状、方向修饰、Loop / PingPong 扫描、Spread 量化                                                 |
+| Velocity over Lifetime       | Local 线性 / 轨道 / 径向速度、Speed Multiplier                                             | World 空间                                                                                            |
+| Limit Velocity over Lifetime | Local 标量限速、Dampen                                                                     | 分轴限速、World 空间、Drag                                                                            |
+| Noise                        | 显式启用的 Curl Noise 近似：High、1 octave、仅位置扰动                                     | 其他 Quality、多 octave、Scroll、Remap、旋转 / 尺寸扰动；Unity 同种子轨迹                             |
+| Texture Sheet Animation      | Lifetime、Whole Sheet、UV0                                                                 | Single Row、Speed / FPS 时间模式、Sprites 模式、其他 UV 通道                                          |
+| Custom Data                  | Custom1.x Vector                                                                           | 完整 Vector / Color、Custom2                                                                          |
+| Renderer                     | World Billboard、有限 Stretched Billboard、World / View 单 Mesh 与单材质；ParticleAddAlpha | 其他对齐方式、横 / 竖 Billboard、粒子排序、Pivot / Flip、最小尺寸、多 Mesh / 材质、其他材质模型       |
+
+Stretched Billboard 仅支持非 Freeform、`rotateWithStretchDirection=true`、`cameraVelocityScale=velocityScale=0`；按 Unity +Z 观察及 XY 速度平面计算。
+
+共享参数支持 Constant / Two Constants / Curve / Two Curves，以及归一化时间下的 Step / Linear / 非加权 Hermite 曲线；不支持加权曲线、Perceptual Blend 渐变。Unity 原始内部循环码仅支持已核对的 `2`（钳制）。随机分布与 Noise 不复现 Unity 原生随机序列，误差见 [Unity 行为对照](tools/unity-probe/MEASUREMENTS.md)。
+
+### Unsupported
+
+| 模块                      | 未实现行为             |
+| ------------------------- | ---------------------- |
+| Inherit Velocity          | 继承发射器速度         |
+| Lifetime by Emitter Speed | 根据发射器速度设置寿命 |
+| Force over Lifetime       | 生命周期内施加力       |
+| Color by Speed            | 根据速度改变颜色       |
+| Size by Speed             | 根据速度改变尺寸       |
+| Rotation over Lifetime    | 生命周期内持续旋转     |
+| Rotation by Speed         | 根据速度改变旋转速度   |
+| External Forces           | 外部力场               |
+| Collision                 | 平面及场景碰撞         |
+| Triggers                  | 碰撞区域检测与事件     |
+| Sub Emitters              | 由粒子事件触发子发射器 |
+| Lights                    | 粒子灯光               |
+| Trails                    | 粒子拖尾与带状连接     |
 
 ## 开发与预览
 

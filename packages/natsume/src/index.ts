@@ -17,3 +17,4 @@ export { type SourceColorSpace } from './rendering/particle-mesh.js';
 export { type LayoutSize } from './runtime/scene.js';
 export { type PlaybackState } from './runtime/simulation.js';
 export { type Diagnostic } from './runtime/emitter.js';
+export { NatsumePlugin } from './application-plugin.js';

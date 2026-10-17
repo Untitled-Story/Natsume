@@ -1,0 +1,114 @@
+{
+  "stage": "T0",
+  "cpu": {
+    "scenario": "synthetic-motion-limit-combined-v1",
+    "measuredAt": "2026-10-17T07:57:17.902Z",
+    "environment": {
+      "node": "v26.11.1",
+      "platform": "darwin",
+      "arch": "arm64",
+      "cpu": "Apple M5"
+    },
+    "fixedDelta": 0.016666666666666666,
+    "warmupSteps": 80,
+    "sourceHash": "a638dfbaf1240663f5a3d194f0d8be0a29333ab1ed993e61fdaa9cd76e04f16d",
+    "particles": 20000,
+    "storageBytes": 1520000,
+    "framesPerRun": 120,
+    "runs": 7,
+    "medianMsPerStep": 5.729223608333332,
+    "milliseconds": [
+      5.687594791666667, 5.693308674999999, 5.7204010416666655, 5.729223608333332,
+      5.803671874999998, 5.911312850000005, 5.957388541666668
+    ]
+  },
+  "preview": {
+    "scenario": "kirakira-preview-v1",
+    "measuredAt": "2026-10-17T07:55:43.895Z",
+    "node": "v26.11.1",
+    "cpu": "Apple M5",
+    "chromium": "149.0.7827.55",
+    "sample": {
+      "sha256": "b1cd52d9232a47091cfd3a908c694ba905b07a7a840b56adbf77e4219ba6eb1e",
+      "bytes": 139046
+    },
+    "sourceHash": "990141d1d4e3b233bc688e0c65fa6442bf940f458720b0514f02a2a34aec034e",
+    "device": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (LLVM 10.0.0) (0x0000C0DE)), SwiftShader driver)",
+    "resolution": [1280, 720],
+    "fixedDelta": 0.016666666666666666,
+    "seed": 12345,
+    "warmupFrames": 180,
+    "measuredFrames": 120,
+    "particleRange": [98, 128],
+    "updateMs": {
+      "median": 0.09999996423721313,
+      "p95": 0.10000002384185791
+    },
+    "renderSubmissionMs": {
+      "median": 0.800000011920929,
+      "p95": 1
+    },
+    "perFrame": {
+      "drawCalls": 11,
+      "uploadCalls": 11,
+      "uploadedBytes": 28230.4
+    },
+    "simulationArrayBytes": 1217600,
+    "geometryAndSimulationArrayBytes": 5417600,
+    "textureRgba8EstimateBytes": 1048576,
+    "lifecycle": {
+      "single": {
+        "instances": 1,
+        "textureLeases": 1,
+        "textureRefs": [15],
+        "retainedPixels": 262144,
+        "stageChildren": 1
+      },
+      "shared": {
+        "instances": 2,
+        "textureLeases": 1,
+        "textureRefs": [30],
+        "retainedPixels": 262144,
+        "stageChildren": 2
+      },
+      "released": {
+        "instances": 0,
+        "textureLeases": 0,
+        "textureRefs": [],
+        "retainedPixels": 0,
+        "stageChildren": 0
+      },
+      "cycles": [
+        {
+          "instances": 0,
+          "textureLeases": 0,
+          "textureRefs": [],
+          "retainedPixels": 0,
+          "stageChildren": 0
+        },
+        {
+          "instances": 0,
+          "textureLeases": 0,
+          "textureRefs": [],
+          "retainedPixels": 0,
+          "stageChildren": 0
+        },
+        {
+          "instances": 0,
+          "textureLeases": 0,
+          "textureRefs": [],
+          "retainedPixels": 0,
+          "stageChildren": 0
+        }
+      ],
+      "final": {
+        "instances": 0,
+        "textureLeases": 0,
+        "textureRefs": [],
+        "retainedPixels": 0,
+        "stageChildren": 0
+      }
+    },
+    "gpuExecutionMs": null
+  }
+}
