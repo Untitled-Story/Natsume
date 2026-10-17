@@ -1,0 +1,9 @@
+reference/
+data/
+docs/
+**/dist/
+**/generated/
+**/node_modules/
+pnpm-lock.yaml
+packages/natsume/schemas/noap.schema.json
+packages/natsume/schemas/shader-data.schema.json

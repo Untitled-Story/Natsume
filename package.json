@@ -1,0 +1,33 @@
+{
+  "name": "natsume-workspace",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "packageManager": "pnpm@12.11.2",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "pnpm --filter natsume-playground dev",
+    "build": "pnpm -r build",
+    "typecheck": "tsc --noEmit && pnpm -r typecheck",
+    "test": "pnpm --filter natsume test",
+    "test:browser": "playwright test",
+    "lint": "eslint packages tools *.ts *.js",
+    "format": "prettier --write packages tools *.ts *.js *.json pnpm-workspace.yaml",
+    "format:check": "prettier --check packages tools *.ts *.js *.json pnpm-workspace.yaml",
+    "generate": "pnpm --filter natsume generate",
+    "probe:unity": "node tools/unity-probe/probe-unity.mjs",
+    "benchmark": "node tools/benchmarks/benchmark-particles.mjs"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.2",
+    "@playwright/test": "1.61.1",
+    "@types/node": "^24.0.0",
+    "eslint": "9.39.2",
+    "prettier": "3.8.3",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.67.0",
+    "vite": "8.3.4"
+  }
+}

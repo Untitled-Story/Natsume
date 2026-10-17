@@ -1,0 +1,17 @@
+# Local reference sources
+/reference/
+
+# Local design documents
+/docs/
+/data/
+.DS_Store
+node_modules/
+dist/
+coverage/
+test-results/
+playwright-report/
+.pnpm-store/
+.env
+.env.*
+!.env.example
+*.log

@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Natsume · 预览</title>
+  </head>
+  <body>
+    <main id="app">
+      <div id="viewport" aria-label="特效预览"></div>
+      <p id="status" class="sr-only" role="status"></p>
+      <div class="controls" role="group" aria-label="预览控制">
+        <label class="file-button">选择 .noap<input id="file" type="file" accept=".noap" /></label>
+        <button id="play" data-playback disabled>播放</button>
+        <button id="pause" data-playback disabled>暂停</button>
+        <button id="restart" data-playback disabled>重播</button>
+        <button id="clear" data-playback disabled>停止</button>
+        <label class="node-picker"
+          >观察节点
+          <select id="focus" data-playback disabled title="只调整取景，仍播放整个入口">
+            <option value="0">全景</option>
+          </select>
+        </label>
+        <button
+          id="overlay"
+          data-playback
+          disabled
+          aria-pressed="false"
+          title="实验：抵消发射组之间的平移，保留粒子模拟和组内层级"
+        >
+          叠加观察
+        </button>
+        <button id="fit" data-playback disabled title="拖动平移，滚轮缩放">适应视图</button>
+        <button id="toggle-console" aria-expanded="false" aria-controls="console-panel">
+          控制台
+        </button>
+        <span id="pack-name" title="尚未选择文件"></span>
+        <output id="playback-status" aria-live="off">未载入</output>
+      </div>
+      <section id="console-panel" aria-label="控制台" hidden>
+        <div class="console-toolbar"><button id="clear-console">清空日志</button></div>
+        <div id="console" role="log" aria-label="运行日志" aria-live="polite"></div>
+      </section>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
