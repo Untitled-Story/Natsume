@@ -23,6 +23,7 @@ pnpm probe:unity --random       # 随机分布与参数相关性
 pnpm probe:unity --shape        # 位置扰动与 Burst Spread
 pnpm probe:unity --basic-shapes     # 基础 Shape 区域、厚度、初速度分布
 pnpm probe:unity --rotation-prewarm  # 生命周期旋转和预热
+pnpm probe:unity --sorting      # 透明粒子索引顺序
 pnpm probe:unity --noise-fit    # 执行本地提供的 Noise 采样输入
 pnpm probe:unity --prefab-layout # 原始 prefab 布局
 ```
@@ -41,6 +42,7 @@ pnpm probe:unity --random --update-fixtures
 pnpm probe:unity --shape --update-fixtures
 pnpm probe:unity --basic-shapes --update-fixtures
 pnpm probe:unity --rotation-prewarm --update-fixtures
+pnpm probe:unity --sorting --update-fixtures
 pnpm test
 ```
 

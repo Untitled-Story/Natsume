@@ -18,6 +18,7 @@ import type { MaterialT } from '../format/generated/noa/ir/material.js';
 import { MaterialModel } from '../format/generated/noa/ir/material-model.js';
 import { RenderMode } from '../format/generated/noa/ir/render-mode.js';
 import { Alignment } from '../format/generated/noa/ir/alignment.js';
+import { ParticleSort } from '../format/generated/noa/ir/particle-sort.js';
 import { BlendFactor as B } from '../format/generated/noa/ir/blend-factor.js';
 import { CompareOp } from '../format/generated/noa/ir/compare-op.js';
 import { ColorSpace } from '../format/generated/noa/ir/color-space.js';
@@ -169,6 +170,9 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
   private readonly vertices: Float32Array;
   private readonly vertexBuffer: Buffer;
   private readonly indexBuffer: Buffer;
+  private readonly indexData: Uint32Array;
+  private readonly sortKeys: Float64Array;
+  private readonly particleOrder: number[] = [];
   private readonly basePositions: readonly {
     readonly x: number;
     readonly y: number;
@@ -423,6 +427,8 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
     this.vertices = vertices;
     this.vertexBuffer = vertexBuffer;
     this.indexBuffer = indexBuffer;
+    this.indexData = indices;
+    this.sortKeys = new Float64Array(emitter.ages.length);
     this.basePositions = positions;
     this.baseUV = uv;
     this.baseIndices = meshIndices;
@@ -624,6 +630,35 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
           v[o + 15] = fy;
         }
       }
+    }
+    const sort = this.definition.sort;
+    if (sort !== ParticleSort.None) {
+      const order = this.particleOrder,
+        keys = this.sortKeys;
+      order.length = n;
+      for (let index = 0; index < n; index++) {
+        order[index] = index;
+        if (sort === ParticleSort.OldestFirst || sort === ParticleSort.YoungestFirst) {
+          keys[index] = e.ages[index]! * (sort === ParticleSort.OldestFirst ? -1 : 1);
+          continue;
+        }
+        const o = index * 3;
+        const px = e.positions[o]!;
+        const py = e.positions[o + 1]!;
+        const pz = e.positions[o + 2]!;
+        const wx = world[0]! * px + world[4]! * py + world[8]! * pz + world[12]!;
+        const wy = world[1]! * px + world[5]! * py + world[9]! * pz + world[13]!;
+        const wz = world[2]! * px + world[6]! * py + world[10]! * pz + world[14]!;
+        // The display transform is affine (orthographic): Distance equals Depth.
+        keys[index] = matrix[2]! * wx + matrix[6]! * wy + matrix[10]! * wz + matrix[14]!;
+      }
+      order.sort((a, b) => keys[b]! - keys[a]! || a - b);
+      for (let i = 0; i < n; i++) {
+        const source = order[i]!;
+        for (let k = 0; k < this.baseIndices.length; k++)
+          this.indexData[i * this.baseIndices.length + k] = source * stride + this.baseIndices[k]!;
+      }
+      this.indexBuffer.update(n * this.baseIndices.length * 4);
     }
     this.geometry.indexCount = n * this.baseIndices.length;
     this.vertexBuffer.update(n * stride * 64);

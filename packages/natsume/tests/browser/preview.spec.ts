@@ -620,3 +620,25 @@ test('overlays emitter groups without changing simulation, geometry or source tr
   await expect(page.locator('#playback-status')).toContainText('播放中');
   expect(errors).toEqual([]);
 });
+
+test('orders transparent particles by Unity sort modes', async ({ page }) => {
+  await page.goto('/');
+  await page
+    .locator('#file')
+    .setInputFiles(fileURLToPath(new URL('../../../../data/kirakira.noap', import.meta.url)));
+  await expect(page.locator('#status')).toHaveText('预览就绪');
+  const result = await page.evaluate(
+    async (path) => (await import(`/@fs${path}`)).measureParticleSorting(),
+    new URL('./render-fixture.ts', import.meta.url).pathname,
+  );
+  const native = JSON.parse(
+    readFileSync(new URL('../fixtures/unity-sorting.json', import.meta.url), 'utf8'),
+  );
+  for (const sample of native.cases) {
+    const name = sample.label.replace('InFront', 'First');
+    expect(result[name], sample.label).toEqual(sample.order);
+  }
+  expect(result.transformed).toEqual([1, 2, 0]);
+  expect(result.ties).toEqual([0, 1, 2]);
+  expect(result.empty).toEqual([0]);
+});

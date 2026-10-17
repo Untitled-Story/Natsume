@@ -8,6 +8,7 @@ import { minimalDocument } from '../helpers.js';
 import { manualParticle, particleSource } from '../particle-fixtures.js';
 import { RenderMode } from '../../src/format/generated/noa/ir/render-mode.js';
 import { Alignment } from '../../src/format/generated/noa/ir/alignment.js';
+import { ParticleSort } from '../../src/format/generated/noa/ir/particle-sort.js';
 import type { ParticleRendererT } from '../../src/format/generated/noa/ir/particle-renderer.js';
 import type { EffectPack } from '../../src/pack.js';
 import { randomSource } from '../random-fixtures.js';
@@ -244,6 +245,74 @@ export async function measureParticleGeometry() {
       });
     }
     mesh.destroy();
+  }
+  return result;
+}
+
+/** Returns the particle source order encoded in the index buffer for each sort mode. */
+export function measureParticleSorting() {
+  const { effect } = getPreview();
+  if (!effect) throw new Error('Missing preview');
+  effect.pause();
+  const original = effect.container.children[0] as ParticleMesh;
+  const document = minimalDocument();
+  const pack = {
+    nodes: document.nodes,
+    components: [],
+    getNode: (id: number) => document.nodes.find((n) => n.id === id),
+  } as unknown as EffectPack;
+  const scene = new Scene(pack, [1]);
+  const emitter = new Emitter(3, scene.nodes.get(1)!, particleSource(''), true, 1, false, []);
+  manualParticle(emitter);
+  emitter.count = 3;
+  emitter.positions.set([0, 0, 3, 0, 0, 1, 0, 0, 2]);
+  emitter.lifetimes.fill(1);
+  emitter.ages.set([0.2, 0.8, 0.5]);
+  const result: Record<string, number[]> = {};
+  for (const [name, sort] of [
+    ['None', ParticleSort.None],
+    ['Distance', ParticleSort.Distance],
+    ['OldestFirst', ParticleSort.OldestFirst],
+    ['YoungestFirst', ParticleSort.YoungestFirst],
+    ['Depth', ParticleSort.Depth],
+  ] as const) {
+    const definition = structuredClone(original.definition) as ParticleRendererT;
+    definition.mode = RenderMode.Mesh;
+    definition.meshAssetIds = [1];
+    definition.sort = sort as ParticleSort;
+    const meshPack = {
+      getMesh: () => ({
+        positions: [{ x: 0, y: 0, z: 0 }],
+        uv0: [{ x: 0, y: 0 }],
+        indices: [0],
+        submeshes: [{}],
+      }),
+    } as unknown as EffectPack;
+    const mesh = new ParticleMesh(
+      emitter,
+      definition,
+      original.materialDefinition,
+      Texture.WHITE,
+      meshPack,
+    );
+    try {
+      mesh.sync([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1], 'gamma');
+      result[name] = Array.from(mesh.geometry.indexBuffer!.data.slice(0, 3));
+      if (sort === ParticleSort.Depth) {
+        emitter.node.worldMatrix[10] = -1;
+        mesh.sync([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1], 'gamma');
+        result.transformed = Array.from(mesh.geometry.indexBuffer!.data.slice(0, 3));
+        emitter.node.worldMatrix[10] = 1;
+        emitter.positions.fill(0);
+        mesh.sync([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1], 'gamma');
+        result.ties = Array.from(mesh.geometry.indexBuffer!.data.slice(0, 3));
+        emitter.count = 0;
+        mesh.sync([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1], 'gamma');
+        result.empty = [Number(mesh.visible)];
+      }
+    } finally {
+      mesh.destroy();
+    }
   }
   return result;
 }

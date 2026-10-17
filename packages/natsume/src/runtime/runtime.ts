@@ -446,6 +446,7 @@ export class NatsumeRuntime {
         (a, b) =>
           a.data.sortingLayerRank - b.data.sortingLayerRank ||
           a.data.sortingOrder - b.data.sortingOrder ||
+          b.data.sortingFudge - a.data.sortingFudge ||
           a.id - b.id,
       );
       const totalVertices = renderers.reduce((sum, { data }) => {

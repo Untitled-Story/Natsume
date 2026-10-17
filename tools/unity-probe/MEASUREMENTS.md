@@ -38,6 +38,19 @@ Limit 测量例：`limit=0.12`、`dampen=0.26`、初速度 `(10,0,0)`。dt=1/60 
 
 Stretch 已测范围：`cameraVelocityScale=0`、`velocityScale=0`、`rotateWithStretchDirection=true`，非 Freeform，沿 +Z 观察，速度位于 XY 平面。
 
+## 粒子排序
+
+Unity 2022.3.21f1 正交相机下，3 个手动粒子的 BakeMesh 索引顺序对照：
+
+| 模式             | Unity / Natsume 顺序 | 索引差异 |
+| ---------------- | -------------------- | -------- |
+| None             | 0, 1, 2              | 0        |
+| Distance / Depth | 0, 2, 1              | 0        |
+| OldestInFront    | 0, 2, 1              | 0        |
+| YoungestInFront  | 1, 2, 0              | 0        |
+
+输入 Z 为 `[3,1,2]`，年龄为 `[0.2,0.8,0.5]` 秒，寿命均为 1 秒。未测透视相机、Unity 同深度粒子的稳定顺序及跨系统 sortingFudge 的最终像素。
+
 ## 随机分布与形状
 
 随机分布与形状各 14 组案例。随机参数分布归一化至 `[0,1]` 后比较；位置扰动统计保留场景单位。随机结果不要求相同种子逐粒子一致。
@@ -96,6 +109,8 @@ Stretch 已测范围：`cameraVelocityScale=0`、`velocityScale=0`、`rotateWith
 近似范围：High、1 octave、scroll=0、remap 关闭、仅位置扰动。Natsume 使用纯 TypeScript Curl Noise；不复现 Unity 的原生噪声函数和同种子轨迹。
 
 ## 数据
+
+- [unity-sorting.json](../../packages/natsume/tests/fixtures/unity-sorting.json)：五种粒子排序的原生索引顺序。
 
 - [unity-boundaries.json](../../packages/natsume/tests/fixtures/unity-boundaries.json)：发射、运动、外观、顶点及 UV 的原生数值摘录。
 - [unity-random.json](../../packages/natsume/tests/fixtures/unity-random.json)：随机分布、均值、方差与相关性。
