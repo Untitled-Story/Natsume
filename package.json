@@ -19,8 +19,7 @@
     "generate": "pnpm --filter natsume generate",
     "probe:unity": "node tools/unity-probe/probe-unity.mjs",
     "benchmark": "node tools/benchmarks/benchmark-particles.mjs",
-    "benchmark:preview": "node tools/benchmarks/benchmark-preview.mjs",
-    "baseline:check": "node tools/baseline/check.mjs"
+    "benchmark:preview": "node tools/benchmarks/benchmark-preview.mjs"
   },
   "devDependencies": {
     "@eslint/js": "9.39.2",
