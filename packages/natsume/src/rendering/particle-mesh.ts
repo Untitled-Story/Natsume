@@ -93,6 +93,7 @@ uniform mat3 uTransformMatrix;
 uniform vec4 uWorldColorAlpha;
 uniform vec4 uColor;
 uniform float uMaxSize;
+uniform float uMinSize;
 uniform float uModel;
 uniform float uDepthMode;
 uniform float uDepthConstant;
@@ -106,7 +107,8 @@ void main(){
   vec3 p=transform*vec3(aPosition.xy,1.0);
   vec2 center=(transform*vec3(aCenter,1.0)).xy;
   vec2 extent=abs((transform*vec3(aEdgeX,0.0)).xy)+abs((transform*vec3(aEdgeY,0.0)).xy);
-  float factor=min(1.0,uMaxSize/max(max(extent.x,extent.y)*0.5,0.000001));
+  float size=max(max(extent.x,extent.y)*0.5,0.000001);
+  float factor=clamp(uMaxSize/size,uMinSize/size,1.0);
   p.xy=center+(p.xy-center)*factor;
   gl_Position=vec4(p.xy,aPosition.z,1.0);
   vScreenUV=vec2(p.x*0.5+0.5,0.5-p.y*0.5);
@@ -219,32 +221,29 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
         Alignment[definition.alignment] +
         ' is unsupported',
     );
-    check(
-      definition.sort === 0,
-      'CAPABILITY',
-      'System ' + emitter.id + ': particle sort ' + definition.sort + ' is unsupported',
-    );
-    check(
-      definition.sortingFudge === 0,
-      'CAPABILITY',
-      'System ' + emitter.id + ': sortingFudge ' + definition.sortingFudge + ' is unsupported',
-    );
+    check(definition.sort >= 0 && definition.sort <= 4, 'SEMANTIC', 'Invalid particle sort');
+    check(Number.isFinite(definition.sortingFudge), 'SEMANTIC', 'Invalid sortingFudge');
     check(
       !definition.pivot ||
-        (definition.pivot.x === 0 && definition.pivot.y === 0 && definition.pivot.z === 0),
-      'CAPABILITY',
-      'System ' + emitter.id + ': renderer pivot is unsupported',
+        [definition.pivot.x, definition.pivot.y, definition.pivot.z].every(Number.isFinite),
+      'SEMANTIC',
+      'Invalid renderer pivot',
     );
     check(
       !definition.flip ||
-        (definition.flip.x === 0 && definition.flip.y === 0 && definition.flip.z === 0),
+        [definition.flip.x, definition.flip.y, definition.flip.z].every(
+          (value) => value >= 0 && value <= 1,
+        ),
       'CAPABILITY',
-      'System ' + emitter.id + ': renderer flip is unsupported',
+      'Renderer flip values must be in [0,1]',
     );
     check(
-      definition.minSize === 0,
-      'CAPABILITY',
-      'System ' + emitter.id + ': renderer minSize ' + definition.minSize + ' is unsupported',
+      Number.isFinite(definition.minSize) &&
+        Number.isFinite(definition.maxSize) &&
+        definition.minSize >= 0 &&
+        definition.maxSize >= definition.minSize,
+      'SEMANTIC',
+      'Renderer minSize/maxSize are invalid',
     );
     if (definition.mode === RenderMode.StretchedBillboard) {
       check(
@@ -401,6 +400,10 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
             value: definition.mode !== RenderMode.Mesh ? definition.maxSize : 1e20,
             type: 'f32',
           },
+          uMinSize: {
+            value: definition.mode !== RenderMode.Mesh ? definition.minSize : 0,
+            type: 'f32',
+          },
           uLinear: { value: 0, type: 'f32' },
           uTextureSRGB: {
             value: material.textures[0]!.colorSpace === ColorSpace.SRGB ? 1 : 0,
@@ -523,6 +526,9 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
       const frame = sheetFrame(sheet, t, rnd(54), rnd(55)),
         col = frame % cols,
         row = Math.floor(frame / cols);
+      const flip = this.definition.flip;
+      const flipX = flip ? random(e.seed, e.serials[i]!, 57) < flip.x : false;
+      const flipY = flip ? random(e.seed, e.serials[i]!, 58) < flip.y : false;
       const stream = e.custom?.streams.find(
         (s) => s.slot === 0 && s.mode === CustomDataMode.Vector,
       );
@@ -533,6 +539,13 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
         let x = p.x * sx,
           y = p.y * sy,
           z = p.z * sz;
+        if (this.definition.mode !== RenderMode.Mesh) {
+          if (this.definition.pivot) {
+            x -= this.definition.pivot.x * sx;
+            y -= this.definition.pivot.y * sy;
+            z -= this.definition.pivot.z * sz;
+          }
+        }
         let a = x * cz - y * snz;
         y = x * snz + y * cz;
         x = a;
@@ -575,11 +588,13 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
         v[k + 1] = (matrix[1]! * wx + matrix[5]! * wy + matrix[9]! * wz + matrix[13]!) / w;
         v[k + 2] = (matrix[2]! * wx + matrix[6]! * wy + matrix[10]! * wz + matrix[14]!) / w;
         // No bitmap upload flip: authored bottom-left Unity UVs are flipped here once.
+        const sampledU = flipX ? 1 - uv.x : uv.x;
+        const sampledV = flipY ? 1 - uv.y : uv.y;
         v[k + 3] =
-          ((uv.x + col) / cols) * (this.binding.scale?.x ?? 1) + (this.binding.offset?.x ?? 0);
+          ((sampledU + col) / cols) * (this.binding.scale?.x ?? 1) + (this.binding.offset?.x ?? 0);
         v[k + 4] =
           1 -
-          (((uv.y + (rows - 1 - row)) / rows) * (this.binding.scale?.y ?? 1) +
+          (((sampledV + (rows - 1 - row)) / rows) * (this.binding.scale?.y ?? 1) +
             (this.binding.offset?.y ?? 0));
         v[k + 5] = e.startColors[i * 4]! * this.scratchColor[0]! * (tint?.r ?? 1);
         v[k + 6] = e.startColors[i * 4 + 1]! * this.scratchColor[1]! * (tint?.g ?? 1);
