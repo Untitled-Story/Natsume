@@ -104,10 +104,8 @@ pnpm test:browser
 
 运行库位于 `packages/natsume/`，预览页位于 `packages/playground/`。生成绑定已包含在源码中，普通构建无需安装 FlatBuffers 编译器。
 
-[Unity 探针](tools/unity-probe/README.md) 与性能脚本位于 `tools/`，普通构建和测试无需安装 Unity。`data/`、`reference/` 和 `docs/` 为本地资料，不提交 Git；依赖本地 `.noap` 样本的测试在缺少文件时会跳过。
+[Unity 探针](tools/unity-probe/README.md) 与性能脚本位于 `tools/`，普通构建和测试无需安装 Unity。
 
 ## 许可证
-
-Copyright 2026 Untitled Story Orgnization
 
 本项目采用 [Apache License 2.0](LICENSE) 许可证。第三方资源保留其原有授权。
