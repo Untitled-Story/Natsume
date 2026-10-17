@@ -209,20 +209,42 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
       'Unsupported particle render mode',
     );
     check(
-      (definition.alignment === Alignment.World ||
+      definition.alignment === Alignment.World ||
         ((definition.mode === RenderMode.Mesh || definition.mode === RenderMode.Billboard) &&
-          definition.alignment === Alignment.View)) &&
-        definition.sort === 0 &&
-        definition.sortingFudge === 0 &&
-        !definition.pivot?.x &&
-        !definition.pivot?.y &&
-        !definition.pivot?.z &&
-        !definition.flip?.x &&
-        !definition.flip?.y &&
-        !definition.flip?.z &&
-        definition.minSize === 0,
+          definition.alignment === Alignment.View),
       'CAPABILITY',
-      'Unsupported renderer alignment, sort, pivot, flip or minimum size',
+      'System ' +
+        emitter.id +
+        ': renderer alignment ' +
+        Alignment[definition.alignment] +
+        ' is unsupported',
+    );
+    check(
+      definition.sort === 0,
+      'CAPABILITY',
+      'System ' + emitter.id + ': particle sort ' + definition.sort + ' is unsupported',
+    );
+    check(
+      definition.sortingFudge === 0,
+      'CAPABILITY',
+      'System ' + emitter.id + ': sortingFudge ' + definition.sortingFudge + ' is unsupported',
+    );
+    check(
+      !definition.pivot ||
+        (definition.pivot.x === 0 && definition.pivot.y === 0 && definition.pivot.z === 0),
+      'CAPABILITY',
+      'System ' + emitter.id + ': renderer pivot is unsupported',
+    );
+    check(
+      !definition.flip ||
+        (definition.flip.x === 0 && definition.flip.y === 0 && definition.flip.z === 0),
+      'CAPABILITY',
+      'System ' + emitter.id + ': renderer flip is unsupported',
+    );
+    check(
+      definition.minSize === 0,
+      'CAPABILITY',
+      'System ' + emitter.id + ': renderer minSize ' + definition.minSize + ' is unsupported',
     );
     if (definition.mode === RenderMode.StretchedBillboard) {
       check(

@@ -17,6 +17,7 @@ export interface SimulationOptions {
   readonly approximateNoise?: boolean;
   /** Required only when the entry's root uses stretched external anchors. */
   readonly parentLayout?: LayoutSize;
+  readonly gravity?: readonly [number, number, number];
 }
 export type PlaybackState = 'idle' | 'playing' | 'paused' | 'draining' | 'stopped';
 
@@ -101,6 +102,7 @@ export class Simulation {
           seed,
           options.approximateNoise ?? false,
           this.diagnostics,
+          options.gravity ?? [0, 0, 0],
         ),
       );
     for (const a of pack.document.animations) {

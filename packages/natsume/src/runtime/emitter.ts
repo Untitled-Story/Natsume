@@ -90,19 +90,22 @@ export class Emitter {
     instanceSeed: number,
     approximateNoise: boolean,
     diagnostics: Diagnostic[],
+    public gravity: readonly [number, number, number] = [0, 0, 0],
   ) {
     const main = source.main!;
     this.main = main;
+    this.gravity = gravity;
     validateParameters(source);
     check(
       main.space === Space.Local && main.scaling === ScalingMode.Local,
       'CAPABILITY',
       `System ${id}: playback supports local simulation/scaling`,
     );
+    check(main.space === Space.Local, 'CAPABILITY', 'Gravity requires Local simulation');
     check(
-      constantZero(main.gravityMultiplier),
-      'CAPABILITY',
-      `System ${id}: gravity is not supported`,
+      constantZero(main.gravityMultiplier) || gravity.some((value) => value !== 0),
+      'HOST',
+      `System ${id}: nonzero gravityMultiplier requires particleEnvironment.gravity`,
     );
     check(
       main.flipRotationProbability === 0,
@@ -446,6 +449,10 @@ export class Emitter {
       let vx = this.velocities[o]!,
         vy = this.velocities[o + 1]!,
         vz = this.velocities[o + 2]!;
+      const gravityMultiplier = scalar(this.main.gravityMultiplier, t, rnd(69), 1);
+      vx += this.gravity[0]! * gravityMultiplier * dt;
+      vy += this.gravity[1]! * gravityMultiplier * dt;
+      vz += this.gravity[2]! * gravityMultiplier * dt;
       let orbitalX = 0,
         orbitalY = 0,
         orbitalZ = 0,

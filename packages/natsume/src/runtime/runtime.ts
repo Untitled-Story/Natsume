@@ -196,6 +196,8 @@ export class EffectInstance {
     this.assertAlive();
     const next = copyEnvironment(value);
     this.environment = next;
+    for (const emitter of this.simulation.emitters.values())
+      emitter.gravity = next?.gravity ?? [0, 0, 0];
     for (const mesh of this.meshes) mesh.environment = next;
     this.render();
   }
@@ -416,7 +418,12 @@ export class NatsumeRuntime {
     check(!this.disposed, 'DISPOSED', 'Runtime has been destroyed');
     const environment = copyEnvironment(options.particleEnvironment);
     options = { ...options, ...(environment ? { particleEnvironment: environment } : {}) };
-    const simulation = new Simulation(pack, options),
+    const simulation = new Simulation(pack, {
+        ...options,
+        ...(options.particleEnvironment?.gravity
+          ? { gravity: options.particleEnvironment.gravity }
+          : {}),
+      }),
       releases: (() => void)[] = [];
     const instance = new EffectInstance(
       simulation,

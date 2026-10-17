@@ -51,6 +51,26 @@ it('holds emission during the authored start delay', () => {
   expect(emitter.count).toBeGreaterThan(0);
 });
 
+it('applies host gravity through the authored multiplier', () => {
+  const source = particleSource();
+  source.main!.gravityMultiplier = constant(1);
+  source.modules.push(
+    new ParticleModuleT(
+      M.EmissionModule,
+      new EmissionModuleT(null, null, [new BurstT(0, constant(1))]),
+    ),
+  );
+  const emitter = new Emitter(3, scene.nodes.get(1)!, source, true, 1, false, [], [0, -10, 0]);
+  emitter.sync();
+  expect(emitter.gravity).toEqual([0, -10, 0]);
+  expect(emitter.main.gravityMultiplier?.constantMax).toBe(1);
+  expect(emitter.count).toBe(1);
+  emitter.step(1 / 60);
+  emitter.step(1 / 60);
+  expect(emitter.velocities[1]).toBe(0);
+  expect(emitter.positions[1]).toBeCloseTo((-10 / 60) * (1 / 60) * 2, 6);
+});
+
 for (const label of ['burst-zero', 'burst-loop', 'burst-end']) {
   it(`matches native ${label} counts at fixed-step boundaries`, () => {
     const source = particleSource();

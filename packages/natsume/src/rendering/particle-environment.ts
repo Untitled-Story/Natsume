@@ -18,6 +18,8 @@ export type ParticleFog =
 /** Host inputs for Unity legacy particle recipes. Texture ownership stays with the host. */
 export interface ParticleEnvironment {
   readonly fog: ParticleFog;
+  /** Acceleration in local particle units per second squared. */
+  readonly gravity?: readonly [number, number, number] | undefined;
   /** View distance, or coefficients ax+by+cz+d in Unity world coordinates. Defaults to container.zIndex; negative distances clamp to zero. */
   readonly depth?: number | readonly [number, number, number, number] | undefined;
   /** Omit to disable soft particles. R stores linear view distance in the same units as depth. */
@@ -55,6 +57,12 @@ export function copyEnvironment(
       );
     else check(Number.isFinite(f.density) && f.density >= 0, 'HOST', 'Invalid fog density');
   }
+  const g = value.gravity;
+  check(
+    g === undefined || (g.length === 3 && g.every(Number.isFinite)),
+    'HOST',
+    'Invalid particle gravity',
+  );
   const d = value.depth;
   check(
     d === undefined ||
@@ -80,6 +88,7 @@ export function copyEnvironment(
   }
   return {
     fog: f.mode === 'none' ? { mode: 'none' } : { ...f, color: [...f.color] },
+    gravity: g ? [...g] : undefined,
     depth: typeof d === 'number' || d === undefined ? d : [...d],
     softParticles: soft
       ? {

@@ -61,7 +61,7 @@ Legacy Additive / Alpha Blended 材质需要显式提供环境。普通二维预
 
 ```ts
 const effect = await runtime.instantiate(pack, {
-  particleEnvironment: { fog: { mode: 'none' } },
+  particleEnvironment: { fog: { mode: 'none' }, gravity: [0, -9.81, 0] },
 });
 effect.container.zIndex = 10;
 
@@ -72,6 +72,8 @@ effect.setParticleEnvironment({
   softParticles: { depthTexture: sceneDepthTexture },
 });
 ```
+
+`gravity` 是宿主提供的局部加速度，单位与粒子的位置和速度一致；当包中的 `gravityMultiplier` 非零时必须提供它。Natsume 不使用隐含的 Unity 默认重力。
 
 雾效支持 `none`、`linear`、`exp`、`exp2`。`depth` 也可传 `[a, b, c, d]`，以 Unity 世界坐标计算 `ax + by + cz + d`。当前采用固定 +Z 观察与仿射深度，不提供完整 Unity 相机。
 
