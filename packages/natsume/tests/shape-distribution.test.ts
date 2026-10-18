@@ -1,3 +1,4 @@
+import { recordError } from './measurement.js';
 import { readFileSync } from 'node:fs';
 import { beforeAll, expect, it } from 'vitest';
 import { Emitter } from '../src/runtime/emitter.js';
@@ -64,8 +65,15 @@ for (const fixture of native.cases) {
     expect(e.count).toBe(count);
     if (spread) {
       for (let i = 0; i < count; i++)
-        for (const [axis, key] of (['x', 'y', 'z'] as const).entries())
+        for (const [axis, key] of (['x', 'y', 'z'] as const).entries()) {
+          recordError(
+            'shape.burstSpread',
+            e.positions[i * 3 + axis]! - fixture.positions[i]![key],
+            'units',
+            fixture.label + '/' + i + '/' + key,
+          );
           expect(e.positions[i * 3 + axis]).toBeCloseTo(fixture.positions[i]![key], 5);
+        }
       return;
     }
     const columns = [0, 1, 2].map(() => [] as number[]),
@@ -83,11 +91,35 @@ for (const fixture of native.cases) {
     for (let axis = 0; axis < 3; axis++) {
       const mean = columns[axis]!.reduce((s, v) => s + v, 0) / count;
       const moment = columns[axis]!.reduce((s, v) => s + v * v, 0) / count;
+      recordError(
+        'shape.jitter.mean',
+        mean - fixture.mean[axis]!,
+        'units',
+        fixture.label + '/' + axis,
+      );
+      recordError(
+        'shape.jitter.second',
+        moment - fixture.secondMoment[axis]!,
+        'units²',
+        fixture.label + '/' + axis,
+      );
       expect(Math.abs(mean - fixture.mean[axis]!)).toBeLessThan(0.06);
       expect(Math.abs(moment - fixture.secondMoment[axis]!)).toBeLessThan(0.06);
     }
     const mean = radii.reduce((s, v) => s + v, 0) / count;
     const variance = radii.reduce((s, v) => s + (v - mean) ** 2, 0) / count;
+    recordError(
+      'shape.jitter.radiusSquaredMean',
+      mean - fixture.radiusSquaredMean,
+      'units²',
+      fixture.label,
+    );
+    recordError(
+      fixture.rotated ? 'shape.jitter.rotatedVariance' : 'shape.jitter.variance',
+      variance - fixture.radiusSquaredVariance,
+      'units⁴',
+      fixture.label,
+    );
     expect(Math.abs(mean - fixture.radiusSquaredMean)).toBeLessThan(0.08);
     expect(Math.abs(variance - fixture.radiusSquaredVariance)).toBeLessThan(
       fixture.rotated ? 0.2 : 1e-6,

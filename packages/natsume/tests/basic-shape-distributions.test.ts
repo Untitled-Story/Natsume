@@ -1,3 +1,4 @@
+import { recordError } from './measurement.js';
 import { readFileSync } from 'node:fs';
 import { expect, it } from 'vitest';
 import { sampleShape, validateShape } from '../src/runtime/shapes.js';
@@ -74,10 +75,36 @@ for (const c of native.cases.filter((c) => !c.align))
       radii[3] = radii[3]! + (rv * rv) / c.count;
     }
     for (const [block, stats] of [c.position, c.velocity].entries()) {
+      const metric = block === 0 ? 'shape.basic.position' : 'shape.basic.direction';
+      const unit = block === 0 ? 'units' : 'normalized';
       for (const [a, key] of (['x', 'y', 'z'] as const).entries()) {
+        recordError(
+          metric + '.mean',
+          sums[block * 3 + a]! - stats.mean[key],
+          unit,
+          c.label + '/' + block + '/' + key,
+        );
+        recordError(
+          metric + '.second',
+          squares[block * 3 + a]! - stats.second[key],
+          unit + '²',
+          c.label + '/' + block + '/' + key,
+        );
         expect(Math.abs(sums[block * 3 + a]! - stats.mean[key])).toBeLessThan(0.025);
         expect(Math.abs(squares[block * 3 + a]! - stats.second[key])).toBeLessThan(0.035);
       }
+      recordError(
+        metric + '.radiusMean',
+        radii[block * 2]! - stats.radiusMean,
+        unit,
+        c.label + '/' + block,
+      );
+      recordError(
+        metric + '.radiusSecond',
+        radii[block * 2 + 1]! - stats.radiusSecond,
+        unit + '²',
+        c.label + '/' + block,
+      );
       expect(Math.abs(radii[block * 2]! - stats.radiusMean)).toBeLessThan(0.025);
       expect(Math.abs(radii[block * 2 + 1]! - stats.radiusSecond)).toBeLessThan(0.045);
     }

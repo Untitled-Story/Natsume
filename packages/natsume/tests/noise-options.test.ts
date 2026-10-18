@@ -1,3 +1,4 @@
+import { recordError } from './measurement.js';
 import { readFileSync } from 'node:fs';
 import { expect, it } from 'vitest';
 import { Emitter } from '../src/runtime/emitter.js';
@@ -70,8 +71,15 @@ for (const label of ['remap-positive', 'remap-negative', 'strength-zero'])
     const samples = native.cases.find((c) => c.label === label)!.samples;
     for (const s of samples) {
       if (s.frame) e.step(1 / 60);
-      for (const [i, k] of (['x', 'y', 'z'] as const).entries())
+      for (const [i, k] of (['x', 'y', 'z'] as const).entries()) {
+        recordError(
+          'noise.constantRemap',
+          e.positions[i]! - s.position[k],
+          'units',
+          label + '/' + s.frame + '/' + k,
+        );
         expect(Math.abs(e.positions[i]! - s.position[k])).toBeLessThan(1e-5);
+      }
     }
   });
 it('keeps native rotation and size parameter relationships without accumulating size', () => {

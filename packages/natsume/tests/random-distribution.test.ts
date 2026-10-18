@@ -1,3 +1,4 @@
+import { recordError } from './measurement.js';
 import { beforeAll, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { Emitter } from '../src/runtime/emitter.js';
@@ -171,15 +172,25 @@ for (const fixture of native.cases) {
         const expected = fixture.distributions.find((d) => d.name === key)!;
         const mean = values.reduce((s, v) => s + v, 0) / values.length;
         const variance = values.reduce((s, v) => s + (v - mean) ** 2, 0) / values.length;
+        const label = [fixture.seed, fixture.thickness, fixture.arc, key].join('/');
+        recordError('random.mean', mean - expected.mean, 'normalized', label);
+        recordError('random.variance', variance - expected.variance, 'normalized²', label);
         expect(Math.abs(mean - expected.mean), key).toBeLessThan(0.018);
         expect(Math.abs(variance - expected.variance), key).toBeLessThan(0.007);
         const bins = new Array<number>(16).fill(0);
         for (const v of values) bins[Math.max(0, Math.min(15, Math.floor(v * 16)))]!++;
-        for (let bin = 0; bin < 16; bin++)
+        for (let bin = 0; bin < 16; bin++) {
+          recordError(
+            'random.histogram',
+            bins[bin]! / values.length - expected.bins[bin]! / fixture.count,
+            'fraction',
+            label + '/' + bin,
+          );
           expect(
             Math.abs(bins[bin]! / values.length - expected.bins[bin]! / fixture.count),
             key,
           ).toBeLessThan(0.018);
+        }
       }
     },
   );

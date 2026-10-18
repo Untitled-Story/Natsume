@@ -1,3 +1,4 @@
+import { recordError } from '../measurement.js';
 import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { test, expect } from '@playwright/test';
@@ -28,12 +29,37 @@ test('uses one stable lifetime-size random factor across axes, matching Unity st
     expect(results[0].distributions).toEqual(results[1].distributions);
     const fixture = native.cases.find((c: { seed: number }) => c.seed === seed);
     for (const result of results) {
+      recordError(
+        'random.sizeLife.axisFactor',
+        result.maximumAxisDifference,
+        'normalized',
+        String(seed),
+      );
       expect(result.maximumAxisDifference).toBeLessThan(1e-6);
       for (let axis = 0; axis < 3; axis++) {
         const expected = fixture.distributions.find(
           (d: { name: string }) => d.name === 'sizeLife' + 'XYZ'[axis],
         );
         const actual = result.distributions[axis]!;
+        recordError(
+          'random.sizeLife.mean',
+          actual.mean - expected.mean,
+          'normalized',
+          seed + '/' + axis,
+        );
+        recordError(
+          'random.sizeLife.variance',
+          actual.variance - expected.variance,
+          'normalized²',
+          seed + '/' + axis,
+        );
+        for (let i = 0; i < 16; i++)
+          recordError(
+            'random.sizeLife.histogram',
+            actual.bins[i]! / fixture.count - expected.bins[i] / fixture.count,
+            'fraction',
+            seed + '/' + axis + '/' + i,
+          );
         expect(Math.abs(actual.mean - expected.mean)).toBeLessThan(0.018);
         expect(Math.abs(actual.variance - expected.variance)).toBeLessThan(0.007);
         for (let i = 0; i < 16; i++)
@@ -120,6 +146,27 @@ test('matches Unity Billboard, Mesh and Stretch vertices with UVs', async ({ pag
       );
       // Native normalized direction has a small length error for combined velocity.
       const tolerance = label === 'stretch-linear-velocity' ? 0.015 : 1e-5;
+      recordError(
+        'renderer.' +
+          (label.startsWith('stretch')
+            ? 'stretch.static'
+            : label.startsWith('billboard') || label === 'appearance-blend'
+              ? 'billboard'
+              : 'mesh'),
+        nearest,
+        'units',
+        label + '/' + result.frame + '/' + index,
+      );
+      recordError(
+        'renderer.uv',
+        Math.min(
+          ...sample.uv.map((p: { x: number; y: number }) =>
+            Math.hypot(p.x - result.uv[index]![0]!, p.y - result.uv[index]![1]!),
+          ),
+        ),
+        'UV',
+        label,
+      );
       expect(nearest, label + ' frame ' + result.frame).toBeLessThan(tolerance);
       const uv = result.uv[index]!;
       const matching = sample.vertices.some(
@@ -635,6 +682,13 @@ test('orders transparent particles by Unity sort modes', async ({ page }) => {
   );
   for (const sample of native.cases) {
     const name = sample.label.replace('InFront', 'First');
+    for (let i = 0; i < sample.order.length; i++)
+      recordError(
+        'renderer.sort',
+        result[name][i] - sample.order[i],
+        'index',
+        sample.label + '/' + i,
+      );
     expect(result[name], sample.label).toEqual(sample.order);
   }
   expect(result.transformed).toEqual([1, 2, 0]);
@@ -677,16 +731,36 @@ test('matches Unity stretch velocity and moving-view geometry', async ({ page })
       const p = sample.vertices[index];
       return [p.x, p.y, p.z];
     };
+    for (const [i, vertex] of result.vertices.entries()) {
+      const p = nativeVertex(result.uv[i]);
+      recordError(
+        sample.label.endsWith('-xyz')
+          ? 'renderer.stretch.xyzFullVertex'
+          : sample.label.startsWith('camera-')
+            ? 'renderer.stretch.movingView'
+            : 'renderer.stretch.velocity',
+        Math.hypot(...vertex.map((v: number, a: number) => v - p[a]!)),
+        'units',
+        sample.label + '/' + i,
+      );
+    }
     if (sample.label.endsWith('-xyz')) {
       // Unity's transverse edge faces the particle-to-camera ray. The affine
       // view uses a fixed +Z direction; compare the full 3D longitudinal edge.
       const a = nativeVertex(result.uv[0]),
         b = nativeVertex(result.uv[1]);
-      for (let axis = 0; axis < 3; axis++)
+      for (let axis = 0; axis < 3; axis++) {
+        recordError(
+          'renderer.stretch.xyzLongitudinal',
+          result.vertices[1][axis] - result.vertices[0][axis] - (b[axis]! - a[axis]!),
+          'units',
+          sample.label + '/' + axis,
+        );
         expect(
           Math.abs(result.vertices[1][axis] - result.vertices[0][axis] - (b[axis]! - a[axis]!)),
           sample.label,
         ).toBeLessThan(0.025);
+      }
     } else {
       for (const [i, vertex] of result.vertices.entries()) {
         const p = nativeVertex(result.uv[i]);
@@ -711,4 +785,41 @@ test('replaces gravity and view inputs atomically while paused', async ({ page }
     new URL('./render-fixture.ts', import.meta.url).pathname,
   );
   expect(result).toEqual({ rejected: true, preserved: true, updated: true });
+});
+
+test('measures Unity renderer pivot and deterministic flip geometry', async ({ page }) => {
+  await page.goto('/');
+  await page
+    .locator('#file')
+    .setInputFiles(fileURLToPath(new URL('../../../../data/kirakira.noap', import.meta.url)));
+  await expect(page.locator('#status')).toHaveText('预览就绪');
+  const actual = await page.evaluate(
+    async (path) =>
+      (await import(`/@fs${path}`)).measureParticleGeometry(['billboard-pivot', 'billboard-flip']),
+    new URL('./render-fixture.ts', import.meta.url).pathname,
+  );
+  const native = JSON.parse(
+    readFileSync(new URL('../fixtures/unity-boundaries.json', import.meta.url), 'utf8'),
+  );
+  for (const result of actual) {
+    const expected = native.cases
+      .find((c: { label: string }) => c.label === result.label)
+      .samples.find((s: { frame: number }) => s.frame === result.frame);
+    for (const [i, vertex] of result.vertices.entries()) {
+      const uv = result.uv[i];
+      const index = expected.uv.findIndex(
+        (p: { x: number; y: number }) => Math.hypot(p.x - uv[0], p.y - uv[1]) < 1e-6,
+      );
+      expect(index).toBeGreaterThanOrEqual(0);
+      const p = expected.vertices[index];
+      const error = Math.hypot(vertex[0] - p.x, vertex[1] - p.y, vertex[2] - p.z);
+      recordError(
+        result.label === 'billboard-pivot' ? 'renderer.pivot' : 'renderer.flip',
+        error,
+        'units',
+        result.label + '/' + result.frame + '/' + i,
+      );
+      expect(Number.isFinite(error)).toBe(true);
+    }
+  }
 });

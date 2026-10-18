@@ -164,6 +164,7 @@ public static class NatsumeBoundaryProbe
             var camera = cameraObject.AddComponent<Camera>(); camera.orthographic = true;
             camera.transform.position = new Vector3(0, 0, -10); camera.orthographicSize = 5;
             var cases = new List<Result> {
+                Emission("rate-delayed", ps => { Rate(ps,60); var m=ps.main;m.duration=1;m.startDelay=0.2f; }, camera),
                 Emission("rate-60-once", ps => Rate(ps, 60), camera),
                 Emission("rate-60-loop", ps => Rate(ps, 60, true), camera),
                 Emission("rate-curve", ps => { Rate(ps, 0); var e = ps.emission; e.rateOverTime = new ParticleSystem.MinMaxCurve(1, AnimationCurve.Linear(0, 0, 1, 120)); }, camera),
@@ -190,6 +191,8 @@ public static class NatsumeBoundaryProbe
                 Manual("mesh-view-node-rotated", ps => { MeshRenderer(ps); ps.GetComponent<ParticleSystemRenderer>().alignment = ParticleSystemRenderSpace.View; ps.transform.rotation = Quaternion.Euler(0,0,90); }, camera, true),
                 Manual("mesh-world-node-rotated", ps => { MeshRenderer(ps); ps.transform.rotation = Quaternion.Euler(0,0,90); }, camera, true),
                 Manual("mesh-local-node-rotated", ps => { MeshRenderer(ps); ps.GetComponent<ParticleSystemRenderer>().alignment = ParticleSystemRenderSpace.Local; ps.transform.rotation = Quaternion.Euler(0,0,90); }, camera, true),
+                Manual("billboard-pivot", ps => { ps.GetComponent<ParticleSystemRenderer>().pivot = new Vector3(0.25f,-0.5f,0.1f); }, camera, true),
+                Manual("billboard-flip", ps => { ps.GetComponent<ParticleSystemRenderer>().flip = new Vector3(1,1,0); }, camera, true),
                 Manual("billboard-local-node-rotated", ps => { ps.GetComponent<ParticleSystemRenderer>().alignment = ParticleSystemRenderSpace.Local; ps.transform.rotation = Quaternion.Euler(0,0,90); }, camera, true),
                 Manual("billboard-world-node-rotated", ps => { ps.transform.rotation = Quaternion.Euler(0,0,90); }, camera, true),
                 Manual("stretch-view", ps => { Stretch(ps, -4); ps.GetComponent<ParticleSystemRenderer>().alignment = ParticleSystemRenderSpace.View; }, camera, true),

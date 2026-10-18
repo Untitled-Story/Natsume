@@ -24,6 +24,8 @@ pnpm probe:unity --shape        # 位置扰动与 Burst Spread
 pnpm probe:unity --basic-shapes     # 基础 Shape 区域、厚度、初速度分布
 pnpm probe:unity --rotation-prewarm  # 生命周期旋转和预热
 pnpm probe:unity --rect-layout  # 有符号 RectTransform 布局
+pnpm probe:unity --noise-statistics # Noise 总体幅度、旋转与尺寸统计
+pnpm probe:unity --custom-data  # 两组自定义流的 Vector / HDR Color
 pnpm probe:unity --noise-options # Noise 参数行为与渲染尺寸
 pnpm probe:unity --sweeps       # Shape 时间扫描、量化与方向对齐
 pnpm probe:unity --spaces       # 模拟空间、世界重力与线性速度
@@ -49,6 +51,8 @@ pnpm probe:unity --basic-shapes --update-fixtures
 pnpm probe:unity --rotation-prewarm --update-fixtures
 pnpm probe:unity --rect-layout --update-fixtures
 pnpm probe:unity --noise-options --update-fixtures
+pnpm probe:unity --noise-statistics --update-fixtures
+pnpm probe:unity --custom-data --update-fixtures
 pnpm probe:unity --sweeps --update-fixtures
 pnpm probe:unity --spaces --update-fixtures
 pnpm probe:unity --sorting --update-fixtures
@@ -57,3 +61,13 @@ pnpm test
 ```
 
 夹具位于 `packages/natsume/tests/fixtures/`，不包含原始游戏素材。详细测量结论、已测范围和近似差异见 [MEASUREMENTS.md](MEASUREMENTS.md)。
+
+## 误差汇总
+
+```sh
+node tools/unity-probe/measure.mjs --refresh-unity
+```
+
+依次刷新全部数值探针（不包含原始 prefab 布局和外部拟合输入），运行单元与浏览器对比，将最大绝对差、误差 RMS、比较次数与输入哈希写入 `measurements.json`。已测输入数值相同时保留夹具文件内容，避免纯格式变动。省略 `--refresh-unity` 可复用本地原生结果。
+
+完整浏览器测量需要本地 `data/kirakira.noap`；其他游戏样本存在时一并运行功能回归。原生完整输出和逐项误差记录位于 `data/unity-baselines/`。汇总区分 Unity 数值对照与解析像素对照；已知近似的测量不等于严格一致性验收。

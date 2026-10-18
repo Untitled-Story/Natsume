@@ -1,0 +1,331 @@
+{
+  "unityVersion": "2022.3.21f1",
+  "count": 512,
+  "pointSeed": 1234567,
+  "cases": [
+    {
+      "label": "calibrated-high",
+      "seed": 2,
+      "samples": [
+        {
+          "frame": 1,
+          "displacementRms": 0.0008962281438251173,
+          "rotationRms": 0,
+          "sizeDeltaRms": 0
+        },
+        {
+          "frame": 60,
+          "displacementRms": 0.053728741476205794,
+          "rotationRms": 0,
+          "sizeDeltaRms": 0
+        }
+      ]
+    },
+    {
+      "label": "high",
+      "seed": 2,
+      "samples": [
+        {
+          "frame": 1,
+          "displacementRms": 0.029874066010582352,
+          "rotationRms": 0,
+          "sizeDeltaRms": 0
+        },
+        {
+          "frame": 60,
+          "displacementRms": 1.6153371346074072,
+          "rotationRms": 0,
+          "sizeDeltaRms": 0
+        }
+      ]
+    },
+    {
+      "label": "low",
+      "seed": 2,
+      "samples": [
+        {
+          "frame": 1,
+          "displacementRms": 0.05342199540291897,
+          "rotationRms": 0,
+          "sizeDeltaRms": 0
+        },
+        {
+          "frame": 60,
+          "displacementRms": 2.7222591182497657,
+          "rotationRms": 0,
+          "sizeDeltaRms": 0
+        }
+      ]
+    },
+    {
+      "label": "medium",
+      "seed": 2,
+      "samples": [
+        {
+          "frame": 1,
+          "displacementRms": 0.0366836747265875,
+          "rotationRms": 0,
+          "sizeDeltaRms": 0
+        },
+        {
+          "frame": 60,
+          "displacementRms": 2.0139775318849864,
+          "rotationRms": 0,
+          "sizeDeltaRms": 0
+        }
+      ]
+    },
+    {
+      "label": "scroll",
+      "seed": 2,
+      "samples": [
+        {
+          "frame": 1,
+          "displacementRms": 0.029865785471219226,
+          "rotationRms": 0,
+          "sizeDeltaRms": 0
+        },
+        {
+          "frame": 60,
+          "displacementRms": 1.581450959176972,
+          "rotationRms": 0,
+          "sizeDeltaRms": 0
+        }
+      ]
+    },
+    {
+      "label": "octaves",
+      "seed": 2,
+      "samples": [
+        {
+          "frame": 1,
+          "displacementRms": 0.028222073930583663,
+          "rotationRms": 0,
+          "sizeDeltaRms": 0
+        },
+        {
+          "frame": 60,
+          "displacementRms": 1.373349030795133,
+          "rotationRms": 0,
+          "sizeDeltaRms": 0
+        }
+      ]
+    },
+    {
+      "label": "frequency-zero",
+      "seed": 2,
+      "samples": [
+        {
+          "frame": 1,
+          "displacementRms": 0.02886652125225151,
+          "rotationRms": 0,
+          "sizeDeltaRms": 0
+        },
+        {
+          "frame": 60,
+          "displacementRms": 1.731991003884785,
+          "rotationRms": 0,
+          "sizeDeltaRms": 0
+        }
+      ]
+    },
+    {
+      "label": "rotation",
+      "seed": 2,
+      "samples": [
+        {
+          "frame": 1,
+          "displacementRms": 0,
+          "rotationRms": 0.014937034493062482,
+          "sizeDeltaRms": 0
+        },
+        {
+          "frame": 60,
+          "displacementRms": 0,
+          "rotationRms": 0.8962220815136872,
+          "sizeDeltaRms": 0
+        }
+      ]
+    },
+    {
+      "label": "size",
+      "seed": 2,
+      "samples": [
+        {
+          "frame": 1,
+          "displacementRms": 0,
+          "rotationRms": 0,
+          "sizeDeltaRms": 0.7223093532133259
+        },
+        {
+          "frame": 60,
+          "displacementRms": 0,
+          "rotationRms": 0,
+          "sizeDeltaRms": 0.7223093532133259
+        }
+      ]
+    },
+    {
+      "label": "calibrated-high",
+      "seed": 4294967295,
+      "samples": [
+        {
+          "frame": 1,
+          "displacementRms": 0.0008699019584384139,
+          "rotationRms": 0,
+          "sizeDeltaRms": 0
+        },
+        {
+          "frame": 60,
+          "displacementRms": 0.052193629826602535,
+          "rotationRms": 0,
+          "sizeDeltaRms": 0
+        }
+      ]
+    },
+    {
+      "label": "high",
+      "seed": 4294967295,
+      "samples": [
+        {
+          "frame": 1,
+          "displacementRms": 0.02899670898615523,
+          "rotationRms": 0,
+          "sizeDeltaRms": 0
+        },
+        {
+          "frame": 60,
+          "displacementRms": 1.6275067915174077,
+          "rotationRms": 0,
+          "sizeDeltaRms": 0
+        }
+      ]
+    },
+    {
+      "label": "low",
+      "seed": 4294967295,
+      "samples": [
+        {
+          "frame": 1,
+          "displacementRms": 0.05310229579299473,
+          "rotationRms": 0,
+          "sizeDeltaRms": 0
+        },
+        {
+          "frame": 60,
+          "displacementRms": 2.689858691142602,
+          "rotationRms": 0,
+          "sizeDeltaRms": 0
+        }
+      ]
+    },
+    {
+      "label": "medium",
+      "seed": 4294967295,
+      "samples": [
+        {
+          "frame": 1,
+          "displacementRms": 0.036834898130605205,
+          "rotationRms": 0,
+          "sizeDeltaRms": 0
+        },
+        {
+          "frame": 60,
+          "displacementRms": 1.9996937047188426,
+          "rotationRms": 0,
+          "sizeDeltaRms": 0
+        }
+      ]
+    },
+    {
+      "label": "scroll",
+      "seed": 4294967295,
+      "samples": [
+        {
+          "frame": 1,
+          "displacementRms": 0.02900315117163473,
+          "rotationRms": 0,
+          "sizeDeltaRms": 0
+        },
+        {
+          "frame": 60,
+          "displacementRms": 1.626432487907448,
+          "rotationRms": 0,
+          "sizeDeltaRms": 0
+        }
+      ]
+    },
+    {
+      "label": "octaves",
+      "seed": 4294967295,
+      "samples": [
+        {
+          "frame": 1,
+          "displacementRms": 0.02842010299786566,
+          "rotationRms": 0,
+          "sizeDeltaRms": 0
+        },
+        {
+          "frame": 60,
+          "displacementRms": 1.3895228355109377,
+          "rotationRms": 0,
+          "sizeDeltaRms": 0
+        }
+      ]
+    },
+    {
+      "label": "frequency-zero",
+      "seed": 4294967295,
+      "samples": [
+        {
+          "frame": 1,
+          "displacementRms": 0.02886709247660749,
+          "rotationRms": 0,
+          "sizeDeltaRms": 0
+        },
+        {
+          "frame": 60,
+          "displacementRms": 1.7320251717566182,
+          "rotationRms": 0,
+          "sizeDeltaRms": 0
+        }
+      ]
+    },
+    {
+      "label": "rotation",
+      "seed": 4294967295,
+      "samples": [
+        {
+          "frame": 1,
+          "displacementRms": 0,
+          "rotationRms": 0.014498358633143565,
+          "sizeDeltaRms": 0
+        },
+        {
+          "frame": 60,
+          "displacementRms": 0,
+          "rotationRms": 0.8699014945379671,
+          "sizeDeltaRms": 0
+        }
+      ]
+    },
+    {
+      "label": "size",
+      "seed": 4294967295,
+      "samples": [
+        {
+          "frame": 1,
+          "displacementRms": 0,
+          "rotationRms": 0,
+          "sizeDeltaRms": 0.6990339817186919
+        },
+        {
+          "frame": 60,
+          "displacementRms": 0,
+          "rotationRms": 0,
+          "sizeDeltaRms": 0.6990339817186919
+        }
+      ]
+    }
+  ]
+}

@@ -1,3 +1,4 @@
+import { recordError } from './measurement.js';
 import { readFileSync } from 'node:fs';
 import { expect, it } from 'vitest';
 import { sampleShape } from '../src/runtime/shapes.js';
@@ -55,10 +56,26 @@ for (const c of native.cases)
     const out = new Float64Array(6);
     for (const s of c.samples) {
       // Native's exact PingPong period endpoint has a discontinuity; retain the continuous reflected limit.
-      if (c.label === 'circle-pingpong' && s.time === 2) continue;
+      if (c.label === 'circle-pingpong' && s.time === 2) {
+        sampleShape(shape, 12345, 0, s.time / 3, 0, 1, out, s.time, 3);
+        recordError(
+          'shape.sweep.excludedEndpoint',
+          Math.hypot(...(['x', 'y', 'z'] as const).map((key, i) => out[i]! - s.position[key])),
+          'units',
+          c.label + '/' + s.time,
+        );
+        continue;
+      }
       sampleShape(shape, 12345, 0, s.time / 3, 0, 1, out, s.time, 3);
-      for (const [i, k] of (['x', 'y', 'z'] as const).entries())
+      for (const [i, k] of (['x', 'y', 'z'] as const).entries()) {
+        recordError(
+          'shape.sweep.position',
+          out[i]! - s.position[k],
+          'units',
+          c.label + '/' + s.time + '/' + k,
+        );
         expect(Math.abs(out[i]! - s.position[k])).toBeLessThan(1e-5);
+      }
     }
   });
 
@@ -98,9 +115,16 @@ for (const c of native.cases.filter((c) => c.label.includes('aligned')))
       emitter.sync();
       for (let i = 0; i < Math.round(sample.time * 60); i++) emitter.step(1 / 60);
       expect(emitter.count).toBe(1);
-      for (const [i, key] of (['x', 'y', 'z'] as const).entries())
+      for (const [i, key] of (['x', 'y', 'z'] as const).entries()) {
+        recordError(
+          'shape.align.rotation',
+          emitter.rotations[i]! - (sample.rotation[key] * Math.PI) / 180,
+          'rad',
+          c.label + '/' + sample.time + '/' + key,
+        );
         expect(
           Math.abs(emitter.rotations[i]! - (sample.rotation[key] * Math.PI) / 180),
         ).toBeLessThan(1e-5);
+      }
     }
   });

@@ -6,6 +6,17 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { verifyUnityBaseline } from './verify-unity-baseline.mjs';
 
+// Preserve existing fixture bytes when a fresh native run is numerically identical.
+async function saveJson(path, contents) {
+  try {
+    const previous = await readFile(path, 'utf8');
+    if (JSON.stringify(JSON.parse(previous)) === JSON.stringify(JSON.parse(contents))) return;
+  } catch (error) {
+    if (error.code !== 'ENOENT' && !(error instanceof SyntaxError)) throw error;
+  }
+  await writeFile(path, contents);
+}
+
 const tool = dirname(fileURLToPath(import.meta.url));
 const root = resolve(tool, '../..');
 const version = '2022.3.21f1';
@@ -20,6 +31,8 @@ const sorting = process.argv.includes('--sorting');
 const spaces = process.argv.includes('--spaces');
 const sweeps = process.argv.includes('--sweeps');
 const noiseOptions = process.argv.includes('--noise-options');
+const noiseStatistics = process.argv.includes('--noise-statistics');
+const customData = process.argv.includes('--custom-data');
 const stretch = process.argv.includes('--stretch');
 const rectLayout = process.argv.includes('--rect-layout');
 assert(
@@ -35,7 +48,9 @@ assert(
     Number(sweeps) +
     Number(noiseOptions) +
     Number(rectLayout) +
-    Number(stretch) <=
+    Number(stretch) +
+    Number(noiseStatistics) +
+    Number(customData) <=
     1,
   'Choose one probe mode',
 );
@@ -45,31 +60,35 @@ const project = resolve(root, 'data/unity-probe');
 const output = resolve(
   root,
   'data/unity-baselines',
-  stretch
-    ? 'stretch'
-    : rectLayout
-      ? 'layout'
-      : noiseOptions
-        ? 'noise-options'
-        : sweeps
-          ? 'sweeps'
-          : spaces
-            ? 'spaces'
-            : sorting
-              ? 'sorting'
-              : basicShapes
-                ? 'basic-shapes'
-                : rotationPrewarm
-                  ? 'rotation-prewarm'
-                  : layout
-                    ? 'prefab-layout'
-                    : boundaries
-                      ? 'boundaries'
-                      : distributions
-                        ? 'random'
-                        : shape
-                          ? 'shape'
-                          : '.',
+  noiseStatistics
+    ? 'noise-statistics'
+    : customData
+      ? 'custom-data'
+      : stretch
+        ? 'stretch'
+        : rectLayout
+          ? 'layout'
+          : noiseOptions
+            ? 'noise-options'
+            : sweeps
+              ? 'sweeps'
+              : spaces
+                ? 'spaces'
+                : sorting
+                  ? 'sorting'
+                  : basicShapes
+                    ? 'basic-shapes'
+                    : rotationPrewarm
+                      ? 'rotation-prewarm'
+                      : layout
+                        ? 'prefab-layout'
+                        : boundaries
+                          ? 'boundaries'
+                          : distributions
+                            ? 'random'
+                            : shape
+                              ? 'shape'
+                              : '.',
 );
 const baseline = resolve(output, fitting ? 'noise-fit-output.json' : `unity-${version}.json`);
 await mkdir(output, { recursive: true });
@@ -104,40 +123,50 @@ const child = spawn(
   editor,
   [
     '-batchmode',
-    ...(layout || boundaries || distributions || sorting || noiseOptions || stretch
+    ...(layout ||
+    boundaries ||
+    distributions ||
+    sorting ||
+    noiseOptions ||
+    stretch ||
+    noiseStatistics
       ? []
       : ['-nographics']),
     '-noUpm',
     '-projectPath',
     project,
     '-executeMethod',
-    stretch
-      ? 'NatsumeStretchProbe.Run'
-      : rectLayout
-        ? 'NatsumeLayoutProbe.Run'
-        : noiseOptions
-          ? 'NatsumeNoiseOptionsProbe.Run'
-          : sweeps
-            ? 'NatsumeSweepProbe.Run'
-            : spaces
-              ? 'NatsumeSpaceProbe.Run'
-              : sorting
-                ? 'NatsumeSortingProbe.Run'
-                : basicShapes
-                  ? 'NatsumeBasicShapeProbe.Run'
-                  : rotationPrewarm
-                    ? 'NatsumeRotationPrewarmProbe.Run'
-                    : shape
-                      ? 'NatsumeShapeProbe.Run'
-                      : distributions
-                        ? 'NatsumeRandomProbe.Run'
-                        : layout
-                          ? 'NatsumePrefabLayoutProbe.Run'
-                          : boundaries
-                            ? 'NatsumeBoundaryProbe.Run'
-                            : fitting
-                              ? 'NatsumeNoiseFitProbe.Run'
-                              : 'NatsumeProbe.Run',
+    noiseStatistics
+      ? 'NatsumeNoiseStatisticsProbe.Run'
+      : customData
+        ? 'NatsumeCustomDataProbe.Run'
+        : stretch
+          ? 'NatsumeStretchProbe.Run'
+          : rectLayout
+            ? 'NatsumeLayoutProbe.Run'
+            : noiseOptions
+              ? 'NatsumeNoiseOptionsProbe.Run'
+              : sweeps
+                ? 'NatsumeSweepProbe.Run'
+                : spaces
+                  ? 'NatsumeSpaceProbe.Run'
+                  : sorting
+                    ? 'NatsumeSortingProbe.Run'
+                    : basicShapes
+                      ? 'NatsumeBasicShapeProbe.Run'
+                      : rotationPrewarm
+                        ? 'NatsumeRotationPrewarmProbe.Run'
+                        : shape
+                          ? 'NatsumeShapeProbe.Run'
+                          : distributions
+                            ? 'NatsumeRandomProbe.Run'
+                            : layout
+                              ? 'NatsumePrefabLayoutProbe.Run'
+                              : boundaries
+                                ? 'NatsumeBoundaryProbe.Run'
+                                : fitting
+                                  ? 'NatsumeNoiseFitProbe.Run'
+                                  : 'NatsumeProbe.Run',
     ...(stretch ? [] : ['-quit']),
     '-logFile',
     log,
@@ -154,6 +183,19 @@ await new Promise((accept, reject) => {
 });
 const current = JSON.parse(await readFile(baseline, 'utf8'));
 assert.equal(current.unityVersion, version);
+if (noiseStatistics || customData) {
+  assert.equal(current.cases.length, noiseStatistics ? 18 : 4);
+  if (process.argv.includes('--update-fixtures'))
+    await saveJson(
+      resolve(
+        root,
+        `packages/natsume/tests/fixtures/unity-${noiseStatistics ? 'noise-statistics' : 'custom-data'}.json`,
+      ),
+      JSON.stringify(current, null, 2) + '\n',
+    );
+  console.log(`Module measurements: ${current.cases.length} cases, ${baseline}`);
+  process.exit(0);
+}
 if (stretch) {
   current.motion = JSON.parse(await readFile(resolve(output, 'camera-motion.json'), 'utf8')).cases;
   assert.equal(current.cases.length, 12);
@@ -163,7 +205,7 @@ if (stretch) {
     'Moving-view probe must record a nonzero native camera velocity',
   );
   if (process.argv.includes('--update-fixtures'))
-    await writeFile(
+    await saveJson(
       resolve(root, 'packages/natsume/tests/fixtures/unity-stretch.json'),
       JSON.stringify(current, null, 2) + '\n',
     );
@@ -173,7 +215,7 @@ if (stretch) {
 if (rectLayout) {
   assert.equal(current.rootSize.x, -100);
   if (process.argv.includes('--update-fixtures'))
-    await writeFile(
+    await saveJson(
       resolve(root, 'packages/natsume/tests/fixtures/unity-layout.json'),
       JSON.stringify(current, null, 2) + '\n',
     );
@@ -183,7 +225,7 @@ if (rectLayout) {
 if (noiseOptions) {
   assert.equal(current.cases.length, 11);
   if (process.argv.includes('--update-fixtures'))
-    await writeFile(
+    await saveJson(
       resolve(root, 'packages/natsume/tests/fixtures/unity-noise-options.json'),
       JSON.stringify(current, null, 2) + '\n',
     );
@@ -193,7 +235,7 @@ if (noiseOptions) {
 if (sweeps) {
   assert.equal(current.cases.length, 9);
   if (process.argv.includes('--update-fixtures'))
-    await writeFile(
+    await saveJson(
       resolve(root, 'packages/natsume/tests/fixtures/unity-sweeps.json'),
       JSON.stringify(current, null, 2) + '\n',
     );
@@ -203,7 +245,7 @@ if (sweeps) {
 if (spaces) {
   assert.equal(current.cases.length, 9);
   if (process.argv.includes('--update-fixtures'))
-    await writeFile(
+    await saveJson(
       resolve(root, 'packages/natsume/tests/fixtures/unity-spaces.json'),
       JSON.stringify(current, null, 2) + '\n',
     );
@@ -214,7 +256,7 @@ if (sorting) {
   assert.equal(current.cases.length, 5);
   assert(current.cases.every((c) => c.order.length === 3));
   if (process.argv.includes('--update-fixtures'))
-    await writeFile(
+    await saveJson(
       resolve(root, 'packages/natsume/tests/fixtures/unity-sorting.json'),
       JSON.stringify(current, null, 2) + '\n',
     );
@@ -222,9 +264,9 @@ if (sorting) {
   process.exit(0);
 }
 if (basicShapes || rotationPrewarm) {
-  assert.equal(current.cases.length, basicShapes ? 31 : 15);
+  assert.equal(current.cases.length, basicShapes ? 31 : 16);
   if (process.argv.includes('--update-fixtures'))
-    await writeFile(
+    await saveJson(
       resolve(
         root,
         `packages/natsume/tests/fixtures/unity-${basicShapes ? 'basic-shapes' : 'rotation-prewarm'}.json`,
@@ -266,7 +308,7 @@ if (shape) {
         radiusSquaredVariance,
       };
     });
-    await writeFile(
+    await saveJson(
       resolve(root, 'packages/natsume/tests/fixtures/unity-shape.json'),
       JSON.stringify({ unityVersion: current.unityVersion, cases }, null, 2) +
         String.fromCharCode(10),
@@ -284,7 +326,7 @@ if (distributions) {
       ...c,
       correlations: c.correlations.filter((r) => Math.abs(r.value) > 0.1),
     }));
-    await writeFile(
+    await saveJson(
       resolve(root, 'packages/natsume/tests/fixtures/unity-random.json'),
       JSON.stringify({ unityVersion: current.unityVersion, cases }, null, 2) +
         String.fromCharCode(10),
@@ -324,7 +366,7 @@ if (boundaries) {
         ),
     }));
     await mkdir(resolve(root, 'packages/natsume/tests/fixtures'), { recursive: true });
-    await writeFile(
+    await saveJson(
       resolve(root, 'packages/natsume/tests/fixtures/unity-boundaries.json'),
       `${JSON.stringify(
         {
@@ -355,6 +397,11 @@ if (fitting) {
   console.log(`Noise measurements: ${current.cases.length} cases, ${baseline}`);
   process.exit(0);
 }
+if (process.argv.includes('--update-fixtures'))
+  await saveJson(
+    resolve(root, 'packages/natsume/tests/fixtures/unity-curves.json'),
+    JSON.stringify({ unityVersion: current.unityVersion, cases: current.curves }, null, 2) + '\n',
+  );
 const report = verifyUnityBaseline(current);
 if (previous?.unityVersion === version) {
   // Labels and probe metadata can evolve; compare unchanged numerical cases.
@@ -368,5 +415,5 @@ if (previous?.unityVersion === version) {
   }
   report.repeatedNoiseCases = compared;
 }
-await writeFile(resolve(output, 'verification.json'), `${JSON.stringify(report, null, 2)}\n`);
+await saveJson(resolve(output, 'verification.json'), `${JSON.stringify(report, null, 2)}\n`);
 console.log(JSON.stringify(report, null, 2));

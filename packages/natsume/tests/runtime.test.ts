@@ -1,3 +1,4 @@
+import { recordError } from './measurement.js';
 import { existsSync, readFileSync } from 'node:fs';
 import { describe, it, expect } from 'vitest';
 import { loadPack } from '../src/loader/load.js';
@@ -235,10 +236,31 @@ it('preserves Unity signed RectTransform sizes and child anchor positions', asyn
   ];
   const pack = await loadPack(await archive((await import('./helpers.js')).encode(d)));
   const scene = new Scene(pack, [1]);
+  recordError('layout.size', scene.layoutSize!.width - native.rootSize.x, 'units', 'root/x');
+  recordError('layout.size', scene.layoutSize!.height - native.rootSize.y, 'units', 'root/y');
+  recordError(
+    'layout.size',
+    scene.nodes.get(4)!.layout!.width - native.childSize.x,
+    'units',
+    'child/x',
+  );
+  recordError(
+    'layout.size',
+    scene.nodes.get(4)!.layout!.height - native.childSize.y,
+    'units',
+    'child/y',
+  );
   expect(scene.layoutSize).toEqual({ width: native.rootSize.x, height: native.rootSize.y });
   expect(Math.abs(scene.nodes.get(4)!.layout!.width - native.childSize.x)).toBeLessThan(1e-5);
   expect(Math.abs(scene.nodes.get(4)!.layout!.height - native.childSize.y)).toBeLessThan(1e-5);
-  for (const [i, k] of (['x', 'y', 'z'] as const).entries())
+  for (const [i, k] of (['x', 'y', 'z'] as const).entries()) {
+    recordError(
+      'layout.position',
+      scene.nodes.get(4)!.localMatrix[12 + i]! - native.childPosition[k],
+      'units',
+      'child/' + k,
+    );
     expect(scene.nodes.get(4)!.localMatrix[12 + i]).toBeCloseTo(native.childPosition[k], 5);
+  }
   pack.dispose();
 });

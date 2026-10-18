@@ -1,3 +1,4 @@
+import { Vec3T } from '../../src/format/generated/noa/ir/vec3.js';
 import { Application, Container, Graphics, RenderTexture, Texture, extensions } from 'pixi.js';
 import { NatsumePlugin } from '../../src/index.js';
 import { getPreview } from '../../../playground/src/preview.js';
@@ -143,7 +144,7 @@ export function measureLifetimeSizeRandomness(seed: number) {
   return result;
 }
 
-export async function measureParticleGeometry() {
+export async function measureParticleGeometry(labels?: string[]) {
   const { effect } = getPreview();
   if (!effect) throw new Error('Missing preview');
   effect.pause();
@@ -155,7 +156,7 @@ export async function measureParticleGeometry() {
     getNode: (id: number) => document.nodes.find((n) => n.id === id),
   } as unknown as EffectPack;
   const result = [];
-  for (const label of [
+  for (const label of labels ?? [
     'appearance-blend',
     'appearance-mesh',
     'mesh-view',
@@ -204,6 +205,8 @@ export async function measureParticleGeometry() {
       label === 'stretch-positive' ? 2 : label === 'stretch-negative-one' ? -1 : -4;
     definition.freeformStretching = false;
     definition.rotateWithStretchDirection = true;
+    if (label === 'billboard-pivot') definition.pivot = new Vec3T(0.25, -0.5, 0.1);
+    if (label === 'billboard-flip') definition.flip = new Vec3T(1, 1, 0);
     definition.meshAssetIds = [1];
     const fixturePack = {
       getMesh: () => ({

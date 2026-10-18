@@ -1,0 +1,643 @@
+{
+  "unityVersion": "2022.3.21f1",
+  "cases": [
+    {
+      "label": "public-0",
+      "requestedPublicMode": 0,
+      "publicPre": 0,
+      "publicPost": 0,
+      "serializedPre": 3,
+      "serializedPost": 3,
+      "samples": [
+        {
+          "time": -2.0,
+          "value": 2.0
+        },
+        {
+          "time": -1.0,
+          "value": 2.0
+        },
+        {
+          "time": -0.25,
+          "value": 5.0
+        },
+        {
+          "time": 0.0,
+          "value": 2.0
+        },
+        {
+          "time": 0.125,
+          "value": 2.5
+        },
+        {
+          "time": 0.25,
+          "value": 3.0
+        },
+        {
+          "time": 0.5,
+          "value": 4.0
+        },
+        {
+          "time": 0.75,
+          "value": 5.0
+        },
+        {
+          "time": 1.0,
+          "value": 2.0
+        },
+        {
+          "time": 1.25,
+          "value": 3.0
+        },
+        {
+          "time": 2.0,
+          "value": 2.0
+        },
+        {
+          "time": 2.25,
+          "value": 3.0
+        }
+      ]
+    },
+    {
+      "label": "public-1",
+      "requestedPublicMode": 1,
+      "publicPre": 8,
+      "publicPost": 8,
+      "serializedPre": 2,
+      "serializedPost": 2,
+      "samples": [
+        {
+          "time": -2.0,
+          "value": 2.0
+        },
+        {
+          "time": -1.0,
+          "value": 2.0
+        },
+        {
+          "time": -0.25,
+          "value": 2.0
+        },
+        {
+          "time": 0.0,
+          "value": 2.0
+        },
+        {
+          "time": 0.125,
+          "value": 2.5
+        },
+        {
+          "time": 0.25,
+          "value": 3.0
+        },
+        {
+          "time": 0.5,
+          "value": 4.0
+        },
+        {
+          "time": 0.75,
+          "value": 5.0
+        },
+        {
+          "time": 1.0,
+          "value": 6.0
+        },
+        {
+          "time": 1.25,
+          "value": 6.0
+        },
+        {
+          "time": 2.0,
+          "value": 6.0
+        },
+        {
+          "time": 2.25,
+          "value": 6.0
+        }
+      ]
+    },
+    {
+      "label": "public-2",
+      "requestedPublicMode": 2,
+      "publicPre": 2,
+      "publicPost": 2,
+      "serializedPre": 1,
+      "serializedPost": 1,
+      "samples": [
+        {
+          "time": -2.0,
+          "value": 2.0
+        },
+        {
+          "time": -1.0,
+          "value": 2.0
+        },
+        {
+          "time": -0.25,
+          "value": 5.0
+        },
+        {
+          "time": 0.0,
+          "value": 2.0
+        },
+        {
+          "time": 0.125,
+          "value": 2.5
+        },
+        {
+          "time": 0.25,
+          "value": 3.0
+        },
+        {
+          "time": 0.5,
+          "value": 4.0
+        },
+        {
+          "time": 0.75,
+          "value": 5.0
+        },
+        {
+          "time": 1.0,
+          "value": 2.0
+        },
+        {
+          "time": 1.25,
+          "value": 3.0
+        },
+        {
+          "time": 2.0,
+          "value": 2.0
+        },
+        {
+          "time": 2.25,
+          "value": 3.0
+        }
+      ]
+    },
+    {
+      "label": "public-4",
+      "requestedPublicMode": 4,
+      "publicPre": 4,
+      "publicPost": 4,
+      "serializedPre": 0,
+      "serializedPost": 0,
+      "samples": [
+        {
+          "time": -2.0,
+          "value": 2.0
+        },
+        {
+          "time": -1.0,
+          "value": 6.0
+        },
+        {
+          "time": -0.25,
+          "value": 3.0
+        },
+        {
+          "time": 0.0,
+          "value": 2.0
+        },
+        {
+          "time": 0.125,
+          "value": 2.5
+        },
+        {
+          "time": 0.25,
+          "value": 3.0
+        },
+        {
+          "time": 0.5,
+          "value": 4.0
+        },
+        {
+          "time": 0.75,
+          "value": 5.0
+        },
+        {
+          "time": 1.0,
+          "value": 6.0
+        },
+        {
+          "time": 1.25,
+          "value": 5.0
+        },
+        {
+          "time": 2.0,
+          "value": 2.0
+        },
+        {
+          "time": 2.25,
+          "value": 3.0
+        }
+      ]
+    },
+    {
+      "label": "public-8",
+      "requestedPublicMode": 8,
+      "publicPre": 8,
+      "publicPost": 8,
+      "serializedPre": 2,
+      "serializedPost": 2,
+      "samples": [
+        {
+          "time": -2.0,
+          "value": 2.0
+        },
+        {
+          "time": -1.0,
+          "value": 2.0
+        },
+        {
+          "time": -0.25,
+          "value": 2.0
+        },
+        {
+          "time": 0.0,
+          "value": 2.0
+        },
+        {
+          "time": 0.125,
+          "value": 2.5
+        },
+        {
+          "time": 0.25,
+          "value": 3.0
+        },
+        {
+          "time": 0.5,
+          "value": 4.0
+        },
+        {
+          "time": 0.75,
+          "value": 5.0
+        },
+        {
+          "time": 1.0,
+          "value": 6.0
+        },
+        {
+          "time": 1.25,
+          "value": 6.0
+        },
+        {
+          "time": 2.0,
+          "value": 6.0
+        },
+        {
+          "time": 2.25,
+          "value": 6.0
+        }
+      ]
+    },
+    {
+      "label": "raw-0",
+      "requestedPublicMode": -1,
+      "publicPre": 4,
+      "publicPost": 4,
+      "serializedPre": 0,
+      "serializedPost": 0,
+      "samples": [
+        {
+          "time": -2.0,
+          "value": 2.0
+        },
+        {
+          "time": -1.0,
+          "value": 6.0
+        },
+        {
+          "time": -0.25,
+          "value": 3.0
+        },
+        {
+          "time": 0.0,
+          "value": 2.0
+        },
+        {
+          "time": 0.125,
+          "value": 2.5
+        },
+        {
+          "time": 0.25,
+          "value": 3.0
+        },
+        {
+          "time": 0.5,
+          "value": 4.0
+        },
+        {
+          "time": 0.75,
+          "value": 5.0
+        },
+        {
+          "time": 1.0,
+          "value": 6.0
+        },
+        {
+          "time": 1.25,
+          "value": 5.0
+        },
+        {
+          "time": 2.0,
+          "value": 2.0
+        },
+        {
+          "time": 2.25,
+          "value": 3.0
+        }
+      ]
+    },
+    {
+      "label": "raw-1",
+      "requestedPublicMode": -1,
+      "publicPre": 2,
+      "publicPost": 2,
+      "serializedPre": 1,
+      "serializedPost": 1,
+      "samples": [
+        {
+          "time": -2.0,
+          "value": 2.0
+        },
+        {
+          "time": -1.0,
+          "value": 2.0
+        },
+        {
+          "time": -0.25,
+          "value": 5.0
+        },
+        {
+          "time": 0.0,
+          "value": 2.0
+        },
+        {
+          "time": 0.125,
+          "value": 2.5
+        },
+        {
+          "time": 0.25,
+          "value": 3.0
+        },
+        {
+          "time": 0.5,
+          "value": 4.0
+        },
+        {
+          "time": 0.75,
+          "value": 5.0
+        },
+        {
+          "time": 1.0,
+          "value": 2.0
+        },
+        {
+          "time": 1.25,
+          "value": 3.0
+        },
+        {
+          "time": 2.0,
+          "value": 2.0
+        },
+        {
+          "time": 2.25,
+          "value": 3.0
+        }
+      ]
+    },
+    {
+      "label": "raw-2",
+      "requestedPublicMode": -1,
+      "publicPre": 8,
+      "publicPost": 8,
+      "serializedPre": 2,
+      "serializedPost": 2,
+      "samples": [
+        {
+          "time": -2.0,
+          "value": 2.0
+        },
+        {
+          "time": -1.0,
+          "value": 2.0
+        },
+        {
+          "time": -0.25,
+          "value": 2.0
+        },
+        {
+          "time": 0.0,
+          "value": 2.0
+        },
+        {
+          "time": 0.125,
+          "value": 2.5
+        },
+        {
+          "time": 0.25,
+          "value": 3.0
+        },
+        {
+          "time": 0.5,
+          "value": 4.0
+        },
+        {
+          "time": 0.75,
+          "value": 5.0
+        },
+        {
+          "time": 1.0,
+          "value": 6.0
+        },
+        {
+          "time": 1.25,
+          "value": 6.0
+        },
+        {
+          "time": 2.0,
+          "value": 6.0
+        },
+        {
+          "time": 2.25,
+          "value": 6.0
+        }
+      ]
+    },
+    {
+      "label": "raw-3",
+      "requestedPublicMode": -1,
+      "publicPre": 0,
+      "publicPost": 0,
+      "serializedPre": 3,
+      "serializedPost": 3,
+      "samples": [
+        {
+          "time": -2.0,
+          "value": 2.0
+        },
+        {
+          "time": -1.0,
+          "value": 2.0
+        },
+        {
+          "time": -0.25,
+          "value": 5.0
+        },
+        {
+          "time": 0.0,
+          "value": 2.0
+        },
+        {
+          "time": 0.125,
+          "value": 2.5
+        },
+        {
+          "time": 0.25,
+          "value": 3.0
+        },
+        {
+          "time": 0.5,
+          "value": 4.0
+        },
+        {
+          "time": 0.75,
+          "value": 5.0
+        },
+        {
+          "time": 1.0,
+          "value": 2.0
+        },
+        {
+          "time": 1.25,
+          "value": 3.0
+        },
+        {
+          "time": 2.0,
+          "value": 2.0
+        },
+        {
+          "time": 2.25,
+          "value": 3.0
+        }
+      ]
+    },
+    {
+      "label": "raw-4",
+      "requestedPublicMode": -1,
+      "publicPre": 8,
+      "publicPost": 8,
+      "serializedPre": 4,
+      "serializedPost": 4,
+      "samples": [
+        {
+          "time": -2.0,
+          "value": 2.0
+        },
+        {
+          "time": -1.0,
+          "value": 2.0
+        },
+        {
+          "time": -0.25,
+          "value": 5.0
+        },
+        {
+          "time": 0.0,
+          "value": 2.0
+        },
+        {
+          "time": 0.125,
+          "value": 2.5
+        },
+        {
+          "time": 0.25,
+          "value": 3.0
+        },
+        {
+          "time": 0.5,
+          "value": 4.0
+        },
+        {
+          "time": 0.75,
+          "value": 5.0
+        },
+        {
+          "time": 1.0,
+          "value": 2.0
+        },
+        {
+          "time": 1.25,
+          "value": 3.0
+        },
+        {
+          "time": 2.0,
+          "value": 2.0
+        },
+        {
+          "time": 2.25,
+          "value": 3.0
+        }
+      ]
+    },
+    {
+      "label": "raw-5",
+      "requestedPublicMode": -1,
+      "publicPre": 8,
+      "publicPost": 8,
+      "serializedPre": 5,
+      "serializedPost": 5,
+      "samples": [
+        {
+          "time": -2.0,
+          "value": 2.0
+        },
+        {
+          "time": -1.0,
+          "value": 2.0
+        },
+        {
+          "time": -0.25,
+          "value": 5.0
+        },
+        {
+          "time": 0.0,
+          "value": 2.0
+        },
+        {
+          "time": 0.125,
+          "value": 2.5
+        },
+        {
+          "time": 0.25,
+          "value": 3.0
+        },
+        {
+          "time": 0.5,
+          "value": 4.0
+        },
+        {
+          "time": 0.75,
+          "value": 5.0
+        },
+        {
+          "time": 1.0,
+          "value": 2.0
+        },
+        {
+          "time": 1.25,
+          "value": 3.0
+        },
+        {
+          "time": 2.0,
+          "value": 2.0
+        },
+        {
+          "time": 2.25,
+          "value": 3.0
+        }
+      ]
+    }
+  ]
+}

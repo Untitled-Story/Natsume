@@ -1,3 +1,4 @@
+import { recordError } from '../measurement.js';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { test, expect } from '@playwright/test';
@@ -81,6 +82,15 @@ test('renders legacy blending, three fog modes, zIndex fallback and soft particl
     'soft-affine-depth': [32, 0, 223, 255],
   };
   for (const [key, pixel] of Object.entries(expected)) {
+    pixel.forEach((v, i) =>
+      recordError(
+        'material.' + (key.startsWith('fog') ? 'fog' : key.startsWith('soft') ? 'soft' : 'blend'),
+        result.results[key][i] - v,
+        '8-bit channel',
+        key + '/' + i,
+        'analytic',
+      ),
+    );
     pixel.forEach((v, i) =>
       expect(Math.abs(result.results[key][i] - v), key + ' channel ' + i).toBeLessThanOrEqual(2),
     );

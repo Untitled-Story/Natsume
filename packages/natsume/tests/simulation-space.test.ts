@@ -1,3 +1,4 @@
+import { recordError } from './measurement.js';
 import { readFileSync } from 'node:fs';
 import { expect, it } from 'vitest';
 import { vec3 } from 'gl-matrix';
@@ -94,6 +95,24 @@ for (const sample of native.cases)
         emitter.simulationMatrix,
       );
       for (const [i, key] of (['x', 'y', 'z'] as const).entries()) {
+        recordError(
+          'space.position',
+          emitter.positions[i]! - s.position[key],
+          'units',
+          sample.label + '/' + s.frame + '/' + key,
+        );
+        recordError(
+          'space.velocity',
+          emitter.velocities[i]! - s.velocity[key],
+          'units/s',
+          sample.label + '/' + s.frame + '/' + key,
+        );
+        recordError(
+          'space.world',
+          world[i]! - s.world[key],
+          'units',
+          sample.label + '/' + s.frame + '/' + key,
+        );
         expect(Math.abs(emitter.positions[i]! - s.position[key])).toBeLessThan(1e-5);
         expect(Math.abs(emitter.velocities[i]! - s.velocity[key])).toBeLessThan(1e-5);
         expect(Math.abs(world[i]! - s.world[key])).toBeLessThan(1e-5);

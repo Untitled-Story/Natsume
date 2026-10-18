@@ -1,3 +1,4 @@
+import { recordError } from './measurement.js';
 import { readFileSync } from 'node:fs';
 import { beforeAll, expect, it } from 'vitest';
 import { loadPack } from '../src/loader/load.js';
@@ -89,6 +90,12 @@ for (const label of ['burst-zero', 'burst-loop', 'burst-end']) {
     // Natsume intentionally exposes the zero-time burst immediately on play.
     for (let frame = 1; frame <= 18; frame++) {
       emitter.step(1 / 60);
+      recordError(
+        'emission.burst.count',
+        emitter.count - fixture.samples.find((s) => s.frame === frame)!.count,
+        'particles',
+        label + '/' + frame,
+      );
       expect(emitter.count).toBe(fixture.samples.find((s) => s.frame === frame)!.count);
     }
   });
@@ -130,6 +137,12 @@ for (const label of [
     const fixture = native.cases.find((c) => c.label === label)!;
     for (let frame = 1; frame <= 18; frame++) {
       emitter.step(1 / 60);
+      recordError(
+        'emission.burst.count',
+        emitter.count - fixture.samples.find((s) => s.frame === frame)!.count,
+        'particles',
+        label + '/' + frame,
+      );
       expect(emitter.count).toBe(fixture.samples.find((s) => s.frame === frame)!.count);
     }
   });
@@ -165,6 +178,12 @@ it('keeps short repeated bursts bounded without copying native early cutoff', ()
     emitter.step(1 / 60);
     const count = fixture.samples.find((s) => s.frame === frame)!.count;
     // Measured native short-duration cutoff drops the last two-particle burst.
+    recordError(
+      'emission.shortBurst.count',
+      emitter.count - count,
+      'particles',
+      'burst-repeat/' + frame,
+    );
     expect(Math.abs(emitter.count - count)).toBeLessThanOrEqual(2);
   }
   expect(emitter.count).toBe(8);
@@ -279,12 +298,24 @@ for (const fixture of native.cases.filter((c) => /appearance-(blend|fixed)$/.tes
       color(c.color, t, 0, rgba);
       for (const [index, axis] of ['x', 'y', 'z'].entries()) {
         const key = axis as 'x' | 'y' | 'z';
+        recordError(
+          'size.lifetime',
+          scalar(size.size![key], t) * [2, 3, 4][index]! - sample.sizes[0]![key],
+          'units',
+          fixture.label + '/' + sample.frame + '/' + key,
+        );
         expect(scalar(size.size![key], t) * [2, 3, 4][index]!).toBeCloseTo(
           sample.sizes[0]![key],
           4,
         );
       }
       for (const [index, key] of (['r', 'g', 'b', 'a'] as const).entries()) {
+        recordError(
+          'color.lifetime',
+          rgba[index]! * [0.8, 0.6, 0.4, 128 / 255][index]! - sample.colors[0]![key],
+          'channel',
+          fixture.label + '/' + sample.frame + '/' + key,
+        );
         expect(
           Math.abs(rgba[index]! * [0.8, 0.6, 0.4, 128 / 255][index]! - sample.colors[0]![key]),
         ).toBeLessThanOrEqual(2 / 255);
@@ -311,9 +342,79 @@ for (const fixture of native.cases.filter((c) => c.label.startsWith('motion-')))
       expect(emitter.count).toBe(1);
       for (const [index, axis] of ['x', 'y', 'z'].entries()) {
         const key = axis as 'x' | 'y' | 'z';
+        recordError(
+          fixture.label.includes('limit') ? 'limit.position' : 'velocity.position',
+          emitter.positions[index]! - sample.positions[0]![key],
+          'units',
+          fixture.label + '/' + frame + '/' + key,
+        );
+        recordError(
+          fixture.label.includes('limit') ? 'limit.velocity' : 'velocity.velocity',
+          emitter.velocities[index]! - sample.velocities[0]![key],
+          'units/s',
+          fixture.label + '/' + frame + '/' + key,
+        );
         expect(emitter.positions[index]!).toBeCloseTo(sample.positions[0]![key], 4);
         expect(emitter.velocities[index]!).toBeCloseTo(sample.velocities[0]![key], 4);
       }
+    }
+  });
+}
+
+for (const fixture of native.cases.filter((c) => c.label.startsWith('rate-'))) {
+  it('measures native emission counts ' + fixture.label, () => {
+    const source = particleSource();
+    source.main!.durationSeconds = fixture.label === 'rate-delayed' ? 1 : Math.fround(0.1);
+    if (fixture.label === 'rate-delayed') source.main!.startDelay = constant(0.2);
+    source.main!.loop = fixture.label.endsWith('-loop');
+    const rate = fixture.label === 'rate-curve' ? linear(0, 120) : constant(60);
+    source.modules.push(new ParticleModuleT(M.EmissionModule, new EmissionModuleT(rate)));
+    const e = new Emitter(3, scene.nodes.get(1)!, source, true, 1, []);
+    e.sync();
+    for (const sample of fixture.samples) {
+      if (sample.frame) e.step(1 / 60);
+      recordError(
+        'emission.rate.count',
+        e.count - sample.count,
+        'particles',
+        fixture.label + '/' + sample.frame,
+      );
+      expect(Math.abs(e.count - sample.count)).toBeLessThanOrEqual(2);
+    }
+  });
+}
+for (const fixture of native.cases.filter((c) => c.label.startsWith('sheet-'))) {
+  it('measures native sheet tile selection ' + fixture.label, () => {
+    const s = new TextureSheetModuleT();
+    s.columns = 4;
+    s.rows = 2;
+    s.cycles = fixture.label.endsWith('twice') || fixture.label === 'sheet-start-quarter' ? 2 : 1;
+    s.startFrame = constant(
+      fixture.label === 'sheet-start-two' ? 2 : fixture.label === 'sheet-start-quarter' ? 0.25 : 0,
+    );
+    s.frameOverTime =
+      fixture.label === 'sheet-constant-one'
+        ? constant(1)
+        : fixture.label === 'sheet-constant-quarter-twice'
+          ? constant(0.25)
+          : linear(0, 1);
+    if (fixture.label === 'sheet-nonlinear-twice') {
+      s.frameOverTime.curveMax!.keys[0]!.interpolation = 2;
+      s.frameOverTime.curveMax!.keys[1]!.inSlope = 2;
+    }
+    for (const sample of fixture.samples) {
+      if (!sample.uv.length) continue;
+      const uv = sample.uv[0]!;
+      const expected = Math.round(uv.x * 4) + (2 - Math.round(uv.y * 2)) * 4;
+      const actual = sheetFrame(s, sample.frame / 60, 0, 0);
+      recordError(
+        'textureSheet.tile',
+        actual - expected,
+        'tiles',
+        fixture.label + '/' + sample.frame,
+      );
+      expect(actual).toBeGreaterThanOrEqual(0);
+      expect(actual).toBeLessThan(8);
     }
   });
 }

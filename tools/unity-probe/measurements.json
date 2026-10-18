@@ -1,0 +1,1177 @@
+{
+  "unityVersion": "2022.3.21f1",
+  "measuredAt": "2026-10-18T05:49:24.441Z",
+  "revision": "7f42c8a93f83503c47e562701266d9f9d62a886b",
+  "workingTreeChanges": true,
+  "nativeRuns": [
+    {
+      "mode": "curves-noise",
+      "file": "data/unity-baselines/unity-2022.3.21f1.json",
+      "modifiedAt": "2026-10-18T05:31:30.311Z",
+      "sha256": "9968a8f81c98a861d10a62f5ee9a04d8c77223b7b092acec77c51570df375512"
+    },
+    {
+      "mode": "boundaries",
+      "file": "data/unity-baselines/boundaries/unity-2022.3.21f1.json",
+      "modifiedAt": "2026-10-18T05:39:52.572Z",
+      "sha256": "1e3c04fbb7d39abc551de4227f3a6977f0cf238571ac936add9850dba38be6d2"
+    },
+    {
+      "mode": "random",
+      "file": "data/unity-baselines/random/unity-2022.3.21f1.json",
+      "modifiedAt": "2026-10-18T05:31:35.572Z",
+      "sha256": "cc097fa7b0dab8c8e53d92700fe129087c6d2b41dcbe1a35a97d9095fdeddd27"
+    },
+    {
+      "mode": "shape",
+      "file": "data/unity-baselines/shape/unity-2022.3.21f1.json",
+      "modifiedAt": "2026-10-18T05:31:38.081Z",
+      "sha256": "57e036a6d82b4328dc1c4ebf5f7c81c7c37e2262d91c9db229023f35154e2c16"
+    },
+    {
+      "mode": "basic-shapes",
+      "file": "data/unity-baselines/basic-shapes/unity-2022.3.21f1.json",
+      "modifiedAt": "2026-10-18T05:31:40.668Z",
+      "sha256": "4497626164b0caa2a88d69ba00942afc913eb48024e9eefebfe7737042f86448"
+    },
+    {
+      "mode": "rotation-prewarm",
+      "file": "data/unity-baselines/rotation-prewarm/unity-2022.3.21f1.json",
+      "modifiedAt": "2026-10-18T05:39:55.047Z",
+      "sha256": "74beb1d20886124dae63ea9b3b6ca7b56216435fd9b89e2b700aa4670cc18e3e"
+    },
+    {
+      "mode": "sorting",
+      "file": "data/unity-baselines/sorting/unity-2022.3.21f1.json",
+      "modifiedAt": "2026-10-18T05:31:45.886Z",
+      "sha256": "e763b2f6858a9215ccb951c4342c6cd6781462c635591d8ead8b673017629c00"
+    },
+    {
+      "mode": "spaces",
+      "file": "data/unity-baselines/spaces/unity-2022.3.21f1.json",
+      "modifiedAt": "2026-10-18T05:31:48.758Z",
+      "sha256": "9b8a1ff8533e681dbc4dfc6779e8d684a43b890730cd37f1166c8b9865134622"
+    },
+    {
+      "mode": "sweeps",
+      "file": "data/unity-baselines/sweeps/unity-2022.3.21f1.json",
+      "modifiedAt": "2026-10-18T05:31:51.293Z",
+      "sha256": "63e607f949af5ce067243c95490c8b5594a6b07694d94c8db5c69e868aff315d"
+    },
+    {
+      "mode": "noise-options",
+      "file": "data/unity-baselines/noise-options/unity-2022.3.21f1.json",
+      "modifiedAt": "2026-10-18T05:31:53.940Z",
+      "sha256": "58fd19c701477611a62622616e220ea1d6fb9e67f08f75a34f430c0bb2161ed5"
+    },
+    {
+      "mode": "rect-layout",
+      "file": "data/unity-baselines/layout/unity-2022.3.21f1.json",
+      "modifiedAt": "2026-10-18T05:31:56.318Z",
+      "sha256": "3471b1a29fd973396ef81684df4f5bfc551b4024178a4c5342d1b26b273bef8c"
+    },
+    {
+      "mode": "stretch",
+      "file": "data/unity-baselines/stretch/unity-2022.3.21f1.json",
+      "modifiedAt": "2026-10-18T05:31:58.832Z",
+      "sha256": "8d29f51f460c14f33bc526498ef0f15f29d03341572995c1bf0cc4eb6058c35e",
+      "cameraMotion": {
+        "file": "data/unity-baselines/stretch/camera-motion.json",
+        "modifiedAt": "2026-10-18T05:31:59.104Z",
+        "sha256": "6e98cfa511fb9c5e0be7109dd8a9491e97417d890cb6ea0410c88d8845fe9670"
+      }
+    },
+    {
+      "mode": "noise-statistics",
+      "file": "data/unity-baselines/noise-statistics/unity-2022.3.21f1.json",
+      "modifiedAt": "2026-10-18T05:35:43.994Z",
+      "sha256": "15df3a70f4938246cbdd3c8a01d418222dae27ae439012eed2966a3cb465fb0a"
+    },
+    {
+      "mode": "custom-data",
+      "file": "data/unity-baselines/custom-data/unity-2022.3.21f1.json",
+      "modifiedAt": "2026-10-18T05:37:15.667Z",
+      "sha256": "d8ff7753592c64d8ea81185bbf1fe8961b1375398af1cca9bdf0d9d99357779c"
+    }
+  ],
+  "fixtures": [
+    {
+      "file": "packages/natsume/tests/fixtures/unity-basic-shapes.json",
+      "sha256": "a98bce6106b76866c74bb83305bbd0175591c2980e40dc12b7ac6b3652a676e1"
+    },
+    {
+      "file": "packages/natsume/tests/fixtures/unity-boundaries.json",
+      "sha256": "fc8fb3b2f6a2be891808451c18e985004b091a6de9c2a9029b68bb4ff83a0520"
+    },
+    {
+      "file": "packages/natsume/tests/fixtures/unity-curves.json",
+      "sha256": "43622cbc9efb2583d7d65ba40d5c439b259de12f68e282aab6be64f664c42785"
+    },
+    {
+      "file": "packages/natsume/tests/fixtures/unity-custom-data.json",
+      "sha256": "69d2847806f51247b725ac8c066fabf17f26455f7d443ea4626775839d99e1b9"
+    },
+    {
+      "file": "packages/natsume/tests/fixtures/unity-layout.json",
+      "sha256": "6ddc827ef6b11e8b6aa3195f08ce7de6596fd4635b726f93b2a7ffd0130e44c6"
+    },
+    {
+      "file": "packages/natsume/tests/fixtures/unity-noise-options.json",
+      "sha256": "e250556db578040266f41dacedb32ce8b5a2e4ce609a6c377c6cbaaad0e607b8"
+    },
+    {
+      "file": "packages/natsume/tests/fixtures/unity-noise-statistics.json",
+      "sha256": "2e25c11975516ef2fd7707b966066b3cf7b87b4a2289c7a1957074609da603f8"
+    },
+    {
+      "file": "packages/natsume/tests/fixtures/unity-random.json",
+      "sha256": "82658d5778a91871d73423740c77ec4812cd09ec845c08ec260a8adb0de6cd42"
+    },
+    {
+      "file": "packages/natsume/tests/fixtures/unity-rotation-prewarm.json",
+      "sha256": "70403aec24a0f9f9c83789b2b8393b029fcc9687fdcdedd547cccefd3ca3eaf1"
+    },
+    {
+      "file": "packages/natsume/tests/fixtures/unity-shape.json",
+      "sha256": "a4efdef5828ab9d4a56eadf63df24b315d81a168b78035e1a7e99bcbf76961c6"
+    },
+    {
+      "file": "packages/natsume/tests/fixtures/unity-sorting.json",
+      "sha256": "c9d3f9f3b48ee3459b1199b9ec7d9780c0162445a62832137bd46e85312952b2"
+    },
+    {
+      "file": "packages/natsume/tests/fixtures/unity-spaces.json",
+      "sha256": "3da18702e17e08ad039d7abcf1bb0362fcae06b6218586f4522a5ff2f233f54b"
+    },
+    {
+      "file": "packages/natsume/tests/fixtures/unity-stretch.json",
+      "sha256": "88d97b403f04030a392b4c07c0f9e2700442236ad32a4bf82a01e2d98f055853"
+    },
+    {
+      "file": "packages/natsume/tests/fixtures/unity-sweeps.json",
+      "sha256": "e3ece84fc1cb5458846923a6cc68533ba22a06d41b8f5a2f8f1268af5126a6b7"
+    }
+  ],
+  "metrics": [
+    {
+      "metric": "color.lifetime",
+      "reference": "unity",
+      "unit": "channel",
+      "samples": 40,
+      "min": 0,
+      "max": 0.003137242794036932,
+      "worstSample": "appearance-blend/4/r",
+      "rms": 0.0008395545113342616
+    },
+    {
+      "metric": "curve.public-1",
+      "reference": "unity",
+      "unit": "value",
+      "samples": 12,
+      "min": 0,
+      "max": 0,
+      "worstSample": "-2",
+      "rms": 0
+    },
+    {
+      "metric": "curve.public-2",
+      "reference": "unity",
+      "unit": "value",
+      "samples": 12,
+      "min": 0,
+      "max": 0,
+      "worstSample": "-2",
+      "rms": 0
+    },
+    {
+      "metric": "curve.public-4",
+      "reference": "unity",
+      "unit": "value",
+      "samples": 12,
+      "min": 0,
+      "max": 0,
+      "worstSample": "-2",
+      "rms": 0
+    },
+    {
+      "metric": "curve.public-8",
+      "reference": "unity",
+      "unit": "value",
+      "samples": 12,
+      "min": 0,
+      "max": 0,
+      "worstSample": "-2",
+      "rms": 0
+    },
+    {
+      "metric": "curve.raw-2",
+      "reference": "unity",
+      "unit": "value",
+      "samples": 12,
+      "min": 0,
+      "max": 0,
+      "worstSample": "-2",
+      "rms": 0
+    },
+    {
+      "metric": "custom.color",
+      "reference": "unity",
+      "unit": "HDR channel",
+      "samples": 48,
+      "min": 0,
+      "max": 0,
+      "worstSample": "1/1/x",
+      "rms": 0
+    },
+    {
+      "metric": "custom.vector",
+      "reference": "unity",
+      "unit": "value",
+      "samples": 48,
+      "min": 0,
+      "max": 0.016666799783706665,
+      "worstSample": "1/30/x",
+      "rms": 0.008333357982390592
+    },
+    {
+      "metric": "emission.burst.count",
+      "reference": "unity",
+      "unit": "particles",
+      "samples": 126,
+      "min": 0,
+      "max": 0,
+      "worstSample": "burst-zero/1",
+      "rms": 0
+    },
+    {
+      "metric": "emission.rate.count",
+      "reference": "unity",
+      "unit": "particles",
+      "samples": 76,
+      "min": 0,
+      "max": 2,
+      "worstSample": "rate-60-once/6",
+      "rms": 1.063756996389881
+    },
+    {
+      "metric": "emission.shortBurst.count",
+      "reference": "unity",
+      "unit": "particles",
+      "samples": 18,
+      "min": 0,
+      "max": 2,
+      "worstSample": "burst-repeat/6",
+      "rms": 1.699673171197595
+    },
+    {
+      "metric": "layout.position",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 3,
+      "min": 0,
+      "max": 0.0000013113021850585938,
+      "worstSample": "child/x",
+      "rms": 7.570806695325236e-7
+    },
+    {
+      "metric": "layout.size",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 4,
+      "min": 0,
+      "max": 0.000005364418029785156,
+      "worstSample": "child/y",
+      "rms": 0.0000027324439318317547
+    },
+    {
+      "metric": "limit.position",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 45,
+      "min": 0,
+      "max": 4.76837158203125e-7,
+      "worstSample": "motion-orbital-limit/30/x",
+      "rms": 1.6466363722335076e-7
+    },
+    {
+      "metric": "limit.velocity",
+      "reference": "unity",
+      "unit": "units/s",
+      "samples": 45,
+      "min": 0,
+      "max": 0.000005736947059631348,
+      "worstSample": "motion-orbital-limit/59/x",
+      "rms": 0.0000013684526936438868
+    },
+    {
+      "metric": "material.blend",
+      "reference": "analytic",
+      "unit": "8-bit channel",
+      "samples": 8,
+      "min": 0,
+      "max": 0,
+      "worstSample": "alpha/0",
+      "rms": 0
+    },
+    {
+      "metric": "material.fog",
+      "reference": "analytic",
+      "unit": "8-bit channel",
+      "samples": 16,
+      "min": 0,
+      "max": 0,
+      "worstSample": "fog-fallback/0",
+      "rms": 0
+    },
+    {
+      "metric": "material.soft",
+      "reference": "analytic",
+      "unit": "8-bit channel",
+      "samples": 16,
+      "min": 0,
+      "max": 0,
+      "worstSample": "soft-quarter/0",
+      "rms": 0
+    },
+    {
+      "metric": "noise.constantRemap",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 27,
+      "min": 0,
+      "max": 0,
+      "worstSample": "remap-positive/0/x",
+      "rms": 0
+    },
+    {
+      "metric": "noise.population.calibrated-high.frame1.absolute",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 2,
+      "min": 0.00003901835277709143,
+      "max": 0.00004162018872190911,
+      "worstSample": "2",
+      "rms": 0.0000403402526187237
+    },
+    {
+      "metric": "noise.population.calibrated-high.frame1.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 2,
+      "min": 0.044853735985529226,
+      "max": 0.04643927889194979,
+      "worstSample": "2",
+      "rms": 0.045653391198594725
+    },
+    {
+      "metric": "noise.population.calibrated-high.frame60.absolute",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 2,
+      "min": 0.0023543332089326144,
+      "max": 0.0024844948442834663,
+      "worstSample": "2",
+      "rms": 0.0024202891862289996
+    },
+    {
+      "metric": "noise.population.calibrated-high.frame60.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 2,
+      "min": 0.045107673422104776,
+      "max": 0.04624144872970354,
+      "worstSample": "2",
+      "rms": 0.04567807889008172
+    },
+    {
+      "metric": "noise.population.frequency-zero.frame1.absolute",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 2,
+      "min": 0.0005563823155472422,
+      "max": 0.0005587269974076797,
+      "worstSample": "4294967295",
+      "rms": 0.0005575558889859887
+    },
+    {
+      "metric": "noise.population.frequency-zero.frame1.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 2,
+      "min": 0.01927431125785016,
+      "max": 0.019355153202922856,
+      "worstSample": "4294967295",
+      "rms": 0.01931477452590509
+    },
+    {
+      "metric": "noise.population.frequency-zero.frame60.absolute",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 2,
+      "min": 0.0333713915381717,
+      "max": 0.03350615580496363,
+      "worstSample": "4294967295",
+      "rms": 0.033438841562025264
+    },
+    {
+      "metric": "noise.population.frequency-zero.frame60.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 2,
+      "min": 0.019267647154818376,
+      "max": 0.01934507439691637,
+      "worstSample": "4294967295",
+      "rms": 0.019306399590612564
+    },
+    {
+      "metric": "noise.population.high.frame1.absolute",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 2,
+      "min": 0.0013005345035851726,
+      "max": 0.0013875578289459338,
+      "worstSample": "2",
+      "rms": 0.0013447502972084974
+    },
+    {
+      "metric": "noise.population.high.frame1.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 2,
+      "min": 0.044851107213791944,
+      "max": 0.046446902422134846,
+      "worstSample": "2",
+      "rms": 0.04565597749974463
+    },
+    {
+      "metric": "noise.population.high.frame60.absolute",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 2,
+      "min": 0.0520138830280501,
+      "max": 0.07478437692613848,
+      "worstSample": "4294967295",
+      "rms": 0.0644133024300355
+    },
+    {
+      "metric": "noise.population.high.frame60.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 2,
+      "min": 0.03220001689659143,
+      "max": 0.045950270263642456,
+      "worstSample": "4294967295",
+      "rms": 0.03967536027210439
+    },
+    {
+      "metric": "noise.population.low.frame1.absolute",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 2,
+      "min": 0.028108832995379036,
+      "max": 0.028775536169910968,
+      "worstSample": "4294967295",
+      "rms": 0.02844413800968456
+    },
+    {
+      "metric": "noise.population.low.frame1.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 2,
+      "min": 0.5261659131856983,
+      "max": 0.5418887402172741,
+      "worstSample": "4294967295",
+      "rms": 0.5340851874808007
+    },
+    {
+      "metric": "noise.population.low.frame60.absolute",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 2,
+      "min": 1.2900540549886121,
+      "max": 1.3079954804143903,
+      "worstSample": "2",
+      "rms": 1.2990557419866617
+    },
+    {
+      "metric": "noise.population.low.frame60.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 2,
+      "min": 0.47959919204552015,
+      "max": 0.48048162338614764,
+      "worstSample": "2",
+      "rms": 0.48004061048129226
+    },
+    {
+      "metric": "noise.population.medium.frame1.absolute",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 2,
+      "min": 0.007883404331329252,
+      "max": 0.0100509322075782,
+      "worstSample": "2",
+      "rms": 0.009032422213685365
+    },
+    {
+      "metric": "noise.population.medium.frame1.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 2,
+      "min": 0.214019984618313,
+      "max": 0.27398924133119934,
+      "worstSample": "2",
+      "rms": 0.24584004777626156
+    },
+    {
+      "metric": "noise.population.medium.frame60.absolute",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 2,
+      "min": 0.38541059700903335,
+      "max": 0.5127408666067548,
+      "worstSample": "2",
+      "rms": 0.4535661608715455
+    },
+    {
+      "metric": "noise.population.medium.frame60.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 2,
+      "min": 0.19273481538675052,
+      "max": 0.25459115530790155,
+      "worstSample": "2",
+      "rms": 0.22579123701239698
+    },
+    {
+      "metric": "noise.population.octaves.frame1.absolute",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 2,
+      "min": 0.003958965042962656,
+      "max": 0.004283588419409071,
+      "worstSample": "2",
+      "rms": 0.0041244717212205375
+    },
+    {
+      "metric": "noise.population.octaves.frame1.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 2,
+      "min": 0.13930157266706503,
+      "max": 0.1517814895512352,
+      "worstSample": "2",
+      "rms": 0.1456752359152188
+    },
+    {
+      "metric": "noise.population.octaves.frame60.absolute",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 2,
+      "min": 0.2811479458966797,
+      "max": 0.3256706443755706,
+      "worstSample": "2",
+      "rms": 0.30422486427798906
+    },
+    {
+      "metric": "noise.population.octaves.frame60.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 2,
+      "min": 0.20233416732104265,
+      "max": 0.23713610820915337,
+      "worstSample": "2",
+      "rms": 0.22042305809747195
+    },
+    {
+      "metric": "noise.population.rotation.frame1.absolute",
+      "reference": "unity",
+      "unit": "rad",
+      "samples": 2,
+      "min": 0.000011349456138155854,
+      "max": 0.000012108620968620857,
+      "worstSample": "2",
+      "rms": 0.000011735179086695872
+    },
+    {
+      "metric": "noise.population.rotation.frame1.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 2,
+      "min": 0.04485169341849715,
+      "max": 0.04644649361610629,
+      "worstSample": "2",
+      "rms": 0.04565605749370976
+    },
+    {
+      "metric": "noise.population.rotation.frame60.absolute",
+      "reference": "unity",
+      "unit": "rad",
+      "samples": 2,
+      "min": 0.0006809673034309013,
+      "max": 0.0007265175599955962,
+      "worstSample": "2",
+      "rms": 0.0007041108695808877
+    },
+    {
+      "metric": "noise.population.rotation.frame60.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 2,
+      "min": 0.04485169035572023,
+      "max": 0.04644651229702436,
+      "worstSample": "2",
+      "rms": 0.04565606549147135
+    },
+    {
+      "metric": "noise.population.scroll.frame1.absolute",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 2,
+      "min": 0.0012663912844096507,
+      "max": 0.0013068089140263542,
+      "worstSample": "2",
+      "rms": 0.00128675880082622
+    },
+    {
+      "metric": "noise.population.scroll.frame1.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 2,
+      "min": 0.04366392041042043,
+      "max": 0.043756053738673216,
+      "worstSample": "2",
+      "rms": 0.04371001134974222
+    },
+    {
+      "metric": "noise.population.scroll.frame60.absolute",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 2,
+      "min": 0.31855887731429067,
+      "max": 0.34924687948281363,
+      "worstSample": "4294967295",
+      "rms": 0.33425524763586306
+    },
+    {
+      "metric": "noise.population.scroll.frame60.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 2,
+      "min": 0.2014345594883808,
+      "max": 0.21473186380588793,
+      "worstSample": "4294967295",
+      "rms": 0.2081894030562416
+    },
+    {
+      "metric": "noise.population.size.frame1.absolute",
+      "reference": "unity",
+      "unit": "factor",
+      "samples": 2,
+      "min": 0.04329457593808739,
+      "max": 0.06311999218734321,
+      "worstSample": "2",
+      "rms": 0.054122794270940425
+    },
+    {
+      "metric": "noise.population.size.frame1.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 2,
+      "min": 0.061934865929751275,
+      "max": 0.0873863697133954,
+      "worstSample": "2",
+      "rms": 0.0757373924472664
+    },
+    {
+      "metric": "noise.population.size.frame60.absolute",
+      "reference": "unity",
+      "unit": "factor",
+      "samples": 2,
+      "min": 0.04329457593808739,
+      "max": 0.06311999218734321,
+      "worstSample": "2",
+      "rms": 0.054122794270940425
+    },
+    {
+      "metric": "noise.population.size.frame60.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 2,
+      "min": 0.061934865929751275,
+      "max": 0.0873863697133954,
+      "worstSample": "2",
+      "rms": 0.0757373924472664
+    },
+    {
+      "metric": "prewarm.count",
+      "reference": "unity",
+      "unit": "particles",
+      "samples": 32,
+      "min": 0,
+      "max": 2,
+      "worstSample": "prewarm-direct-duration3-life1/0",
+      "rms": 0.9519716382329886
+    },
+    {
+      "metric": "prewarm.curve.count",
+      "reference": "unity",
+      "unit": "particles",
+      "samples": 4,
+      "min": 0,
+      "max": 1,
+      "worstSample": "prewarm-direct-curve/1",
+      "rms": 0.8660254037844386
+    },
+    {
+      "metric": "prewarm.curve.medianLifetime",
+      "reference": "unity",
+      "unit": "s",
+      "samples": 4,
+      "min": 0.016666293144226074,
+      "max": 0.18000051379203796,
+      "worstSample": "prewarm-direct-curve/30",
+      "rms": 0.1222248686227837
+    },
+    {
+      "metric": "prewarm.medianLifetime",
+      "reference": "unity",
+      "unit": "s",
+      "samples": 28,
+      "min": 5.960464477539062e-7,
+      "max": 0.09999936819076538,
+      "worstSample": "prewarm-direct/0",
+      "rms": 0.06529468510000011
+    },
+    {
+      "metric": "random.histogram",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 3136,
+      "min": 0,
+      "max": 0.00958251953125,
+      "worstSample": "98765/0.25/360/radiusSquared/14",
+      "rms": 0.0025556954121801856
+    },
+    {
+      "metric": "random.mean",
+      "reference": "unity",
+      "unit": "normalized",
+      "samples": 196,
+      "min": 5.202176467378195e-10,
+      "max": 0.008232492699123184,
+      "worstSample": "13579/1/90/rotationX",
+      "rms": 0.002877892091181669
+    },
+    {
+      "metric": "random.sizeLife.axisFactor",
+      "reference": "unity",
+      "unit": "normalized",
+      "samples": 6,
+      "min": 1.9988899202516563e-7,
+      "max": 2.0924725441240355e-7,
+      "worstSample": "12345",
+      "rms": 2.0343659753965776e-7
+    },
+    {
+      "metric": "random.sizeLife.histogram",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 288,
+      "min": 0.00006103515625,
+      "max": 0.00872802734375,
+      "worstSample": "98765/0/2",
+      "rms": 0.0027198622080171356
+    },
+    {
+      "metric": "random.sizeLife.mean",
+      "reference": "unity",
+      "unit": "normalized",
+      "samples": 18,
+      "min": 0.0023448793149263847,
+      "max": 0.0038117358933660306,
+      "worstSample": "98765/1",
+      "rms": 0.003353449355860502
+    },
+    {
+      "metric": "random.sizeLife.variance",
+      "reference": "unity",
+      "unit": "normalized²",
+      "samples": 18,
+      "min": 0.00035710473047241564,
+      "max": 0.0006544663720473715,
+      "worstSample": "98765/2",
+      "rms": 0.0005076639191503155
+    },
+    {
+      "metric": "random.variance",
+      "reference": "unity",
+      "unit": "normalized²",
+      "samples": 196,
+      "min": 9.122845030616454e-15,
+      "max": 0.0022147149502478036,
+      "worstSample": "12345/0/360/speed",
+      "rms": 0.0008505855073047776
+    },
+    {
+      "metric": "renderer.billboard",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 36,
+      "min": 2.8115454709698567e-7,
+      "max": 0.000001253824470517792,
+      "worstSample": "billboard-local-node-rotated/30/1",
+      "rms": 7.118207827102743e-7
+    },
+    {
+      "metric": "renderer.flip",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 12,
+      "min": 2.388837865275353e-7,
+      "max": 2.682209014892578e-7,
+      "worstSample": "billboard-flip/30/1",
+      "rms": 2.5041784515933416e-7
+    },
+    {
+      "metric": "renderer.mesh",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 60,
+      "min": 1.1920928955078125e-7,
+      "max": 0.0000015266237824995157,
+      "worstSample": "mesh-local-node-rotated/30/0",
+      "rms": 6.440336342148277e-7
+    },
+    {
+      "metric": "renderer.pivot",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 12,
+      "min": 3.218695411343147,
+      "max": 3.2186958071066827,
+      "worstSample": "billboard-pivot/0/0",
+      "rms": 3.2186956004834393
+    },
+    {
+      "metric": "renderer.sort",
+      "reference": "unity",
+      "unit": "index",
+      "samples": 15,
+      "min": 0,
+      "max": 0,
+      "worstSample": "None/0",
+      "rms": 0
+    },
+    {
+      "metric": "renderer.stretch.movingView",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 64,
+      "min": 1.9371509552001953e-7,
+      "max": 0.015129203111956214,
+      "worstSample": "camera-2-velocity-1-length-2/1",
+      "rms": 0.005579107412547739
+    },
+    {
+      "metric": "renderer.stretch.static",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 72,
+      "min": 1.9371509552001953e-7,
+      "max": 0.011011454251702983,
+      "worstSample": "stretch-linear-velocity/1/1",
+      "rms": 0.002595384927567061
+    },
+    {
+      "metric": "renderer.stretch.velocity",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 40,
+      "min": 0,
+      "max": 0.011603952557358008,
+      "worstSample": "ordinary-fixed-xy/1",
+      "rms": 0.0036694919989772178
+    },
+    {
+      "metric": "renderer.stretch.xyzFullVertex",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 8,
+      "min": 0.06290943706229019,
+      "max": 0.07216389140345372,
+      "worstSample": "ordinary-fixed-xyz/2",
+      "rms": 0.06751717059386457
+    },
+    {
+      "metric": "renderer.stretch.xyzLongitudinal",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 6,
+      "min": 0.0025756359100341797,
+      "max": 0.0051515549421310425,
+      "worstSample": "ordinary-fixed-xyz/2",
+      "rms": 0.0040042060102265025
+    },
+    {
+      "metric": "renderer.uv",
+      "reference": "unity",
+      "unit": "UV",
+      "samples": 168,
+      "min": 0,
+      "max": 0,
+      "worstSample": "appearance-blend",
+      "rms": 0
+    },
+    {
+      "metric": "rotation.angle",
+      "reference": "unity",
+      "unit": "rad",
+      "samples": 72,
+      "min": 5.572919903329421e-11,
+      "max": 0.00001104674980911824,
+      "worstSample": "rotation-speed-double/60/z",
+      "rms": 0.000001310208772541112
+    },
+    {
+      "metric": "shape.align.rotation",
+      "reference": "unity",
+      "unit": "rad",
+      "samples": 54,
+      "min": 5.07728634135951e-9,
+      "max": 1.737763453135699e-7,
+      "worstSample": "edge-aligned/0/x",
+      "rms": 9.997587519720435e-8
+    },
+    {
+      "metric": "shape.basic.direction.mean",
+      "reference": "unity",
+      "unit": "normalized",
+      "samples": 90,
+      "min": 0,
+      "max": 0.009546281777842105,
+      "worstSample": "Hemisphere-0/1/x",
+      "rms": 0.0033596756298193025
+    },
+    {
+      "metric": "shape.basic.direction.radiusMean",
+      "reference": "unity",
+      "unit": "normalized",
+      "samples": 30,
+      "min": 0,
+      "max": 0,
+      "worstSample": "Sphere-0/1",
+      "rms": 0
+    },
+    {
+      "metric": "shape.basic.direction.radiusSecond",
+      "reference": "unity",
+      "unit": "normalized²",
+      "samples": 30,
+      "min": 0,
+      "max": 0,
+      "worstSample": "Sphere-0/1",
+      "rms": 0
+    },
+    {
+      "metric": "shape.basic.direction.second",
+      "reference": "unity",
+      "unit": "normalized²",
+      "samples": 90,
+      "min": 0,
+      "max": 0.010301432009275191,
+      "worstSample": "Sphere-0/1/x",
+      "rms": 0.00336377689264631
+    },
+    {
+      "metric": "shape.basic.position.mean",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 90,
+      "min": 0,
+      "max": 0.017406486878092826,
+      "worstSample": "ConeVolume-0/0/x",
+      "rms": 0.005727668715000483
+    },
+    {
+      "metric": "shape.basic.position.radiusMean",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 30,
+      "min": 0,
+      "max": 0.005814844065781699,
+      "worstSample": "SingleSidedEdge-0/0",
+      "rms": 0.0028293558487285137
+    },
+    {
+      "metric": "shape.basic.position.radiusSecond",
+      "reference": "unity",
+      "unit": "units²",
+      "samples": 30,
+      "min": 0,
+      "max": 0.009159269917522028,
+      "worstSample": "ConeVolume-1/0",
+      "rms": 0.004103682593849511
+    },
+    {
+      "metric": "shape.basic.position.second",
+      "reference": "unity",
+      "unit": "units²",
+      "samples": 90,
+      "min": 0,
+      "max": 0.021901567233553854,
+      "worstSample": "ConeVolume-0/0/x",
+      "rms": 0.005909500468693626
+    },
+    {
+      "metric": "shape.burstSpread",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 108,
+      "min": 0,
+      "max": 4.76837158203125e-7,
+      "worstSample": "spread-8-90/2/x",
+      "rms": 9.459162326048281e-8
+    },
+    {
+      "metric": "shape.jitter.mean",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 15,
+      "min": 0,
+      "max": 0.01918106170342071,
+      "worstSample": "jitter-scaled/0",
+      "rms": 0.007120897039110101
+    },
+    {
+      "metric": "shape.jitter.radiusSquaredMean",
+      "reference": "unity",
+      "unit": "units²",
+      "samples": 5,
+      "min": 1.3324091829858276e-10,
+      "max": 0.014312653415056609,
+      "worstSample": "jitter-scaled",
+      "rms": 0.006400813199164001
+    },
+    {
+      "metric": "shape.jitter.rotatedVariance",
+      "reference": "unity",
+      "unit": "units⁴",
+      "samples": 1,
+      "min": 0.1030518228308992,
+      "max": 0.1030518228308992,
+      "worstSample": "jitter-scaled",
+      "rms": 0.1030518228308992
+    },
+    {
+      "metric": "shape.jitter.second",
+      "reference": "unity",
+      "unit": "units²",
+      "samples": 15,
+      "min": 0,
+      "max": 0.04823334731861939,
+      "worstSample": "jitter-scaled/0",
+      "rms": 0.015471373188332289
+    },
+    {
+      "metric": "shape.jitter.variance",
+      "reference": "unity",
+      "unit": "units⁴",
+      "samples": 4,
+      "min": 6.332593605407486e-22,
+      "max": 1.339957941108217e-8,
+      "worstSample": "jitter-1",
+      "rms": 6.705147626798312e-9
+    },
+    {
+      "metric": "shape.sweep.excludedEndpoint",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 1,
+      "min": 4.000000000005066,
+      "max": 4.000000000005066,
+      "worstSample": "circle-pingpong/2",
+      "rms": 4.000000000005066
+    },
+    {
+      "metric": "shape.sweep.position",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 240,
+      "min": 0,
+      "max": 0.000006553872481040661,
+      "worstSample": "circle-pingpong/1.5/x",
+      "rms": 8.252505828263886e-7
+    },
+    {
+      "metric": "size.lifetime",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 30,
+      "min": 0,
+      "max": 0.0000017166137691315697,
+      "worstSample": "appearance-blend/59/y",
+      "rms": 5.548548966913995e-7
+    },
+    {
+      "metric": "space.position",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 81,
+      "min": 0,
+      "max": 2.384185791015625e-7,
+      "worstSample": "custom/0/x",
+      "rms": 8.887386799494982e-8
+    },
+    {
+      "metric": "space.velocity",
+      "reference": "unity",
+      "unit": "units/s",
+      "samples": 81,
+      "min": 0,
+      "max": 2.9802322387695312e-8,
+      "worstSample": "local-gravity/2/x",
+      "rms": 4.823601576713279e-9
+    },
+    {
+      "metric": "space.world",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 81,
+      "min": 0,
+      "max": 2.384185791015625e-7,
+      "worstSample": "custom/0/y",
+      "rms": 5.9235572218889385e-8
+    },
+    {
+      "metric": "textureSheet.tile",
+      "reference": "unity",
+      "unit": "tiles",
+      "samples": 60,
+      "min": 0,
+      "max": 1,
+      "worstSample": "sheet-zero/15",
+      "rms": 0.408248290463863
+    },
+    {
+      "metric": "velocity.position",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 60,
+      "min": 0,
+      "max": 0.00000762939453125,
+      "worstSample": "motion-multiplier/59/x",
+      "rms": 0.0000013554938563502982
+    },
+    {
+      "metric": "velocity.velocity",
+      "reference": "unity",
+      "unit": "units/s",
+      "samples": 60,
+      "min": 0,
+      "max": 0,
+      "worstSample": "motion-linear/0/x",
+      "rms": 0
+    }
+  ]
+}
