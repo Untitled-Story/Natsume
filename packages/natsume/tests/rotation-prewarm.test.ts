@@ -12,6 +12,7 @@ import { EmissionModuleT } from '../src/format/generated/noa/ir/emission-module.
 
 interface NativeCase {
   label: string;
+  speed: number;
   samples: {
     frame: number;
     count: number;
@@ -31,10 +32,15 @@ for (const c of native.cases.filter((c) => c.label !== 'prewarm'))
     main.rotation = vector((10 * Math.PI) / 180, (20 * Math.PI) / 180, (30 * Math.PI) / 180);
     main.durationSeconds = c.label.includes('duration3') ? 3 : 1;
     main.maxParticles = 100;
+    main.simulationSpeed = c.speed;
     const warm = c.label.startsWith('prewarm');
     main.loop = main.prewarm = warm;
     const life =
-      c.label.includes('long') || c.label.includes('life4') ? 4 : c.label.includes('life1') ? 1 : 2;
+      c.label.includes('long') || c.label.includes('life4') || c.label === 'rotation-speed-double'
+        ? 4
+        : c.label.includes('life1')
+          ? 1
+          : 2;
     main.lifetime = constant(life);
     if (warm)
       source.modules.push(new ParticleModuleT(M.EmissionModule, new EmissionModuleT(constant(10))));
@@ -50,7 +56,7 @@ for (const c of native.cases.filter((c) => c.label !== 'prewarm'))
     if (!warm) {
       e.count = 1;
       e.emitting = false;
-      e.lifetimes[0] = 2;
+      e.lifetimes[0] = life;
       e.rotations.set([10, 20, 30].map((v) => (v * Math.PI) / 180));
     }
     for (let frame = 0; frame <= 60; frame++) {
@@ -59,6 +65,10 @@ for (const c of native.cases.filter((c) => c.label !== 'prewarm'))
       if (!sample) continue;
       if (warm) {
         expect(Math.abs(e.count - sample.count)).toBeLessThanOrEqual(2);
+        if (main.simulationSpeed === 0) {
+          expect(e.count).toBe(0);
+          continue;
+        }
         const remaining = Array.from(e.ages.slice(0, e.count), (age) => life - age).sort(
           (a, b) => a - b,
         );
@@ -71,7 +81,7 @@ for (const c of native.cases.filter((c) => c.label !== 'prewarm'))
         for (const [axis, key] of (['x', 'y', 'z'] as const).entries())
           expect(
             Math.abs(e.rotations[axis]! - (sample.rotations[0]![key] * Math.PI) / 180),
-          ).toBeLessThan(1e-5);
+          ).toBeLessThan(main.simulationSpeed > 1 ? 2e-5 : 1e-5);
     }
     if (warm) {
       const before = e.count;

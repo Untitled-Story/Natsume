@@ -124,7 +124,7 @@ if (sorting) {
   process.exit(0);
 }
 if (basicShapes || rotationPrewarm) {
-  assert.equal(current.cases.length, basicShapes ? 31 : 9);
+  assert.equal(current.cases.length, basicShapes ? 31 : 15);
   if (process.argv.includes('--update-fixtures'))
     await writeFile(
       resolve(

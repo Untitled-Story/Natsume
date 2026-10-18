@@ -116,9 +116,9 @@ export class Emitter {
     this.delayRemaining = this.delaySeconds;
     check(main.maxParticles <= 100_000, 'LIMIT', 'Emitter capacity exceeds playback limit');
     check(
-      main.durationSeconds >= 1 / 60 && main.simulationSpeed === 1,
+      main.durationSeconds >= 1 / 60,
       'CAPABILITY',
-      'Initial playback requires duration >= 1/60 second and simulation speed 1',
+      'Playback requires duration >= 1/60 second',
     );
     this.prewarmSeconds = prewarmDuration(main);
     check(
@@ -298,10 +298,12 @@ export class Emitter {
     this.started = true;
     if (this.delayRemaining > 0) return;
     this.bursts(-Number.EPSILON, 0);
-    if (this.prewarmSeconds) {
-      const steps = Math.ceil(this.prewarmSeconds * 60);
-      for (let i = 0; i < steps; i++) this.step(Math.min(1 / 60, this.prewarmSeconds - i / 60));
-    }
+    this.prewarm();
+  }
+  private prewarm(): void {
+    if (!this.main.simulationSpeed) return;
+    const steps = Math.ceil(this.prewarmSeconds * 60);
+    for (let i = 0; i < steps; i++) this.advance(Math.min(1 / 60, this.prewarmSeconds - i / 60));
   }
   private bursts(from: number, to: number): void {
     const duration = this.main.durationSeconds;
@@ -408,18 +410,19 @@ export class Emitter {
   step(delta: number): void {
     if (!this.enabledLast) return;
     let dt = delta * this.main.simulationSpeed;
+    if (dt <= 0) return;
     if (this.delayRemaining > 0) {
       this.delayRemaining -= dt;
       if (this.delayRemaining > 0) return;
       dt = -this.delayRemaining;
       this.delayRemaining = 0;
       this.bursts(-Number.EPSILON, 0);
-      if (this.prewarmSeconds) {
-        const steps = Math.ceil(this.prewarmSeconds * 60);
-        for (let i = 0; i < steps; i++) this.step(Math.min(1 / 60, this.prewarmSeconds - i / 60));
-      }
+      this.prewarm();
       if (dt <= 0) return;
     }
+    this.advance(dt);
+  }
+  private advance(dt: number): void {
     const limitDecay = this.limit ? Math.pow(1 - this.limit.dampen, dt * 30) : 1;
     for (let i = 0; i < this.count; ) {
       const age = this.ages[i]! + dt;
