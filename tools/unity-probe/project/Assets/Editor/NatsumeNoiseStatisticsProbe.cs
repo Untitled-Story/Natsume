@@ -9,11 +9,17 @@ public static class NatsumeNoiseStatisticsProbe
 {
     const int Count = 512;
     [Serializable] public class Sample { public int frame; public double displacementRms, rotationRms, sizeDeltaRms; }
-    [Serializable] public class Case { public string label; public uint seed; public Sample[] samples; }
+    [Serializable] public class Case {
+        public string label; public uint seed, pointSeed;
+        public int quality = 2, octaves = 1;
+        public float frequency = 0.28f, strength = 1, scroll, multiplier = 0.5f, scale = 2;
+        public bool damping = true;
+        public Sample[] samples;
+    }
     [Serializable] public class Output { public string unityVersion; public int count = Count; public uint pointSeed = 1234567; public Case[] cases; }
-    static Vector3[] Origins()
+    static Vector3[] Origins(uint pointSeed)
     {
-        uint state = 1234567;
+        uint state = pointSeed;
         var values = new float[Count * 3];
         for (int i = 0; i < values.Length; i++) {
             state = unchecked(state * 1664525 + 1013904223);
@@ -23,8 +29,9 @@ public static class NatsumeNoiseStatisticsProbe
         for (int i = 0; i < Count; i++) points[i] = new Vector3(values[i*3], values[i*3+1], values[i*3+2]);
         return points;
     }
-    static Case Measure(string label, uint seed, Camera camera)
+    static Case Measure(Case config, Camera camera)
     {
+        string label=config.label; uint seed=config.seed;
         var go = new GameObject(label);
         try {
             var ps = go.AddComponent<ParticleSystem>();
@@ -35,16 +42,16 @@ public static class NatsumeNoiseStatisticsProbe
             m.simulationSpace = ParticleSystemSimulationSpace.Local; m.scalingMode = ParticleSystemScalingMode.Local;
             var emission = ps.emission; emission.enabled = false;
             var shape = ps.shape; shape.enabled = false;
-            var n = ps.noise; n.enabled = true; n.strength = label == "calibrated-high" ? 0.03f : 1;
-            n.frequency = label == "frequency-zero" ? 0 : 0.28f; n.damping = true;
-            n.quality = label == "low" ? ParticleSystemNoiseQuality.Low : label == "medium" ? ParticleSystemNoiseQuality.Medium : ParticleSystemNoiseQuality.High;
-            n.scrollSpeed = label == "scroll" ? 1 : 0;
-            n.octaveCount = label == "octaves" ? 3 : 1; n.octaveMultiplier = 0.5f; n.octaveScale = 2;
+            var n = ps.noise; n.enabled = true; n.strength = config.strength;
+            n.frequency = config.frequency; n.damping = config.damping;
+            n.quality = (ParticleSystemNoiseQuality)config.quality;
+            n.scrollSpeed = config.scroll;
+            n.octaveCount = config.octaves; n.octaveMultiplier = config.multiplier; n.octaveScale = config.scale;
             n.positionAmount = label == "rotation" || label == "size" ? 0 : 1;
             n.rotationAmount = label == "rotation" ? 1 : 0; n.sizeAmount = label == "size" ? 1 : 0;
             var r = ps.GetComponent<ParticleSystemRenderer>(); r.alignment = ParticleSystemRenderSpace.World; r.maxParticleSize = 100;
             ps.Simulate(0, false, true, false);
-            var origins = Origins(); var particles = new ParticleSystem.Particle[Count];
+            var origins = Origins(config.pointSeed); var particles = new ParticleSystem.Particle[Count];
             for (int i = 0; i < Count; i++) particles[i] = new ParticleSystem.Particle {
                 position = origins[i], velocity = Vector3.zero, startSize3D = Vector3.one,
                 startLifetime = 10, remainingLifetime = 10, startColor = Color.white, randomSeed = (uint)(1000+i)
@@ -53,7 +60,7 @@ public static class NatsumeNoiseStatisticsProbe
             var samples = new List<Sample>();
             for (int frame = 1; frame <= 60; frame++) {
                 ps.Simulate(1f/60f, false, false, false);
-                if (frame != 1 && frame != 60) continue;
+                if (frame != 1 && frame != 15 && frame != 60) continue;
                 if (ps.GetParticles(particles) != Count) throw new Exception("Noise population changed");
                 double position = 0, rotation = 0, size = 0;
                 for (int i = 0; i < Count; i++) {
@@ -74,7 +81,7 @@ public static class NatsumeNoiseStatisticsProbe
                 }
                 samples.Add(new Sample {frame=frame, displacementRms=Math.Sqrt(position/Count), rotationRms=Math.Sqrt(rotation/Count), sizeDeltaRms=Math.Sqrt(size/Count)});
             }
-            return new Case {label=label,seed=seed,samples=samples.ToArray()};
+            config.samples=samples.ToArray(); return config;
         } finally { UnityEngine.Object.DestroyImmediate(go); }
     }
     public static void Run()
@@ -85,7 +92,25 @@ public static class NatsumeNoiseStatisticsProbe
             var cases = new List<Case>();
             foreach (uint seed in new uint[] {2, 4294967295})
                 foreach (string label in new [] {"calibrated-high","high","low","medium","scroll","octaves","frequency-zero","rotation","size"})
-                    cases.Add(Measure(label,seed,camera));
+                    cases.Add(Measure(new Case {
+                        label=label,seed=seed,pointSeed=1234567,
+                        quality=label=="low"?0:label=="medium"?1:2,
+                        frequency=label=="frequency-zero"?0:0.28f,
+                        strength=label=="calibrated-high"?0.03f:1,
+                        scroll=label=="scroll"?1:0,octaves=label=="octaves"?3:1
+                    },camera));
+            foreach (uint seed in new uint[] {12345,98765,13579,24680}) {
+                foreach (int quality in new [] {0,1,2})
+                    foreach (float frequency in new [] {0.1f,0.28f,1f})
+                        cases.Add(Measure(new Case {label="quality-"+quality+"-frequency-"+frequency.ToString(System.Globalization.CultureInfo.InvariantCulture),seed=seed,pointSeed=seed+1234567,quality=quality,frequency=frequency},camera));
+                foreach (float speed in new [] {0.25f,2f,-1f})
+                    cases.Add(Measure(new Case {label="scroll-"+speed.ToString(System.Globalization.CultureInfo.InvariantCulture),seed=seed,pointSeed=seed+1234567,scroll=speed},camera));
+                cases.Add(Measure(new Case {label="octaves-two",seed=seed,pointSeed=seed+1234567,octaves=2},camera));
+                cases.Add(Measure(new Case {label="octaves-four",seed=seed,pointSeed=seed+1234567,octaves=4,multiplier=0.3f,scale=1.7f},camera));
+                cases.Add(Measure(new Case {label="low-scroll",seed=seed,pointSeed=seed+1234567,quality=0,scroll=1},camera));
+                cases.Add(Measure(new Case {label="medium-octaves",seed=seed,pointSeed=seed+1234567,quality=1,octaves=3},camera));
+                cases.Add(Measure(new Case {label="scroll-weak",seed=seed,pointSeed=seed+1234567,scroll=1,strength=0.1f},camera));
+            }
             var output = new Output {unityVersion=Application.unityVersion,cases=cases.ToArray()};
             var directory = Path.GetFullPath(Path.Combine(Application.dataPath,"../../unity-baselines/noise-statistics"));
             Directory.CreateDirectory(directory);

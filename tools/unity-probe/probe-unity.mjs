@@ -184,7 +184,7 @@ await new Promise((accept, reject) => {
 const current = JSON.parse(await readFile(baseline, 'utf8'));
 assert.equal(current.unityVersion, version);
 if (noiseStatistics || customData) {
-  assert.equal(current.cases.length, noiseStatistics ? 18 : 4);
+  assert.equal(current.cases.length, noiseStatistics ? 86 : 4);
   if (process.argv.includes('--update-fixtures'))
     await saveJson(
       resolve(

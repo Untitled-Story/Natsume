@@ -7,6 +7,7 @@ import { CurlNoiseField } from './curl-field.js';
 export class ParticleNoise {
   readonly field: CurlNoiseField;
   private readonly fields: CurlNoiseField[];
+  private readonly weights: Float64Array;
   private readonly sampleValue = new Float64Array(3);
   private readonly frequency: number;
   private scroll = 0;
@@ -15,10 +16,24 @@ export class ParticleNoise {
     seed: number,
   ) {
     this.frequency = Math.max(1e-4, settings.frequency);
+    // Native quality levels change amplitude and correlation length, but all
+    // three position axes still affect the field. Fitted to spatial statistics.
+    const coordinateScale = settings.quality === 0 ? 0.86 : settings.quality === 1 ? 0.96 : 1.02;
+    const amplitude =
+      0.9816303202717301 * (settings.quality === 0 ? 1.87 : settings.quality === 1 ? 1.26 : 1);
     this.fields = Array.from(
       { length: settings.octaves },
-      (_, i) => new CurlNoiseField(seed, this.frequency * settings.octaveScale ** i),
+      (_, i) =>
+        new CurlNoiseField(
+          seed,
+          this.frequency * settings.octaveScale ** i,
+          coordinateScale,
+          amplitude,
+        ),
     );
+    this.weights = Float64Array.from(this.fields, (_, i) => settings.octaveMultiplier ** i);
+    const sum = this.weights.reduce((total, weight) => total + weight, 0);
+    for (let i = 0; i < this.weights.length; i++) this.weights[i] = this.weights[i]! / sum;
     this.field = this.fields[0]!;
   }
   reset(): void {
@@ -38,13 +53,10 @@ export class ParticleNoise {
     const n = this.settings;
     out.fill(0);
     for (let octave = 0; octave < this.fields.length; octave++) {
-      this.fields[octave]!.sample(
-        x,
-        n.quality === 0 ? 0 : y,
-        (n.quality < 2 ? 0 : z) + this.scroll / this.frequency,
-        this.sampleValue,
-      );
-      const weight = n.octaveMultiplier ** octave / Math.max(1e-6, n.octaveScale ** octave);
+      this.fields[octave]!.sample(x, y, z + this.scroll, this.sampleValue);
+      // Normalize potential weights; each field already includes its spatial
+      // derivative frequency, which must survive the octave sum.
+      const weight = this.weights[octave]!;
       for (let axis = 0; axis < 3; axis++)
         out[axis] = out[axis]! + this.sampleValue[axis]! * weight;
     }

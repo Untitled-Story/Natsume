@@ -21,7 +21,20 @@ const native = JSON.parse(
 ) as {
   count: number;
   pointSeed: number;
-  cases: { label: string; seed: number; samples: Sample[] }[];
+  cases: {
+    label: string;
+    seed: number;
+    pointSeed: number;
+    quality: number;
+    frequency: number;
+    strength: number;
+    scroll: number;
+    octaves: number;
+    multiplier: number;
+    scale: number;
+    damping: boolean;
+    samples: Sample[];
+  }[];
 };
 for (const sample of native.cases)
   it('measures Noise population statistics ' + sample.label + '/' + sample.seed, () => {
@@ -37,24 +50,24 @@ for (const sample of native.cases)
     source.main!.rotation3d = true;
     const noise = new NoiseModuleT();
     noise.algorithm = 'unity-particle-noise';
-    noise.quality = sample.label === 'low' ? 0 : sample.label === 'medium' ? 1 : 2;
-    noise.frequency = sample.label === 'frequency-zero' ? 0 : Math.fround(0.28);
-    noise.damping = true;
-    const strength = sample.label === 'calibrated-high' ? Math.fround(0.03) : 1;
+    noise.quality = sample.quality;
+    noise.frequency = sample.frequency;
+    noise.damping = sample.damping;
+    const strength = sample.strength;
     noise.strength = vector(strength, strength, strength);
     noise.positionAmount = constant(sample.label === 'rotation' || sample.label === 'size' ? 0 : 1);
     noise.rotationAmount = constant(sample.label === 'rotation' ? 1 : 0);
     noise.sizeAmount = constant(sample.label === 'size' ? 1 : 0);
-    noise.scrollSpeed = constant(sample.label === 'scroll' ? 1 : 0);
-    noise.octaves = sample.label === 'octaves' ? 3 : 1;
-    noise.octaveMultiplier = 0.5;
-    noise.octaveScale = 2;
+    noise.scrollSpeed = constant(sample.scroll);
+    noise.octaves = sample.octaves;
+    noise.octaveMultiplier = sample.multiplier;
+    noise.octaveScale = sample.scale;
     source.modules.push(new ParticleModuleT(M.NoiseModule, noise));
     const e = new Emitter(3, new Scene(pack, [1]).nodes.get(1)!, source, true, sample.seed, []);
     e.sync();
     e.emitting = false;
     e.count = native.count;
-    let state = native.pointSeed;
+    let state = sample.pointSeed;
     for (let i = 0; i < e.positions.length; i++) {
       state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
       e.positions[i] = (state >>> 8) * (32 / 16777216) - 16;
@@ -99,12 +112,15 @@ for (const sample of native.cases)
         mode === 'rotation' ? 'rad' : mode === 'size' ? 'factor' : 'units',
         String(sample.seed),
       );
-      if (target > 1e-8)
+      if (target > 1e-8) {
+        // Population bounds do not require Unity's per-particle random paths.
+        expect(Math.abs(actual / target - 1)).toBeLessThan(sample.quality === 0 ? 0.16 : 0.12);
         recordError(
           `noise.population.${sample.label}.frame${frame}.relative`,
           (actual - target) / target,
           'fraction',
           String(sample.seed),
         );
+      }
     }
   });
