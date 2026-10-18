@@ -1,8 +1,8 @@
 {
   "unityVersion": "2022.3.21f1",
-  "measuredAt": "2026-10-18T05:49:24.441Z",
-  "revision": "7f42c8a93f83503c47e562701266d9f9d62a886b",
-  "workingTreeChanges": true,
+  "measuredAt": "2026-10-18T06:08:46.859Z",
+  "revision": "6220853270151710acfeab052ec754fbae6a7c20",
+  "workingTreeChanges": false,
   "nativeRuns": [
     {
       "mode": "curves-noise",
@@ -13,8 +13,8 @@
     {
       "mode": "boundaries",
       "file": "data/unity-baselines/boundaries/unity-2022.3.21f1.json",
-      "modifiedAt": "2026-10-18T05:39:52.572Z",
-      "sha256": "1e3c04fbb7d39abc551de4227f3a6977f0cf238571ac936add9850dba38be6d2"
+      "modifiedAt": "2026-10-18T06:00:18.174Z",
+      "sha256": "d13098cef5504a017ca7030762d06592ef3594fbf8e3b8b879bcda078bc9e1e2"
     },
     {
       "mode": "random",
@@ -55,8 +55,8 @@
     {
       "mode": "sweeps",
       "file": "data/unity-baselines/sweeps/unity-2022.3.21f1.json",
-      "modifiedAt": "2026-10-18T05:31:51.293Z",
-      "sha256": "63e607f949af5ce067243c95490c8b5594a6b07694d94c8db5c69e868aff315d"
+      "modifiedAt": "2026-10-18T06:07:26.923Z",
+      "sha256": "cbe7b576dca154ec23a0a660e44ba617fc2265373aa8d800b1c60f4875a9992d"
     },
     {
       "mode": "noise-options",
@@ -84,8 +84,8 @@
     {
       "mode": "noise-statistics",
       "file": "data/unity-baselines/noise-statistics/unity-2022.3.21f1.json",
-      "modifiedAt": "2026-10-18T05:35:43.994Z",
-      "sha256": "15df3a70f4938246cbdd3c8a01d418222dae27ae439012eed2966a3cb465fb0a"
+      "modifiedAt": "2026-10-18T05:58:04.421Z",
+      "sha256": "e6138cc48f096a94a8a93da5d73cef8b25f6c7ce8c099f09fcbb63a93ff35c22"
     },
     {
       "mode": "custom-data",
@@ -101,7 +101,7 @@
     },
     {
       "file": "packages/natsume/tests/fixtures/unity-boundaries.json",
-      "sha256": "fc8fb3b2f6a2be891808451c18e985004b091a6de9c2a9029b68bb4ff83a0520"
+      "sha256": "a87ccbef01b9d4f7e88a2d9b30ac32b4d55a0c3e1d9a943b4decae8aa4958995"
     },
     {
       "file": "packages/natsume/tests/fixtures/unity-curves.json",
@@ -121,7 +121,7 @@
     },
     {
       "file": "packages/natsume/tests/fixtures/unity-noise-statistics.json",
-      "sha256": "2e25c11975516ef2fd7707b966066b3cf7b87b4a2289c7a1957074609da603f8"
+      "sha256": "d6b0de82e2fb1a926e7c064a681d3186b213a10751040d3399713e0376b3d1d1"
     },
     {
       "file": "packages/natsume/tests/fixtures/unity-random.json",
@@ -149,7 +149,7 @@
     },
     {
       "file": "packages/natsume/tests/fixtures/unity-sweeps.json",
-      "sha256": "e3ece84fc1cb5458846923a6cc68533ba22a06d41b8f5a2f8f1268af5126a6b7"
+      "sha256": "505bebc20b9adeda0e8764ec940a0fa3b6406e58b0932222910f0fba6d2ca26e"
     }
   ],
   "metrics": [
@@ -364,6 +364,26 @@
       "rms": 0.045653391198594725
     },
     {
+      "metric": "noise.population.calibrated-high.frame15.absolute",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 2,
+      "min": 0.0005861449711793247,
+      "max": 0.0006234964716143494,
+      "worstSample": "2",
+      "rms": 0.0006051089890897154
+    },
+    {
+      "metric": "noise.population.calibrated-high.frame15.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 2,
+      "min": 0.04491972300887424,
+      "max": 0.04638802031793025,
+      "worstSample": "2",
+      "rms": 0.045659774113604064
+    },
+    {
       "metric": "noise.population.calibrated-high.frame60.absolute",
       "reference": "unity",
       "unit": "units",
@@ -402,6 +422,26 @@
       "max": 0.019355153202922856,
       "worstSample": "4294967295",
       "rms": 0.01931477452590509
+    },
+    {
+      "metric": "noise.population.frequency-zero.frame15.absolute",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 2,
+      "min": 0.008345398350776634,
+      "max": 0.008379866752293574,
+      "worstSample": "4294967295",
+      "rms": 0.008362650310139143
+    },
+    {
+      "metric": "noise.population.frequency-zero.frame15.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 2,
+      "min": 0.019273527724535406,
+      "max": 0.019352753390482414,
+      "worstSample": "4294967295",
+      "rms": 0.019313181182048486
     },
     {
       "metric": "noise.population.frequency-zero.frame60.absolute",
@@ -444,6 +484,26 @@
       "rms": 0.04565597749974463
     },
     {
+      "metric": "noise.population.high.frame15.absolute",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 2,
+      "min": 0.019916594176876634,
+      "max": 0.020241859256329042,
+      "worstSample": "2",
+      "rms": 0.020079885330342776
+    },
+    {
+      "metric": "noise.population.high.frame15.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 2,
+      "min": 0.04573217906965117,
+      "max": 0.04604123189867511,
+      "worstSample": "4294967295",
+      "rms": 0.045886965672215785
+    },
+    {
       "metric": "noise.population.high.frame60.absolute",
       "reference": "unity",
       "unit": "units",
@@ -464,124 +524,964 @@
       "rms": 0.03967536027210439
     },
     {
+      "metric": "noise.population.low-scroll.frame1.absolute",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 4,
+      "min": 0.00010283613088364618,
+      "max": 0.001517042667443326,
+      "worstSample": "13579",
+      "rms": 0.000845430758366987
+    },
+    {
+      "metric": "noise.population.low-scroll.frame1.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 4,
+      "min": 0.001959726167597715,
+      "max": 0.029143833143919568,
+      "worstSample": "13579",
+      "rms": 0.016222205930773993
+    },
+    {
+      "metric": "noise.population.low-scroll.frame15.absolute",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 4,
+      "min": 0.0030808821856531665,
+      "max": 0.023614928621520703,
+      "worstSample": "13579",
+      "rms": 0.01615977310755853
+    },
+    {
+      "metric": "noise.population.low-scroll.frame15.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 4,
+      "min": 0.003954886314254286,
+      "max": 0.03070030729962013,
+      "worstSample": "13579",
+      "rms": 0.02101238459920929
+    },
+    {
+      "metric": "noise.population.low-scroll.frame60.absolute",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 4,
+      "min": 0.08190169658533097,
+      "max": 0.19419505808700332,
+      "worstSample": "98765",
+      "rms": 0.12762461748915657
+    },
+    {
+      "metric": "noise.population.low-scroll.frame60.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 4,
+      "min": 0.031223976369015013,
+      "max": 0.07546484153990042,
+      "worstSample": "98765",
+      "rms": 0.04918383536371168
+    },
+    {
       "metric": "noise.population.low.frame1.absolute",
       "reference": "unity",
       "unit": "units",
       "samples": 2,
-      "min": 0.028108832995379036,
-      "max": 0.028775536169910968,
-      "worstSample": "4294967295",
-      "rms": 0.02844413800968456
+      "min": 0.0008132085456465724,
+      "max": 0.0009938983369560048,
+      "worstSample": "2",
+      "rms": 0.0009080589306087258
     },
     {
       "metric": "noise.population.low.frame1.relative",
       "reference": "unity",
       "unit": "fraction",
       "samples": 2,
-      "min": 0.5261659131856983,
-      "max": 0.5418887402172741,
-      "worstSample": "4294967295",
-      "rms": 0.5340851874808007
+      "min": 0.015313999771622887,
+      "max": 0.018604665165721204,
+      "worstSample": "2",
+      "rms": 0.017038957640270514
+    },
+    {
+      "metric": "noise.population.low.frame15.absolute",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 2,
+      "min": 0.008404634336020678,
+      "max": 0.012469252682792309,
+      "worstSample": "2",
+      "rms": 0.010632970911028133
+    },
+    {
+      "metric": "noise.population.low.frame15.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 2,
+      "min": 0.010742502979175598,
+      "max": 0.015852193646351716,
+      "worstSample": "2",
+      "rms": 0.013540557847796196
     },
     {
       "metric": "noise.population.low.frame60.absolute",
       "reference": "unity",
       "unit": "units",
       "samples": 2,
-      "min": 1.2900540549886121,
-      "max": 1.3079954804143903,
-      "worstSample": "2",
-      "rms": 1.2990557419866617
+      "min": 0.0023193399968071127,
+      "max": 0.06755629208342251,
+      "worstSample": "4294967295",
+      "rms": 0.04779765652247756
     },
     {
       "metric": "noise.population.low.frame60.relative",
       "reference": "unity",
       "unit": "fraction",
       "samples": 2,
-      "min": 0.47959919204552015,
-      "max": 0.48048162338614764,
-      "worstSample": "2",
-      "rms": 0.48004061048129226
+      "min": 0.0008519909002263886,
+      "max": 0.025115182558056927,
+      "worstSample": "4294967295",
+      "rms": 0.017769331493033096
+    },
+    {
+      "metric": "noise.population.medium-octaves.frame1.absolute",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 4,
+      "min": 0.000040337012715413456,
+      "max": 0.001831417077253962,
+      "worstSample": "98765",
+      "rms": 0.0010618484857294755
+    },
+    {
+      "metric": "noise.population.medium-octaves.frame1.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 4,
+      "min": 0.0011322820460190138,
+      "max": 0.050564432743021526,
+      "worstSample": "98765",
+      "rms": 0.029319489789104515
+    },
+    {
+      "metric": "noise.population.medium-octaves.frame15.absolute",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 4,
+      "min": 0.0014297725650320725,
+      "max": 0.024874177939093856,
+      "worstSample": "98765",
+      "rms": 0.016779357894310412
+    },
+    {
+      "metric": "noise.population.medium-octaves.frame15.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 4,
+      "min": 0.0028499038279767267,
+      "max": 0.04771903902340469,
+      "worstSample": "98765",
+      "rms": 0.032100318538410104
+    },
+    {
+      "metric": "noise.population.medium-octaves.frame60.absolute",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 4,
+      "min": 0.0009452598938042289,
+      "max": 0.09943373417106827,
+      "worstSample": "12345",
+      "rms": 0.07483247953331498
+    },
+    {
+      "metric": "noise.population.medium-octaves.frame60.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 4,
+      "min": 0.0005742348641122589,
+      "max": 0.058640883641383104,
+      "worstSample": "12345",
+      "rms": 0.04433868349574305
     },
     {
       "metric": "noise.population.medium.frame1.absolute",
       "reference": "unity",
       "unit": "units",
       "samples": 2,
-      "min": 0.007883404331329252,
-      "max": 0.0100509322075782,
-      "worstSample": "2",
-      "rms": 0.009032422213685365
+      "min": 0.0006713297851808214,
+      "max": 0.0015425421901011094,
+      "worstSample": "4294967295",
+      "rms": 0.0011895629635947933
     },
     {
       "metric": "noise.population.medium.frame1.relative",
       "reference": "unity",
       "unit": "fraction",
       "samples": 2,
-      "min": 0.214019984618313,
-      "max": 0.27398924133119934,
-      "worstSample": "2",
-      "rms": 0.24584004777626156
+      "min": 0.01830050533880284,
+      "max": 0.041877194410358615,
+      "worstSample": "4294967295",
+      "rms": 0.032315692065454225
+    },
+    {
+      "metric": "noise.population.medium.frame15.absolute",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 2,
+      "min": 0.016254572762408936,
+      "max": 0.025015939487469052,
+      "worstSample": "4294967295",
+      "rms": 0.02109512223393313
+    },
+    {
+      "metric": "noise.population.medium.frame15.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 2,
+      "min": 0.029709901714718556,
+      "max": 0.045648646925362725,
+      "worstSample": "4294967295",
+      "rms": 0.03851283698985745
     },
     {
       "metric": "noise.population.medium.frame60.absolute",
       "reference": "unity",
       "unit": "units",
       "samples": 2,
-      "min": 0.38541059700903335,
-      "max": 0.5127408666067548,
-      "worstSample": "2",
-      "rms": 0.4535661608715455
+      "min": 0.09157752206342584,
+      "max": 0.10782153882416834,
+      "worstSample": "4294967295",
+      "rms": 0.10002981251029337
     },
     {
       "metric": "noise.population.medium.frame60.relative",
       "reference": "unity",
       "unit": "fraction",
       "samples": 2,
-      "min": 0.19273481538675052,
-      "max": 0.25459115530790155,
-      "worstSample": "2",
-      "rms": 0.22579123701239698
+      "min": 0.045470975030050945,
+      "max": 0.053919026983849046,
+      "worstSample": "4294967295",
+      "rms": 0.049874196941246875
+    },
+    {
+      "metric": "noise.population.octaves-four.frame1.absolute",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 4,
+      "min": 0.0000774912427595198,
+      "max": 0.001693389620738988,
+      "worstSample": "13579",
+      "rms": 0.0008822244330033936
+    },
+    {
+      "metric": "noise.population.octaves-four.frame1.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 4,
+      "min": 0.003296413238499508,
+      "max": 0.07001689029296929,
+      "worstSample": "13579",
+      "rms": 0.03658742710187328
+    },
+    {
+      "metric": "noise.population.octaves-four.frame15.absolute",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 4,
+      "min": 0.002225136748610468,
+      "max": 0.028415080103286305,
+      "worstSample": "13579",
+      "rms": 0.014481503654337714
+    },
+    {
+      "metric": "noise.population.octaves-four.frame15.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 4,
+      "min": 0.006323641462804775,
+      "max": 0.07873296599992284,
+      "worstSample": "13579",
+      "rms": 0.040184925623381135
+    },
+    {
+      "metric": "noise.population.octaves-four.frame60.absolute",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 4,
+      "min": 0.008064382113579072,
+      "max": 0.12471317918042701,
+      "worstSample": "13579",
+      "rms": 0.06596188724131234
+    },
+    {
+      "metric": "noise.population.octaves-four.frame60.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 4,
+      "min": 0.006161949407567312,
+      "max": 0.09148355247302552,
+      "worstSample": "13579",
+      "rms": 0.048543466848380505
+    },
+    {
+      "metric": "noise.population.octaves-two.frame1.absolute",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 4,
+      "min": 0.000001941903095228903,
+      "max": 0.0010875000269206271,
+      "worstSample": "12345",
+      "rms": 0.0007590465728553248
+    },
+    {
+      "metric": "noise.population.octaves-two.frame1.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 4,
+      "min": 0.00007219113364740972,
+      "max": 0.03934083171354661,
+      "worstSample": "12345",
+      "rms": 0.027588880099816807
+    },
+    {
+      "metric": "noise.population.octaves-two.frame15.absolute",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 4,
+      "min": 0.0033584012750309533,
+      "max": 0.009703413510456393,
+      "worstSample": "13579",
+      "rms": 0.007592114617215248
+    },
+    {
+      "metric": "noise.population.octaves-two.frame15.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 4,
+      "min": 0.00834815360184176,
+      "max": 0.024092077975154794,
+      "worstSample": "13579",
+      "rms": 0.018772825680056816
+    },
+    {
+      "metric": "noise.population.octaves-two.frame60.absolute",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 4,
+      "min": 0.0009171215477072892,
+      "max": 0.02789393624891967,
+      "worstSample": "13579",
+      "rms": 0.01818019310887842
+    },
+    {
+      "metric": "noise.population.octaves-two.frame60.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 4,
+      "min": 0.0006447697470877261,
+      "max": 0.01935688720832913,
+      "worstSample": "13579",
+      "rms": 0.012612967684400591
     },
     {
       "metric": "noise.population.octaves.frame1.absolute",
       "reference": "unity",
       "unit": "units",
       "samples": 2,
-      "min": 0.003958965042962656,
-      "max": 0.004283588419409071,
+      "min": 0.000016458483897040938,
+      "max": 0.00015128345435031984,
       "worstSample": "2",
-      "rms": 0.0041244717212205375
+      "rms": 0.00010760475187545034
     },
     {
       "metric": "noise.population.octaves.frame1.relative",
       "reference": "unity",
       "unit": "fraction",
       "samples": 2,
-      "min": 0.13930157266706503,
-      "max": 0.1517814895512352,
+      "min": 0.0005791141537480341,
+      "max": 0.005360465525050488,
       "worstSample": "2",
-      "rms": 0.1456752359152188
+      "rms": 0.003812477137526605
+    },
+    {
+      "metric": "noise.population.octaves.frame15.absolute",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 2,
+      "min": 0.008049936377389932,
+      "max": 0.009937047055752435,
+      "worstSample": "4294967295",
+      "rms": 0.009042852975368556
+    },
+    {
+      "metric": "noise.population.octaves.frame15.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 2,
+      "min": 0.019389464598535168,
+      "max": 0.023866576725259016,
+      "worstSample": "4294967295",
+      "rms": 0.021743560219068588
     },
     {
       "metric": "noise.population.octaves.frame60.absolute",
       "reference": "unity",
       "unit": "units",
       "samples": 2,
-      "min": 0.2811479458966797,
-      "max": 0.3256706443755706,
-      "worstSample": "2",
-      "rms": 0.30422486427798906
+      "min": 0.015551891344840252,
+      "max": 0.04669562604122923,
+      "worstSample": "4294967295",
+      "rms": 0.03480188799321125
     },
     {
       "metric": "noise.population.octaves.frame60.relative",
       "reference": "unity",
       "unit": "fraction",
       "samples": 2,
-      "min": 0.20233416732104265,
-      "max": 0.23713610820915337,
-      "worstSample": "2",
-      "rms": 0.22042305809747195
+      "min": 0.011324063290623299,
+      "max": 0.03360551179719109,
+      "worstSample": "4294967295",
+      "rms": 0.025075534217252397
+    },
+    {
+      "metric": "noise.population.quality-0-frequency-0.1.frame1.absolute",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 4,
+      "min": 0.0018402871234530285,
+      "max": 0.005905793927963657,
+      "worstSample": "24680",
+      "rms": 0.004539482814964837
+    },
+    {
+      "metric": "noise.population.quality-0-frequency-0.1.frame1.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 4,
+      "min": 0.0367210965124158,
+      "max": 0.123216385510849,
+      "worstSample": "24680",
+      "rms": 0.08848053196292775
+    },
+    {
+      "metric": "noise.population.quality-0-frequency-0.1.frame15.absolute",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 4,
+      "min": 0.026052166142079725,
+      "max": 0.0845963056064345,
+      "worstSample": "24680",
+      "rms": 0.06755186161079485
+    },
+    {
+      "metric": "noise.population.quality-0-frequency-0.1.frame15.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 4,
+      "min": 0.034750101294130614,
+      "max": 0.11759138712664748,
+      "worstSample": "24680",
+      "rms": 0.08742592662956142
+    },
+    {
+      "metric": "noise.population.quality-0-frequency-0.1.frame60.absolute",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 4,
+      "min": 0.1052107377378233,
+      "max": 0.36636859800183164,
+      "worstSample": "98765",
+      "rms": 0.26279452159586847
+    },
+    {
+      "metric": "noise.population.quality-0-frequency-0.1.frame60.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 4,
+      "min": 0.03616736335591317,
+      "max": 0.11420368219048004,
+      "worstSample": "98765",
+      "rms": 0.08531029430023924
+    },
+    {
+      "metric": "noise.population.quality-0-frequency-0.28.frame1.absolute",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 4,
+      "min": 0.00011920328951913611,
+      "max": 0.001551067452376563,
+      "worstSample": "13579",
+      "rms": 0.000859504754470235
+    },
+    {
+      "metric": "noise.population.quality-0-frequency-0.28.frame1.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 4,
+      "min": 0.0022715176316669694,
+      "max": 0.02981270316781912,
+      "worstSample": "13579",
+      "rms": 0.01650176492838424
+    },
+    {
+      "metric": "noise.population.quality-0-frequency-0.28.frame15.absolute",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 4,
+      "min": 0.0007129350956355252,
+      "max": 0.027333399606919495,
+      "worstSample": "13579",
+      "rms": 0.01523612140491737
+    },
+    {
+      "metric": "noise.population.quality-0-frequency-0.28.frame15.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 4,
+      "min": 0.0009133496377241131,
+      "max": 0.03553544697569948,
+      "worstSample": "13579",
+      "rms": 0.019792873063085175
+    },
+    {
+      "metric": "noise.population.quality-0-frequency-0.28.frame60.absolute",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 4,
+      "min": 0.030535647582256242,
+      "max": 0.1572603331776823,
+      "worstSample": "13579",
+      "rms": 0.10850529104926425
+    },
+    {
+      "metric": "noise.population.quality-0-frequency-0.28.frame60.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 4,
+      "min": 0.011355448270631162,
+      "max": 0.05958918903253686,
+      "worstSample": "13579",
+      "rms": 0.0411615421691759
+    },
+    {
+      "metric": "noise.population.quality-0-frequency-1.frame1.absolute",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 4,
+      "min": 0.00005655587123864353,
+      "max": 0.0018959276624002444,
+      "worstSample": "98765",
+      "rms": 0.0011383241376011482
+    },
+    {
+      "metric": "noise.population.quality-0-frequency-1.frame1.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 4,
+      "min": 0.0010544475652289654,
+      "max": 0.03679198604403805,
+      "worstSample": "98765",
+      "rms": 0.022032920431053038
+    },
+    {
+      "metric": "noise.population.quality-0-frequency-1.frame15.absolute",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 4,
+      "min": 0.0036726257496901837,
+      "max": 0.04436206541662713,
+      "worstSample": "12345",
+      "rms": 0.029959057562975823
+    },
+    {
+      "metric": "noise.population.quality-0-frequency-1.frame15.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 4,
+      "min": 0.005140163233989196,
+      "max": 0.06592429913677048,
+      "worstSample": "12345",
+      "rms": 0.04453976565764542
+    },
+    {
+      "metric": "noise.population.quality-0-frequency-1.frame60.absolute",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 4,
+      "min": 0.009318601942758908,
+      "max": 0.08782453725220218,
+      "worstSample": "24680",
+      "rms": 0.05075073317227787
+    },
+    {
+      "metric": "noise.population.quality-0-frequency-1.frame60.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 4,
+      "min": 0.005287223335225288,
+      "max": 0.04780419822755257,
+      "worstSample": "24680",
+      "rms": 0.027769622039857483
+    },
+    {
+      "metric": "noise.population.quality-1-frequency-0.1.frame1.absolute",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 4,
+      "min": 0.0009931145900265378,
+      "max": 0.0014347045017915408,
+      "worstSample": "13579",
+      "rms": 0.0012561425044681721
+    },
+    {
+      "metric": "noise.population.quality-1-frequency-0.1.frame1.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 4,
+      "min": 0.027022335549494236,
+      "max": 0.04037804059379441,
+      "worstSample": "13579",
+      "rms": 0.03561108972612187
+    },
+    {
+      "metric": "noise.population.quality-1-frequency-0.1.frame15.absolute",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 4,
+      "min": 0.014538371979655684,
+      "max": 0.022613958293221437,
+      "worstSample": "13579",
+      "rms": 0.01873023563024653
+    },
+    {
+      "metric": "noise.population.quality-1-frequency-0.1.frame15.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 4,
+      "min": 0.026400142098997256,
+      "max": 0.04241360285071487,
+      "worstSample": "13579",
+      "rms": 0.0353971131992461
+    },
+    {
+      "metric": "noise.population.quality-1-frequency-0.1.frame60.absolute",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 4,
+      "min": 0.05693016431664599,
+      "max": 0.09239011958471544,
+      "worstSample": "13579",
+      "rms": 0.07070861860956389
+    },
+    {
+      "metric": "noise.population.quality-1-frequency-0.1.frame60.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 4,
+      "min": 0.026254285034167976,
+      "max": 0.043884117304113616,
+      "worstSample": "13579",
+      "rms": 0.033771877827367486
+    },
+    {
+      "metric": "noise.population.quality-1-frequency-0.28.frame1.absolute",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 4,
+      "min": 0.00026814076958914246,
+      "max": 0.0010142925809014172,
+      "worstSample": "24680",
+      "rms": 0.0007586516002314639
+    },
+    {
+      "metric": "noise.population.quality-1-frequency-0.28.frame1.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 4,
+      "min": 0.007377358365613843,
+      "max": 0.028276978840565663,
+      "worstSample": "24680",
+      "rms": 0.02109731935540131
+    },
+    {
+      "metric": "noise.population.quality-1-frequency-0.28.frame15.absolute",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 4,
+      "min": 0.009123032160057276,
+      "max": 0.013950075755066127,
+      "worstSample": "24680",
+      "rms": 0.011583066870250187
+    },
+    {
+      "metric": "noise.population.quality-1-frequency-0.28.frame15.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 4,
+      "min": 0.016704764518349735,
+      "max": 0.02614206383706431,
+      "worstSample": "24680",
+      "rms": 0.021593555403235924
+    },
+    {
+      "metric": "noise.population.quality-1-frequency-0.28.frame60.absolute",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 4,
+      "min": 0.02575497260058257,
+      "max": 0.09154513601431025,
+      "worstSample": "13579",
+      "rms": 0.05142447952650606
+    },
+    {
+      "metric": "noise.population.quality-1-frequency-0.28.frame60.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 4,
+      "min": 0.013140844876605069,
+      "max": 0.045663689811561804,
+      "worstSample": "13579",
+      "rms": 0.025701875907521814
+    },
+    {
+      "metric": "noise.population.quality-1-frequency-1.frame1.absolute",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 4,
+      "min": 0.0009109346049480868,
+      "max": 0.0017907372877972172,
+      "worstSample": "12345",
+      "rms": 0.0013477308273708683
+    },
+    {
+      "metric": "noise.population.quality-1-frequency-1.frame1.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 4,
+      "min": 0.02517354971033317,
+      "max": 0.04880384464961574,
+      "worstSample": "12345",
+      "rms": 0.03706335668564129
+    },
+    {
+      "metric": "noise.population.quality-1-frequency-1.frame15.absolute",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 4,
+      "min": 0.012122918317828857,
+      "max": 0.02332392599323746,
+      "worstSample": "24680",
+      "rms": 0.018398965619782607
+    },
+    {
+      "metric": "noise.population.quality-1-frequency-1.frame15.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 4,
+      "min": 0.024115883166414505,
+      "max": 0.04515080552723646,
+      "worstSample": "24680",
+      "rms": 0.03606876010881334
+    },
+    {
+      "metric": "noise.population.quality-1-frequency-1.frame60.absolute",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 4,
+      "min": 0.039998612310600645,
+      "max": 0.07592264396606185,
+      "worstSample": "13579",
+      "rms": 0.05470908256348484
+    },
+    {
+      "metric": "noise.population.quality-1-frequency-1.frame60.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 4,
+      "min": 0.029044595349393087,
+      "max": 0.054000501437140434,
+      "worstSample": "13579",
+      "rms": 0.039324049963444484
+    },
+    {
+      "metric": "noise.population.quality-2-frequency-0.1.frame1.absolute",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 4,
+      "min": 0.0005360977651898031,
+      "max": 0.0021572062699451305,
+      "worstSample": "12345",
+      "rms": 0.0016262815920674966
+    },
+    {
+      "metric": "noise.population.quality-2-frequency-0.1.frame1.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 4,
+      "min": 0.018509036768980174,
+      "max": 0.07470880517234314,
+      "worstSample": "12345",
+      "rms": 0.05523929399813628
+    },
+    {
+      "metric": "noise.population.quality-2-frequency-0.1.frame15.absolute",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 4,
+      "min": 0.007747614116492274,
+      "max": 0.03354104686475462,
+      "worstSample": "12345",
+      "rms": 0.024438910871772596
+    },
+    {
+      "metric": "noise.population.quality-2-frequency-0.1.frame15.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 4,
+      "min": 0.017837551805193388,
+      "max": 0.0774715737813256,
+      "worstSample": "12345",
+      "rms": 0.05545760329764065
+    },
+    {
+      "metric": "noise.population.quality-2-frequency-0.1.frame60.absolute",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 4,
+      "min": 0.020371371761621848,
+      "max": 0.13692676173942497,
+      "worstSample": "12345",
+      "rms": 0.08932097929306117
+    },
+    {
+      "metric": "noise.population.quality-2-frequency-0.1.frame60.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 4,
+      "min": 0.011840775679531894,
+      "max": 0.08002815409480107,
+      "worstSample": "12345",
+      "rms": 0.051542966982794806
+    },
+    {
+      "metric": "noise.population.quality-2-frequency-0.28.frame1.absolute",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 4,
+      "min": 0.00034981958449863126,
+      "max": 0.002453099668903516,
+      "worstSample": "13579",
+      "rms": 0.0012858113528029078
+    },
+    {
+      "metric": "noise.population.quality-2-frequency-0.28.frame1.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 4,
+      "min": 0.012079119050674965,
+      "max": 0.08223912348713336,
+      "worstSample": "13579",
+      "rms": 0.04318108225713696
+    },
+    {
+      "metric": "noise.population.quality-2-frequency-0.28.frame15.absolute",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 4,
+      "min": 0.006624163967783814,
+      "max": 0.03989394062611662,
+      "worstSample": "13579",
+      "rms": 0.021110104798899455
+    },
+    {
+      "metric": "noise.population.quality-2-frequency-0.28.frame15.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 4,
+      "min": 0.015082166138438727,
+      "max": 0.0886956633198423,
+      "worstSample": "13579",
+      "rms": 0.047099006203515745
+    },
+    {
+      "metric": "noise.population.quality-2-frequency-0.28.frame60.absolute",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 4,
+      "min": 0.006426290205593599,
+      "max": 0.1343614827375983,
+      "worstSample": "13579",
+      "rms": 0.07756640756688385
+    },
+    {
+      "metric": "noise.population.quality-2-frequency-0.28.frame60.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 4,
+      "min": 0.004016255743391806,
+      "max": 0.0795765149435319,
+      "worstSample": "13579",
+      "rms": 0.04626139420972338
+    },
+    {
+      "metric": "noise.population.quality-2-frequency-1.frame1.absolute",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 4,
+      "min": 0.00010715956398061124,
+      "max": 0.001086232343437691,
+      "worstSample": "13579",
+      "rms": 0.0005725832783887859
+    },
+    {
+      "metric": "noise.population.quality-2-frequency-1.frame1.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 4,
+      "min": 0.003805119502164425,
+      "max": 0.037781460661237116,
+      "worstSample": "13579",
+      "rms": 0.01994895715830799
+    },
+    {
+      "metric": "noise.population.quality-2-frequency-1.frame15.absolute",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 4,
+      "min": 0.005561633800372168,
+      "max": 0.014805375579803326,
+      "worstSample": "13579",
+      "rms": 0.011459550802119462
+    },
+    {
+      "metric": "noise.population.quality-2-frequency-1.frame15.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 4,
+      "min": 0.013926021884262502,
+      "max": 0.03638596369284532,
+      "worstSample": "13579",
+      "rms": 0.028054488488728734
+    },
+    {
+      "metric": "noise.population.quality-2-frequency-1.frame60.absolute",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 4,
+      "min": 0.00422107980064057,
+      "max": 0.05397293739725817,
+      "worstSample": "98765",
+      "rms": 0.03205967800126661
+    },
+    {
+      "metric": "noise.population.quality-2-frequency-1.frame60.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 4,
+      "min": 0.0037103520992300544,
+      "max": 0.04628094473904174,
+      "worstSample": "98765",
+      "rms": 0.027501916781327043
     },
     {
       "metric": "noise.population.rotation.frame1.absolute",
@@ -604,6 +1504,26 @@
       "rms": 0.04565605749370976
     },
     {
+      "metric": "noise.population.rotation.frame15.absolute",
+      "reference": "unity",
+      "unit": "rad",
+      "samples": 2,
+      "min": 0.0001702418817304389,
+      "max": 0.00018162931201980538,
+      "worstSample": "2",
+      "rms": 0.00017602770418304693
+    },
+    {
+      "metric": "noise.population.rotation.frame15.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 2,
+      "min": 0.04485170355125638,
+      "max": 0.04644649277652799,
+      "worstSample": "2",
+      "rms": 0.04565606204377383
+    },
+    {
       "metric": "noise.population.rotation.frame60.absolute",
       "reference": "unity",
       "unit": "rad",
@@ -624,44 +1544,304 @@
       "rms": 0.04565606549147135
     },
     {
+      "metric": "noise.population.scroll--1.frame1.absolute",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 4,
+      "min": 0.00035061498879752906,
+      "max": 0.0024596041397485745,
+      "worstSample": "13579",
+      "rms": 0.0012944906460896383
+    },
+    {
+      "metric": "noise.population.scroll--1.frame1.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 4,
+      "min": 0.012110003748192669,
+      "max": 0.08243913164486485,
+      "worstSample": "13579",
+      "rms": 0.04346849223428367
+    },
+    {
+      "metric": "noise.population.scroll--1.frame15.absolute",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 4,
+      "min": 0.008565597189300556,
+      "max": 0.04027857341182434,
+      "worstSample": "13579",
+      "rms": 0.022106802439368658
+    },
+    {
+      "metric": "noise.population.scroll--1.frame15.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 4,
+      "min": 0.019740990047154402,
+      "max": 0.08963669175020897,
+      "worstSample": "13579",
+      "rms": 0.04945213120077382
+    },
+    {
+      "metric": "noise.population.scroll--1.frame60.absolute",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 4,
+      "min": 0.01363748694428435,
+      "max": 0.1347055101428949,
+      "worstSample": "13579",
+      "rms": 0.08482561216322082
+    },
+    {
+      "metric": "noise.population.scroll--1.frame60.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 4,
+      "min": 0.008572143864225064,
+      "max": 0.08133096881739295,
+      "worstSample": "13579",
+      "rms": 0.05175488345327388
+    },
+    {
+      "metric": "noise.population.scroll-0.25.frame1.absolute",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 4,
+      "min": 0.0003496394762464751,
+      "max": 0.0024513743473528714,
+      "worstSample": "13579",
+      "rms": 0.0012836413144414552
+    },
+    {
+      "metric": "noise.population.scroll-0.25.frame1.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 4,
+      "min": 0.012072033911997387,
+      "max": 0.08218591343648839,
+      "worstSample": "13579",
+      "rms": 0.043109301827491224
+    },
+    {
+      "metric": "noise.population.scroll-0.25.frame15.absolute",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 4,
+      "min": 0.006003797525323096,
+      "max": 0.03974790044673704,
+      "worstSample": "13579",
+      "rms": 0.02090255960201055
+    },
+    {
+      "metric": "noise.population.scroll-0.25.frame15.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 4,
+      "min": 0.013678301942055694,
+      "max": 0.08838696961920357,
+      "worstSample": "13579",
+      "rms": 0.04662883922376589
+    },
+    {
+      "metric": "noise.population.scroll-0.25.frame60.absolute",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 4,
+      "min": 0.0019097521143998097,
+      "max": 0.13578613347777058,
+      "worstSample": "13579",
+      "rms": 0.0776866091509049
+    },
+    {
+      "metric": "noise.population.scroll-0.25.frame60.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 4,
+      "min": 0.0011943700070332593,
+      "max": 0.08039188167555468,
+      "worstSample": "13579",
+      "rms": 0.046291704497261985
+    },
+    {
+      "metric": "noise.population.scroll-2.frame1.absolute",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 4,
+      "min": 0.00034818985676822456,
+      "max": 0.002437966544687746,
+      "worstSample": "13579",
+      "rms": 0.0012683862545149404
+    },
+    {
+      "metric": "noise.population.scroll-2.frame1.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 4,
+      "min": 0.012015869584245428,
+      "max": 0.08176982837109356,
+      "worstSample": "13579",
+      "rms": 0.042605498757897375
+    },
+    {
+      "metric": "noise.population.scroll-2.frame15.absolute",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 4,
+      "min": 0.003901290931709489,
+      "max": 0.03861053907939832,
+      "worstSample": "13579",
+      "rms": 0.02000127833666461
+    },
+    {
+      "metric": "noise.population.scroll-2.frame15.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 4,
+      "min": 0.008969467573585183,
+      "max": 0.08638808642703685,
+      "worstSample": "13579",
+      "rms": 0.044842140537580365
+    },
+    {
+      "metric": "noise.population.scroll-2.frame60.absolute",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 4,
+      "min": 0.07043114394492722,
+      "max": 0.13564454992938546,
+      "worstSample": "13579",
+      "rms": 0.0925573140845341
+    },
+    {
+      "metric": "noise.population.scroll-2.frame60.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 4,
+      "min": 0.04527123172207535,
+      "max": 0.08498346770312842,
+      "worstSample": "13579",
+      "rms": 0.05855525428211422
+    },
+    {
+      "metric": "noise.population.scroll-weak.frame1.absolute",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 4,
+      "min": 0.00003489264771881209,
+      "max": 0.0002446040524333882,
+      "worstSample": "13579",
+      "rms": 0.00012771684673246246
+    },
+    {
+      "metric": "noise.population.scroll-weak.frame1.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 4,
+      "min": 0.012044779266639277,
+      "max": 0.08202096775754089,
+      "worstSample": "13579",
+      "rms": 0.04289526700389365
+    },
+    {
+      "metric": "noise.population.scroll-weak.frame15.absolute",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 4,
+      "min": 0.00034581901197559134,
+      "max": 0.003644628287153742,
+      "worstSample": "13579",
+      "rms": 0.001872905366220988
+    },
+    {
+      "metric": "noise.population.scroll-weak.frame15.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 4,
+      "min": 0.007991079587291193,
+      "max": 0.08160530339247637,
+      "worstSample": "13579",
+      "rms": 0.041983903442354316
+    },
+    {
+      "metric": "noise.population.scroll-weak.frame60.absolute",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 4,
+      "min": 0.0009132930631738923,
+      "max": 0.014510086075176343,
+      "worstSample": "13579",
+      "rms": 0.007738357614567171
+    },
+    {
+      "metric": "noise.population.scroll-weak.frame60.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 4,
+      "min": 0.005408299234199638,
+      "max": 0.08286317068605015,
+      "worstSample": "13579",
+      "rms": 0.04427450889788692
+    },
+    {
       "metric": "noise.population.scroll.frame1.absolute",
       "reference": "unity",
       "unit": "units",
       "samples": 2,
-      "min": 0.0012663912844096507,
-      "max": 0.0013068089140263542,
+      "min": 0.0012963255987398677,
+      "max": 0.0013588641723078186,
       "worstSample": "2",
-      "rms": 0.00128675880082622
+      "rms": 0.0013279630824556247
     },
     {
       "metric": "noise.population.scroll.frame1.relative",
       "reference": "unity",
       "unit": "fraction",
       "samples": 2,
-      "min": 0.04366392041042043,
-      "max": 0.043756053738673216,
+      "min": 0.04469602599622632,
+      "max": 0.045499026758138196,
       "worstSample": "2",
-      "rms": 0.04371001134974222
+      "rms": 0.04509931360782065
+    },
+    {
+      "metric": "noise.population.scroll.frame15.absolute",
+      "reference": "unity",
+      "unit": "units",
+      "samples": 2,
+      "min": 0.017250701819935987,
+      "max": 0.01994337089476611,
+      "worstSample": "4294967295",
+      "rms": 0.01864570668983274
+    },
+    {
+      "metric": "noise.population.scroll.frame15.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 2,
+      "min": 0.039147063740143206,
+      "max": 0.04604065034463065,
+      "worstSample": "4294967295",
+      "rms": 0.04273309071218331
     },
     {
       "metric": "noise.population.scroll.frame60.absolute",
       "reference": "unity",
       "unit": "units",
       "samples": 2,
-      "min": 0.31855887731429067,
-      "max": 0.34924687948281363,
+      "min": 0.04480391749400092,
+      "max": 0.10478884251347997,
       "worstSample": "4294967295",
-      "rms": 0.33425524763586306
+      "rms": 0.08058564555218302
     },
     {
       "metric": "noise.population.scroll.frame60.relative",
       "reference": "unity",
       "unit": "fraction",
       "samples": 2,
-      "min": 0.2014345594883808,
-      "max": 0.21473186380588793,
+      "min": 0.028330892737463094,
+      "max": 0.06442864569700046,
       "worstSample": "4294967295",
-      "rms": 0.2081894030562416
+      "rms": 0.049767910693795735
     },
     {
       "metric": "noise.population.size.frame1.absolute",
@@ -675,6 +1855,26 @@
     },
     {
       "metric": "noise.population.size.frame1.relative",
+      "reference": "unity",
+      "unit": "fraction",
+      "samples": 2,
+      "min": 0.061934865929751275,
+      "max": 0.0873863697133954,
+      "worstSample": "2",
+      "rms": 0.0757373924472664
+    },
+    {
+      "metric": "noise.population.size.frame15.absolute",
+      "reference": "unity",
+      "unit": "factor",
+      "samples": 2,
+      "min": 0.04329457593808739,
+      "max": 0.06311999218734321,
+      "worstSample": "2",
+      "rms": 0.054122794270940425
+    },
+    {
+      "metric": "noise.population.size.frame15.relative",
       "reference": "unity",
       "unit": "fraction",
       "samples": 2,
@@ -847,11 +2047,11 @@
       "metric": "renderer.pivot",
       "reference": "unity",
       "unit": "units",
-      "samples": 12,
-      "min": 3.218695411343147,
-      "max": 3.2186958071066827,
-      "worstSample": "billboard-pivot/0/0",
-      "rms": 3.2186956004834393
+      "samples": 192,
+      "min": 0,
+      "max": 0.0000020544156956212623,
+      "worstSample": "mesh-pivot-local-node-rotated/30/1",
+      "rms": 5.455624426104949e-7
     },
     {
       "metric": "renderer.sort",
@@ -1097,11 +2297,11 @@
       "metric": "shape.sweep.position",
       "reference": "unity",
       "unit": "units",
-      "samples": 240,
+      "samples": 291,
       "min": 0,
       "max": 0.000006553872481040661,
       "worstSample": "circle-pingpong/1.5/x",
-      "rms": 8.252505828263886e-7
+      "rms": 0.0000012558654144023875
     },
     {
       "metric": "size.lifetime",
