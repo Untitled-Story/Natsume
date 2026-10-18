@@ -126,7 +126,6 @@ try {
     const single = snapshot();
     const second = await runtime.instantiate(pack, {
       seed: 12345,
-      approximateNoise: true,
       particleEnvironment: { fog: { mode: 'none' } },
     });
     app.stage.addChild(second.container);
@@ -140,7 +139,6 @@ try {
     for (let i = 0; i < 3; i++) {
       const instance = await runtime.instantiate(pack, {
         seed: 12345,
-        approximateNoise: true,
         particleEnvironment: { fog: { mode: 'none' } },
       });
       app.stage.addChild(instance.container);

@@ -33,15 +33,7 @@ export async function measureLegacyMaterials() {
     components: [],
     getNode: (id: number) => doc.nodes.find((n) => n.id === id),
   } as unknown as EffectPack;
-  const e = new Emitter(
-    3,
-    new Scene(pack, [1]).nodes.get(1)!,
-    particleSource(),
-    true,
-    1,
-    false,
-    [],
-  );
+  const e = new Emitter(3, new Scene(pack, [1]).nodes.get(1)!, particleSource(), true, 1, []);
   manualParticle(e);
   e.positions.set([10, 10, 0.5]);
   e.startSizes.set([16, 16, 1]);

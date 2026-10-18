@@ -40,7 +40,7 @@ app.ticker.add(tick);
 
 `loadPack` 接受 URL、`Uint8Array` 或 `ArrayBuffer`。同一个资源包可以创建多个独立实例；实例提供 `play()`、`pause()`、`restart()` 和 `stop()` 控制播放，宿主以秒调用 `update()` 推进模拟。
 
-包含已支持 Noise 配置的特效，需要在实例化时显式传入 `{ approximateNoise: true }` 以允许 Curl Noise 近似。
+Noise 默认使用内置 Curl Noise 近似；实例诊断会说明与 Unity 原生噪声的差异。
 
 不再使用时，解除更新回调并释放资源：
 
@@ -131,7 +131,7 @@ runtime.registerScript(
 | Rotation over Lifetime       | Z 或分轴角速度、生命周期曲线积分                                                                                                                                                                                                                                 | 已测范围以外的步长与原生积分差异                                          |
 | Velocity over Lifetime       | Local 线性 / 轨道 / 径向速度、Speed Multiplier                                                                                                                                                                                                                   | World 空间                                                                |
 | Limit Velocity over Lifetime | Local 标量限速、Dampen                                                                                                                                                                                                                                           | 分轴限速、World 空间、Drag                                                |
-| Noise                        | 显式启用的 Curl Noise 近似：High、1 octave、仅位置扰动                                                                                                                                                                                                           | 其他 Quality、多 octave、Scroll、Remap、旋转 / 尺寸扰动；Unity 同种子轨迹 |
+| Noise                        | 内置 Curl Noise 近似：High、1 octave、仅位置扰动                                                                                                                                                                                                                 | 其他 Quality、多 octave、Scroll、Remap、旋转 / 尺寸扰动；Unity 同种子轨迹 |
 | Texture Sheet Animation      | Lifetime、Whole Sheet、UV0                                                                                                                                                                                                                                       | Single Row、Speed / FPS 时间模式、Sprites 模式、其他 UV 通道              |
 | Custom Data                  | Custom1.x Vector                                                                                                                                                                                                                                                 | 完整 Vector / Color、Custom2                                              |
 | Renderer                     | World / Local / 固定 +Z View Billboard、有限 Stretched Billboard、World / Local / View 单 Mesh 与单材质；None / Distance / Oldest / Youngest / Depth 排序；Pivot、Flip、最小尺寸；ParticleAddAlpha、ParticleUnlit、Legacy Additive / Alpha Blended、雾效与软粒子 | 其他对齐方式、横 / 竖 Billboard、多 Mesh / 材质、其他材质模型             |

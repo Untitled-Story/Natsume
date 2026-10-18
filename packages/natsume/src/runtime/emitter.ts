@@ -88,7 +88,6 @@ export class Emitter {
     readonly source: R<ParticleSystemT>,
     readonly enabled: boolean,
     instanceSeed: number,
-    approximateNoise: boolean,
     diagnostics: Diagnostic[],
     public gravity: readonly [number, number, number] = [0, 0, 0],
   ) {
@@ -236,7 +235,6 @@ export class Emitter {
         : Math.floor(random(instanceSeed, id, 0) * 4294967296);
     if (this.noise) {
       const n = this.noise;
-      check(approximateNoise, 'CAPABILITY', 'Unity Noise requires explicit approximateNoise: true');
       check(
         n.algorithm === 'unity-particle-noise' &&
           n.algorithmRevision === 1 &&

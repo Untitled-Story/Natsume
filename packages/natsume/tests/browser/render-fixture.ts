@@ -35,7 +35,7 @@ export async function checkApplicationPlugin() {
   const runtime = other.natsume;
   const distinct = runtime !== app.natsume;
   const stable = runtime === other.natsume;
-  const instance = await runtime.instantiate(effect.simulation.pack, { approximateNoise: true });
+  const instance = await runtime.instantiate(effect.simulation.pack, {});
   other.stage.addChild(instance.container);
   instance.play();
   other.destroy();
@@ -71,15 +71,7 @@ export function measureLifetimeSizeRandomness(seed: number) {
     getNode: (id: number) => document.nodes.find((n) => n.id === id),
   } as unknown as EffectPack;
   const scene = new Scene(pack, [1]);
-  const e = new Emitter(
-    3,
-    scene.nodes.get(1)!,
-    randomSource(seed, 1, Math.PI * 2),
-    true,
-    seed,
-    false,
-    [],
-  );
+  const e = new Emitter(3, scene.nodes.get(1)!, randomSource(seed, 1, Math.PI * 2), true, seed, []);
   e.sync();
   e.positions.fill(0);
   e.rotations.fill(0);
@@ -198,7 +190,7 @@ export async function measureParticleGeometry() {
           ),
         ),
       );
-    const emitter = new Emitter(3, scene.nodes.get(1)!, source, true, 1, false, []);
+    const emitter = new Emitter(3, scene.nodes.get(1)!, source, true, 1, []);
     manualParticle(emitter);
     const definition = structuredClone(original.definition) as ParticleRendererT;
     definition.mode = mode;
@@ -270,7 +262,7 @@ export function measureParticleSorting() {
     getNode: (id: number) => document.nodes.find((n) => n.id === id),
   } as unknown as EffectPack;
   const scene = new Scene(pack, [1]);
-  const emitter = new Emitter(3, scene.nodes.get(1)!, particleSource(''), true, 1, false, []);
+  const emitter = new Emitter(3, scene.nodes.get(1)!, particleSource(''), true, 1, []);
   manualParticle(emitter);
   emitter.count = 3;
   emitter.positions.set([0, 0, 3, 0, 0, 1, 0, 0, 2]);

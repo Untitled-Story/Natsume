@@ -65,8 +65,7 @@ it('resolves root-owned size and child anchors without host window dimensions', 
 
 const sample = new URL('../../../data/kirakira.noap', import.meta.url);
 describe.skipIf(!existsSync(sample))('kirakira playback', () => {
-  const create = async () =>
-    new Simulation(await loadPack(readFileSync(sample)), { seed: 123, approximateNoise: true });
+  const create = async () => new Simulation(await loadPack(readFileSync(sample)), { seed: 123 });
   const snapshot = (s: Simulation) =>
     [...s.emitters.values()].map((e) => ({
       id: e.id,
@@ -74,9 +73,11 @@ describe.skipIf(!existsSync(sample))('kirakira playback', () => {
       positions: Array.from(e.positions.slice(0, e.count * 3)),
       ages: Array.from(e.ages.slice(0, e.count)),
     }));
-  it('requires explicit approximation and reports four noise modules', async () => {
+  it('uses built-in Curl Noise and reports four noise modules', async () => {
     const pack = await loadPack(readFileSync(sample));
-    expect(() => new Simulation(pack)).toThrow('approximateNoise');
+    expect(
+      new Simulation(pack).diagnostics.filter((d) => d.code === 'APPROXIMATE_NOISE'),
+    ).toHaveLength(4);
     const s = await create();
     expect(s.diagnostics.filter((d) => d.code === 'APPROXIMATE_NOISE')).toHaveLength(4);
     expect(s.scene.layoutSize).toEqual({ width: 100, height: 100 });
@@ -154,7 +155,7 @@ describe.skipIf(!existsSync(sample))('kirakira playback', () => {
     limitSource.modules = limitSource.modules.filter(
       (m) => m.dataType !== ParticleModuleData.VelocityModule,
     );
-    const e = new Emitter(76, limitOriginal.node, limitSource, true, 123, false, []);
+    const e = new Emitter(76, limitOriginal.node, limitSource, true, 123, []);
     e.sync();
     e.count = 1;
     e.positions.fill(0);
@@ -176,7 +177,7 @@ describe.skipIf(!existsSync(sample))('kirakira playback', () => {
         index
       ]!;
     }
-    const orbital = new Emitter(66, original.node, source, true, 123, false, []);
+    const orbital = new Emitter(66, original.node, source, true, 123, []);
     orbital.sync();
     orbital.count = 1;
     orbital.positions.fill(0);

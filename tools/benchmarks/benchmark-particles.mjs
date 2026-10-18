@@ -31,7 +31,7 @@ try {
   );
   const source = particleSource('motion-limit-combined');
   source.main.maxParticles = 20_000;
-  const emitter = new Emitter(3, scene.nodes.get(1), source, true, 123, false, []);
+  const emitter = new Emitter(3, scene.nodes.get(1), source, true, 123, []);
   emitter.sync();
   emitter.emitting = false;
   emitter.count = source.main.maxParticles;

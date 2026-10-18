@@ -59,7 +59,7 @@ for (const fixture of native.cases) {
     (
       source.modules.find((m) => m.dataType === M.EmissionModule)!.data as EmissionModuleT
     ).bursts[0]!.count = constant(count);
-    const e = new Emitter(3, scene.nodes.get(1)!, source, true, 12345, false, []);
+    const e = new Emitter(3, scene.nodes.get(1)!, source, true, 12345, []);
     e.sync();
     expect(e.count).toBe(count);
     if (spread) {
@@ -97,7 +97,7 @@ for (const fixture of native.cases) {
     (
       unjittered.modules.find((m) => m.dataType === M.ShapeModule)!.data as ShapeModuleT
     ).randomPosition = 0;
-    const control = new Emitter(3, scene.nodes.get(1)!, unjittered, true, 12345, false, []);
+    const control = new Emitter(3, scene.nodes.get(1)!, unjittered, true, 12345, []);
     control.sync();
     expect(e.velocities).toEqual(control.velocities);
   });
@@ -112,7 +112,7 @@ it('keeps one-particle and zero-arc Burst Spread finite', () => {
   (
     source.modules.find((m) => m.dataType === M.EmissionModule)!.data as EmissionModuleT
   ).bursts[0]!.count = constant(1);
-  const e = new Emitter(3, scene.nodes.get(1)!, source, true, 12345, false, []);
+  const e = new Emitter(3, scene.nodes.get(1)!, source, true, 12345, []);
   e.sync();
   expect(Array.from(e.positions).every(Number.isFinite)).toBe(true);
 });

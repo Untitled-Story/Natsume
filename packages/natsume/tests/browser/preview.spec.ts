@@ -262,7 +262,6 @@ test('shares textures between independent instances and survives pack/instance d
     first.pause();
     const second = await runtime.instantiate(first.simulation.pack, {
       seed: 99,
-      approximateNoise: true,
     });
     const shared = first.container.children[0].texture === second.container.children[0].texture;
     second.play();
@@ -363,7 +362,7 @@ test('isolates failing script behaviors and keeps pause/active lifecycle distinc
         throw new Error('test script failure');
       },
     }));
-    const e = await runtime.instantiate(first.simulation.pack, { approximateNoise: true });
+    const e = await runtime.instantiate(first.simulation.pack, {});
     e.play();
     e.play();
     e.update(1 / 60);
@@ -441,7 +440,7 @@ test('applies public node render offsets with inheritance, validation and Bridge
         },
       }),
     );
-    const e = (await runtime.instantiate(pack, { approximateNoise: true })) as EffectInstance;
+    const e = (await runtime.instantiate(pack, {})) as EffectInstance;
     e.play();
     e.pause();
     const meshes = e.container.children as ParticleMesh[];

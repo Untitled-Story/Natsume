@@ -14,7 +14,6 @@ import { Emitter, prewarmDuration, type Diagnostic } from './emitter.js';
 export interface SimulationOptions {
   readonly entryId?: number;
   readonly seed?: number;
-  readonly approximateNoise?: boolean;
   /** Required only when the entry's root uses stretched external anchors. */
   readonly parentLayout?: LayoutSize;
   readonly gravity?: readonly [number, number, number];
@@ -100,7 +99,6 @@ export class Simulation {
           c.data as R<ParticleSystemT>,
           c.enabled,
           seed,
-          options.approximateNoise ?? false,
           this.diagnostics,
           options.gravity ?? [0, 0, 0],
         ),

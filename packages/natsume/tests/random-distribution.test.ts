@@ -18,7 +18,7 @@ beforeAll(async () => {
 });
 function create(seed: number, thickness: number, arc: number) {
   const source = randomSource(seed, thickness, arc);
-  const emitter = new Emitter(3, scene.nodes.get(1)!, source, true, seed, false, []);
+  const emitter = new Emitter(3, scene.nodes.get(1)!, source, true, seed, []);
   emitter.sync();
   return emitter;
 }
@@ -195,7 +195,7 @@ it('handles zero-radius and zero-arc boundaries with finite births', () => {
   const source = structuredClone(e.source);
   (source.modules.find((m) => m.dataType === M.ShapeModule)!.data as ShapeModuleT).geometry =
     new CircleShapeT(constant(0), Math.PI * 2, 1);
-  const zero = new Emitter(3, scene.nodes.get(1)!, source, true, 24680, false, []);
+  const zero = new Emitter(3, scene.nodes.get(1)!, source, true, 24680, []);
   zero.sync();
   expect(zero.positions.every((v) => v === 0)).toBe(true);
   expect(zero.velocities.every(Number.isFinite)).toBe(true);

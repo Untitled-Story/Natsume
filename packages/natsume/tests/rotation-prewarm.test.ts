@@ -51,7 +51,7 @@ for (const c of native.cases.filter((c) => c.label !== 'prewarm'))
         new ParticleModuleT(M.RotationModule, new RotationModuleT(v, c.label === 'rotation-xyz')),
       );
     }
-    const e = new Emitter(3, new Scene(pack, [1]).nodes.get(1)!, source, true, 12345, false, []);
+    const e = new Emitter(3, new Scene(pack, [1]).nodes.get(1)!, source, true, 12345, []);
     e.sync();
     if (!warm) {
       e.count = 1;
@@ -98,8 +98,8 @@ it('bounds prewarm work and rejects unmeasured lifetime curves', async () => {
   const s = particleSource();
   s.main!.loop = s.main!.prewarm = true;
   s.main!.lifetime = constant(100);
-  expect(() => new Emitter(3, node, s, true, 1, false, [])).toThrow('budget');
+  expect(() => new Emitter(3, node, s, true, 1, [])).toThrow('budget');
   s.main!.lifetime = linear(1, 2);
-  expect(() => new Emitter(3, node, s, true, 1, false, [])).toThrow('Prewarm requires');
+  expect(() => new Emitter(3, node, s, true, 1, [])).toThrow('Prewarm requires');
   pack.dispose();
 });

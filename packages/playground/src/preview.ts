@@ -194,7 +194,6 @@ export async function showPreview(pack: EffectPack, signal: AbortSignal): Promis
   if (signal.aborted) return;
   const created = await runtime!.instantiate(pack, {
     seed: 12345,
-    approximateNoise: true,
     particleEnvironment: { fog: { mode: 'none' } },
   });
   if (signal.aborted) {

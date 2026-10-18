@@ -41,7 +41,7 @@ it('holds emission during the authored start delay', () => {
   const source = particleSource();
   source.main!.startDelay = constant(0.2);
   source.modules.push(new ParticleModuleT(M.EmissionModule, new EmissionModuleT(constant(60))));
-  const emitter = new Emitter(3, scene.nodes.get(1)!, source, true, 1, false, []);
+  const emitter = new Emitter(3, scene.nodes.get(1)!, source, true, 1, []);
   emitter.sync();
   for (let i = 0; i < 12; i++) {
     emitter.step(1 / 60);
@@ -60,7 +60,7 @@ it('applies host gravity through the authored multiplier', () => {
       new EmissionModuleT(null, null, [new BurstT(0, constant(1))]),
     ),
   );
-  const emitter = new Emitter(3, scene.nodes.get(1)!, source, true, 1, false, [], [0, -10, 0]);
+  const emitter = new Emitter(3, scene.nodes.get(1)!, source, true, 1, [], [0, -10, 0]);
   emitter.sync();
   expect(emitter.gravity).toEqual([0, -10, 0]);
   expect(emitter.main.gravityMultiplier?.constantMax).toBe(1);
@@ -83,7 +83,7 @@ for (const label of ['burst-zero', 'burst-loop', 'burst-end']) {
     source.modules.push(
       new ParticleModuleT(M.EmissionModule, new EmissionModuleT(null, null, [burst])),
     );
-    const emitter = new Emitter(3, scene.nodes.get(1)!, source, true, 1, false, []);
+    const emitter = new Emitter(3, scene.nodes.get(1)!, source, true, 1, []);
     emitter.sync();
     const fixture = native.cases.find((c) => c.label === label)!;
     // Natsume intentionally exposes the zero-time burst immediately on play.
@@ -125,7 +125,7 @@ for (const label of [
     document.components = [new ComponentT(3, 1, true, ComponentData.ParticleSystem, source)];
     const pack = await loadPack(await archive(encode(document)));
     pack.dispose();
-    const emitter = new Emitter(3, scene.nodes.get(1)!, source, true, 1, false, []);
+    const emitter = new Emitter(3, scene.nodes.get(1)!, source, true, 1, []);
     emitter.sync();
     const fixture = native.cases.find((c) => c.label === label)!;
     for (let frame = 1; frame <= 18; frame++) {
@@ -141,7 +141,7 @@ it('rejects unbounded burst work and infinite bursts without a positive interval
   source.modules.push(
     new ParticleModuleT(M.EmissionModule, new EmissionModuleT(null, null, [burst])),
   );
-  const create = () => new Emitter(3, scene.nodes.get(1)!, source, true, 1, false, []);
+  const create = () => new Emitter(3, scene.nodes.get(1)!, source, true, 1, []);
   expect(create).toThrow(/positive repeat interval/);
   burst.intervalSeconds = 1e-12;
   expect(create).toThrow(/Too many burst repetitions/);
@@ -158,7 +158,7 @@ it('keeps short repeated bursts bounded without copying native early cutoff', ()
       ]),
     ),
   );
-  const emitter = new Emitter(3, scene.nodes.get(1)!, source, true, 1, false, []);
+  const emitter = new Emitter(3, scene.nodes.get(1)!, source, true, 1, []);
   emitter.sync();
   const fixture = native.cases.find((c) => c.label === 'burst-repeat')!;
   for (let frame = 1; frame <= 18; frame++) {
@@ -183,7 +183,7 @@ it('keeps burst boundaries single, includes duration-end and resets loop curve p
       ]),
     ),
   );
-  const emitter = new Emitter(3, scene.nodes.get(1)!, source, true, 1, false, []);
+  const emitter = new Emitter(3, scene.nodes.get(1)!, source, true, 1, []);
   emitter.sync();
   expect(emitter.count).toBe(1);
   for (let i = 0; i < 6; i++) emitter.step(1 / 60);
@@ -205,7 +205,7 @@ it('expires short-lived particles without a terminal frame or a repeat burst', (
       new EmissionModuleT(null, null, [new BurstT(0, constant(1))]),
     ),
   );
-  const emitter = new Emitter(3, scene.nodes.get(1)!, source, true, 1, false, []);
+  const emitter = new Emitter(3, scene.nodes.get(1)!, source, true, 1, []);
   emitter.sync();
   for (let i = 0; i < 2; i++) emitter.step(1 / 60);
   expect(emitter.count).toBe(1);
@@ -220,7 +220,7 @@ it('handles zero speed multiplier and radial origin without NaN', () => {
   const v = source.modules.find((m) => m.dataType === M.VelocityModule)!
     .data as import('../src/format/generated/noa/ir/velocity-module.js').VelocityModuleT;
   v.speedMultiplier = constant(0);
-  const emitter = new Emitter(3, scene.nodes.get(1)!, source, true, 1, false, []);
+  const emitter = new Emitter(3, scene.nodes.get(1)!, source, true, 1, []);
   manualParticle(emitter);
   emitter.positions.fill(0);
   for (let i = 0; i < 10; i++) emitter.step(1 / 60);
@@ -232,7 +232,7 @@ it('retains combined render velocity through deaths and new births', () => {
   const source = particleSource('motion-linear');
   source.main!.lifetime = constant(0.1);
   source.modules.push(new ParticleModuleT(M.EmissionModule, new EmissionModuleT(constant(60))));
-  const emitter = new Emitter(3, scene.nodes.get(1)!, source, true, 1, false, []);
+  const emitter = new Emitter(3, scene.nodes.get(1)!, source, true, 1, []);
   emitter.renderVelocities = emitter.velocities.slice();
   emitter.sync();
   for (let frame = 0; frame < 24; frame++) {
@@ -301,7 +301,6 @@ for (const fixture of native.cases.filter((c) => c.label.startsWith('motion-')))
       particleSource(fixture.label),
       true,
       12345,
-      false,
       [],
     );
     manualParticle(emitter);
