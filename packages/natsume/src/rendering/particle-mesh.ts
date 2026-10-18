@@ -22,7 +22,6 @@ import { ParticleSort } from '../format/generated/noa/ir/particle-sort.js';
 import { BlendFactor as B } from '../format/generated/noa/ir/blend-factor.js';
 import { CompareOp } from '../format/generated/noa/ir/compare-op.js';
 import { ColorSpace } from '../format/generated/noa/ir/color-space.js';
-import { CustomDataMode } from '../format/generated/noa/ir/custom-data-mode.js';
 import { VertexSemantic } from '../format/generated/noa/ir/vertex-semantic.js';
 import { mat4 } from 'gl-matrix';
 import { color, random, scalar, sheetFrame } from '../runtime/parameters.js';
@@ -265,23 +264,28 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
       'CAPABILITY',
       'Multiple materials unsupported',
     );
-    const streams = new Map([
-      [VertexSemantic.Position, 3],
-      [VertexSemantic.Normal, 3],
-      [VertexSemantic.Color, 4],
-      [VertexSemantic.UV0, 2],
-      [VertexSemantic.Custom1, 1],
-    ]);
     check(
-      definition.vertexStreams.every((s) => streams.get(s.semantic) === s.components) &&
-        [
-          VertexSemantic.Position,
-          VertexSemantic.Color,
-          VertexSemantic.UV0,
-          ...(!straight ? [VertexSemantic.Custom1] : []),
-        ].every((semantic) => definition.vertexStreams.some((s) => s.semantic === semantic)),
+      definition.vertexStreams.every(
+        (s) =>
+          s.semantic >= 0 &&
+          s.semantic <= VertexSemantic.VertexId &&
+          s.components >= 1 &&
+          s.components <= 4,
+      ) &&
+        [VertexSemantic.Position, VertexSemantic.Color, VertexSemantic.UV0].every((semantic) =>
+          definition.vertexStreams.some(
+            (s) =>
+              s.semantic === semantic &&
+              s.components ===
+                (semantic === VertexSemantic.Position
+                  ? 3
+                  : semantic === VertexSemantic.Color
+                    ? 4
+                    : 2),
+          ),
+        ),
       'CAPABILITY',
-      'Material requires compatible Position3/Color4/UV0_2 and optional Custom1_1 streams',
+      'Unsupported particle vertex stream',
     );
     check(
       material.textures.length === 1 && material.textures[0]!.uvSet === 0,
@@ -541,10 +545,11 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
       const flip = this.definition.flip;
       const flipX = flip ? random(e.seed, e.serials[i]!, 57) < flip.x : false;
       const flipY = flip ? random(e.seed, e.serials[i]!, 58) < flip.y : false;
-      const stream = e.custom?.streams.find(
-        (s) => s.slot === 0 && s.mode === CustomDataMode.Vector,
-      );
-      const custom = scalar(stream?.vector[0], t, rnd(56));
+      const custom = this.definition.vertexStreams.some(
+        (s) => s.semantic === VertexSemantic.Custom1,
+      )
+        ? (e.customData?.[i * 8] ?? 0)
+        : 0;
       for (let j = 0; j < stride; j++) {
         const p = this.basePositions[j]!,
           uv = this.baseUV[j]!;

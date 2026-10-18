@@ -70,6 +70,7 @@ export class Emitter {
   readonly noise: R<NoiseModuleT> | undefined;
   readonly sheet: R<TextureSheetModuleT> | undefined;
   readonly custom: R<CustomDataModuleT> | undefined;
+  readonly customData: Float32Array | undefined;
   readonly positions: Float32Array;
   readonly velocities: Float32Array;
   renderVelocities: Float32Array | undefined;
@@ -238,13 +239,6 @@ export class Emitter {
         'CAPABILITY',
         'Initial texture sheets support lifetime, whole-sheet UV0',
       );
-    for (const s of this.custom?.streams ?? [])
-      check(
-        s.mode === CustomDataMode.Disabled ||
-          (s.slot === 0 && s.mode === CustomDataMode.Vector && s.vectorComponents === 1),
-        'CAPABILITY',
-        'Only Custom1.x vector stream is supported',
-      );
     this.seed =
       main.seedMode === SeedMode.Fixed
         ? main.seed
@@ -276,6 +270,35 @@ export class Emitter {
     this.ages = new Float32Array(cap);
     this.lifetimes = new Float32Array(cap);
     this.serials = new Uint32Array(cap);
+    if (this.custom?.streams.some((s) => s.mode !== CustomDataMode.Disabled))
+      this.customData = new Float32Array(cap * 8);
+  }
+  private updateCustom(index: number, age: number): void {
+    if (!this.customData) return;
+    const serial = this.serials[index]!;
+    for (const stream of this.custom!.streams) {
+      const offset = index * 8 + stream.slot * 4;
+      this.customData.fill(0, offset, offset + 4);
+      if (stream.mode === CustomDataMode.Vector)
+        for (let component = 0; component < stream.vectorComponents; component++)
+          this.customData[offset + component] = scalar(
+            stream.vector[component],
+            age,
+            random(
+              this.seed,
+              serial,
+              stream.slot === 0 && component === 0 ? 56 : 120 + stream.slot * 4 + component,
+            ),
+          );
+      else if (stream.mode === CustomDataMode.Color)
+        color(
+          stream.color,
+          age,
+          random(this.seed, serial, 120 + stream.slot * 4),
+          this.customData,
+          offset,
+        );
+    }
   }
   setGravity(value: readonly [number, number, number] | undefined): void {
     const authored = this.main.gravity;
@@ -488,6 +511,7 @@ export class Emitter {
           this.rotations[o + 1]! + (Math.hypot(dx, dz) < 1e-8 ? -Math.PI / 2 : Math.atan2(dx, dz));
       }
       color(this.main.color, t, rnd(11), this.startColors, i * 4);
+      this.updateCustom(i, 0);
     }
   }
   step(delta: number): void {
@@ -666,6 +690,7 @@ export class Emitter {
       this.positions[o + 1] = y + vy * dt;
       this.positions[o + 2] = z + vz * dt;
       this.ages[i] = age;
+      this.updateCustom(i, t);
       i++;
     }
     if (this.emitting && this.started) {
@@ -698,6 +723,7 @@ export class Emitter {
       a.copyWithin(i * 3, last * 3, last * 3 + 3);
     this.noiseSizes?.copyWithin(i * 3, last * 3, last * 3 + 3);
     this.renderVelocities?.copyWithin(i * 3, last * 3, last * 3 + 3);
+    this.customData?.copyWithin(i * 8, last * 8, last * 8 + 8);
     this.startColors.copyWithin(i * 4, last * 4, last * 4 + 4);
   }
 }
