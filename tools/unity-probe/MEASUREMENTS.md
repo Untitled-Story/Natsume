@@ -57,6 +57,12 @@ Unity 2022.3.21f1 正交相机下，3 个手动粒子的 BakeMesh 索引顺序�
 
 输入 Z 为 `[3,1,2]`，年龄为 `[0.2,0.8,0.5]` 秒，寿命均为 1 秒。未测透视相机、Unity 同深度粒子的稳定顺序及跨系统 sortingFudge 的最终像素。
 
+## 速度与视图拉伸
+
+12 组静态 `BakeMesh` 与 16 组真实帧循环移动视图测量。普通拉伸使用 `粒子速度 - 视图速度 × Camera Velocity Scale`；长度为 `sizeY × Length Scale + 相对速度长度 × Velocity Scale`。负系数保留符号，零相对速度时四角重合，非 Freeform 模式不受 Rotate With Stretch Direction 开关影响。
+
+XY 速度、轴向 Z、正负系数与静止 / 移动视图的顶点和 UV 回归容差为 0.025 场景单位。Unity 的快速方向归一化与精确归一化有小幅差异。斜向 XYZ 只比较纵向边，分量容差 0.025；横边方向采用固定 +Z 仿射视图，未拟合 Unity 的粒子到相机射线，不纳入一致性结论。Freeform 未实现。
+
 ## 随机分布与形状
 
 随机分布与形状各 14 组案例。随机参数分布归一化至 `[0,1]` 后比较；位置扰动统计保留场景单位。随机结果不要求相同种子逐粒子一致。
@@ -129,6 +135,8 @@ Unity Circle PingPong 在实测整周期 2 秒处出现反射端点跳变；Nats
 根尺寸 `(-100,-200)`、拉伸子节点尺寸 `(-90,-140)`、子节点位置 `(-1,32,7)` 与 Unity 一致，坐标回归容差 < 10⁻⁵。保留有符号布局参与锚点计算；Pixi 的容器边界取对应矩形的非负宽高，不改变子节点布局。
 
 ## 数据
+
+- [unity-stretch.json](../../packages/natsume/tests/fixtures/unity-stretch.json)：速度拉伸与实际移动相机的顶点、UV 和速度。
 
 - [unity-layout.json](../../packages/natsume/tests/fixtures/unity-layout.json)：有符号矩形与锚点位置。
 

@@ -641,3 +641,61 @@ test('orders transparent particles by Unity sort modes', async ({ page }) => {
   expect(result.ties).toEqual([0, 1, 2]);
   expect(result.empty).toEqual([0]);
 });
+
+test('matches Unity stretch velocity and moving-view geometry', async ({ page }) => {
+  const native = JSON.parse(
+    readFileSync(new URL('../fixtures/unity-stretch.json', import.meta.url), 'utf8'),
+  );
+  const cases = [
+    ...native.cases.filter(
+      (s: { freeform: boolean; label: string }) => !s.freeform && s.label !== 'camera-render-moved',
+    ),
+    ...native.motion.map(
+      (s: { cameraScale: number; velocityScale: number; lengthScale: number }) => ({
+        ...s,
+        label: `camera-${s.cameraScale}-velocity-${s.velocityScale}-length-${s.lengthScale}`,
+        cameraVelocityScale: s.cameraScale,
+        rotate: true,
+      }),
+    ),
+  ];
+  await page.goto('/');
+  await page
+    .locator('#file')
+    .setInputFiles(fileURLToPath(new URL('../../../../data/kirakira.noap', import.meta.url)));
+  await expect(page.locator('#status')).toHaveText('预览就绪');
+  const actual = await page.evaluate(
+    async ({ path, cases }) => (await import(`/@fs${path}`)).measureStretchedParticles(cases),
+    { path: new URL('./render-fixture.ts', import.meta.url).pathname, cases },
+  );
+  for (const [ci, result] of actual.entries()) {
+    const sample = cases[ci];
+    const nativeVertex = (uv: number[]) => {
+      const index = sample.uv.findIndex(
+        (p: { x: number; y: number }) => Math.hypot(p.x - uv[0]!, p.y - uv[1]!) < 1e-6,
+      );
+      const p = sample.vertices[index];
+      return [p.x, p.y, p.z];
+    };
+    if (sample.label.endsWith('-xyz')) {
+      // Unity's transverse edge faces the particle-to-camera ray. The affine
+      // view uses a fixed +Z direction; compare the full 3D longitudinal edge.
+      const a = nativeVertex(result.uv[0]),
+        b = nativeVertex(result.uv[1]);
+      for (let axis = 0; axis < 3; axis++)
+        expect(
+          Math.abs(result.vertices[1][axis] - result.vertices[0][axis] - (b[axis]! - a[axis]!)),
+          sample.label,
+        ).toBeLessThan(0.025);
+    } else {
+      for (const [i, vertex] of result.vertices.entries()) {
+        const p = nativeVertex(result.uv[i]);
+        expect(
+          Math.hypot(...vertex.map((v: number, a: number) => v - p[a]!)),
+          sample.label,
+        ).toBeLessThan(0.025);
+      }
+    }
+    expect(result.vertices.flat().every(Number.isFinite)).toBe(true);
+  }
+});

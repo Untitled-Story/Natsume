@@ -250,12 +250,16 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
     );
     if (definition.mode === RenderMode.StretchedBillboard) {
       check(
-        !definition.freeformStretching &&
-          definition.rotateWithStretchDirection &&
-          definition.cameraVelocityScale === 0 &&
-          definition.velocityScale === 0,
+        !definition.freeformStretching,
         'CAPABILITY',
-        'Stretched Billboard requires non-freeform, rotation with direction, zero camera/velocity scale',
+        'Freeform Stretched Billboard is unsupported',
+      );
+      check(
+        [definition.lengthScale, definition.velocityScale, definition.cameraVelocityScale].every(
+          Number.isFinite,
+        ),
+        'SEMANTIC',
+        'Stretched Billboard scales must be finite',
       );
       emitter.renderVelocities ??= emitter.velocities.slice();
     }
@@ -510,21 +514,50 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
         sz *= e.noiseSizes[o + 2]!;
       }
       let stretchX = 0,
-        stretchY = 0;
+        stretchY = 0,
+        stretchZ = 0,
+        stretchWidthX = 0,
+        stretchWidthY = 0,
+        stretchLength = 0;
       const stretched = this.definition.mode === RenderMode.StretchedBillboard;
       if (stretched) {
         const velocity = e.renderVelocities!,
           vx = velocity[o]!,
           vy = velocity[o + 1]!,
           vz = velocity[o + 2]!;
-        stretchX = world[0]! * vx + world[4]! * vy + world[8]! * vz;
-        stretchY = world[1]! * vx + world[5]! * vy + world[9]! * vz;
-        const length = Math.hypot(stretchX, stretchY);
+        const view = this.environment?.viewVelocity,
+          cameraScale = this.definition.cameraVelocityScale;
+        stretchX =
+          world[0]! * vx + world[4]! * vy + world[8]! * vz - (view?.[0] ?? 0) * cameraScale;
+        stretchY =
+          world[1]! * vx + world[5]! * vy + world[9]! * vz - (view?.[1] ?? 0) * cameraScale;
+        stretchZ =
+          world[2]! * vx + world[6]! * vy + world[10]! * vz - (view?.[2] ?? 0) * cameraScale;
+        const length = Math.hypot(stretchX, stretchY, stretchZ),
+          projected = Math.hypot(stretchX, stretchY);
+        stretchLength =
+          sy * localScale.y * this.definition.lengthScale + length * this.definition.velocityScale;
         if (length > 1e-8) {
           stretchX /= length;
           stretchY /= length;
+          stretchZ /= length;
+          if (projected > 1e-8) {
+            stretchWidthX = (stretchY * length) / projected;
+            stretchWidthY = (-stretchX * length) / projected;
+          } else {
+            // An axial velocity still has width. Use the radial screen direction
+            // at the particle, with a stable basis at the view center.
+            const px = e.positions[o]!,
+              py = e.positions[o + 1]!,
+              pz = e.positions[o + 2]!;
+            const wx = world[0]! * px + world[4]! * py + world[8]! * pz + world[12]!;
+            const wy = world[1]! * px + world[5]! * py + world[9]! * pz + world[13]!;
+            const radial = Math.hypot(wx, wy);
+            stretchWidthX = radial > 1e-8 ? (-Math.sign(stretchZ) * wy) / radial : 1;
+            stretchWidthY = radial > 1e-8 ? (Math.sign(stretchZ) * wx) / radial : 0;
+          }
         } else {
-          stretchX = stretchY = 0;
+          stretchX = stretchY = stretchZ = 0;
         }
       }
       // Native BakeMesh: World Billboard reverses particle Euler angles;
@@ -585,11 +618,12 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
         z *= localScale.z;
         if (stretched) {
           // Native stretch anchors UV.x=0 at the particle, ignores Euler rotation,
-          // and flips the transverse edge when lengthScale is negative.
-          const along = uv.x * sy * localScale.y * this.definition.lengthScale,
-            across = (uv.y - 0.5) * sx * localScale.x * Math.sign(this.definition.lengthScale);
-          wx += -stretchX * along + stretchY * across;
-          wy += -stretchY * along - stretchX * across;
+          // and flips the transverse edge when the combined length is negative.
+          const along = uv.x * stretchLength,
+            across = (uv.y - 0.5) * sx * localScale.x * Math.sign(stretchLength);
+          wx += -stretchX * along + stretchWidthX * across;
+          wy += -stretchY * along + stretchWidthY * across;
+          wz -= stretchZ * along;
         } else {
           if (this.definition.alignment === Alignment.Local) {
             const lx = rotation[0]! * x + rotation[4]! * y + rotation[8]! * z;

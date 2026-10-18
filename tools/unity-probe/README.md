@@ -27,6 +27,7 @@ pnpm probe:unity --rect-layout  # 有符号 RectTransform 布局
 pnpm probe:unity --noise-options # Noise 参数行为与渲染尺寸
 pnpm probe:unity --sweeps       # Shape 时间扫描、量化与方向对齐
 pnpm probe:unity --spaces       # 模拟空间、世界重力与线性速度
+pnpm probe:unity --stretch      # 拉伸长度、粒子速度与移动视图
 pnpm probe:unity --sorting      # 透明粒子索引顺序
 pnpm probe:unity --noise-fit    # 执行本地提供的 Noise 采样输入
 pnpm probe:unity --prefab-layout # 原始 prefab 布局
@@ -51,6 +52,7 @@ pnpm probe:unity --noise-options --update-fixtures
 pnpm probe:unity --sweeps --update-fixtures
 pnpm probe:unity --spaces --update-fixtures
 pnpm probe:unity --sorting --update-fixtures
+pnpm probe:unity --stretch --update-fixtures
 pnpm test
 ```
 

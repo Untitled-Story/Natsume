@@ -410,3 +410,56 @@ export function checkRenderState() {
     linear,
   };
 }
+
+/** Measures ordinary stretch geometry for deterministic native inputs. */
+export function measureStretchedParticles(
+  cases: {
+    label: string;
+    velocity: { x: number; y: number; z: number };
+    viewVelocity?: { x: number; y: number; z: number };
+    lengthScale: number;
+    velocityScale: number;
+    cameraVelocityScale: number;
+    rotate: boolean;
+  }[],
+) {
+  const { effect } = getPreview();
+  if (!effect) throw new Error('Missing preview');
+  effect.pause();
+  const original = effect.container.children[0] as ParticleMesh;
+  const doc = minimalDocument();
+  const pack = {
+    nodes: doc.nodes,
+    components: [],
+    getNode: (id: number) => doc.nodes.find((n) => n.id === id),
+  } as unknown as EffectPack;
+  return cases.map((sample) => {
+    const e = new Emitter(3, new Scene(pack, [1]).nodes.get(1)!, particleSource(), true, 1, []);
+    manualParticle(e);
+    e.velocities.set([sample.velocity.x, sample.velocity.y, sample.velocity.z]);
+    const definition = structuredClone(original.definition) as ParticleRendererT;
+    definition.mode = RenderMode.StretchedBillboard;
+    definition.alignment = Alignment.View;
+    definition.freeformStretching = false;
+    definition.rotateWithStretchDirection = sample.rotate;
+    definition.lengthScale = sample.lengthScale;
+    definition.velocityScale = sample.velocityScale;
+    definition.cameraVelocityScale = sample.cameraVelocityScale;
+    const velocity = sample.viewVelocity;
+    const mesh = new ParticleMesh(e, definition, original.materialDefinition, Texture.WHITE, pack, {
+      fog: { mode: 'none' },
+      ...(velocity ? { viewVelocity: [velocity.x, velocity.y, velocity.z] as const } : {}),
+    });
+    try {
+      mesh.sync([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1], 'gamma');
+      const buffer = mesh.geometry.getBuffer('aPosition').data as Float32Array;
+      return {
+        label: sample.label,
+        vertices: [0, 1, 2, 3].map((i) => Array.from(buffer.slice(i * 16, i * 16 + 3))),
+        uv: [0, 1, 2, 3].map((i) => [buffer[i * 16 + 3]!, 1 - buffer[i * 16 + 4]!]),
+      };
+    } finally {
+      mesh.destroy();
+    }
+  });
+}

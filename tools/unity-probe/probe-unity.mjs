@@ -20,6 +20,7 @@ const sorting = process.argv.includes('--sorting');
 const spaces = process.argv.includes('--spaces');
 const sweeps = process.argv.includes('--sweeps');
 const noiseOptions = process.argv.includes('--noise-options');
+const stretch = process.argv.includes('--stretch');
 const rectLayout = process.argv.includes('--rect-layout');
 assert(
   Number(fitting) +
@@ -33,7 +34,8 @@ assert(
     Number(spaces) +
     Number(sweeps) +
     Number(noiseOptions) +
-    Number(rectLayout) <=
+    Number(rectLayout) +
+    Number(stretch) <=
     1,
   'Choose one probe mode',
 );
@@ -43,29 +45,31 @@ const project = resolve(root, 'data/unity-probe');
 const output = resolve(
   root,
   'data/unity-baselines',
-  rectLayout
-    ? 'layout'
-    : noiseOptions
-      ? 'noise-options'
-      : sweeps
-        ? 'sweeps'
-        : spaces
-          ? 'spaces'
-          : sorting
-            ? 'sorting'
-            : basicShapes
-              ? 'basic-shapes'
-              : rotationPrewarm
-                ? 'rotation-prewarm'
-                : layout
-                  ? 'prefab-layout'
-                  : boundaries
-                    ? 'boundaries'
-                    : distributions
-                      ? 'random'
-                      : shape
-                        ? 'shape'
-                        : '.',
+  stretch
+    ? 'stretch'
+    : rectLayout
+      ? 'layout'
+      : noiseOptions
+        ? 'noise-options'
+        : sweeps
+          ? 'sweeps'
+          : spaces
+            ? 'spaces'
+            : sorting
+              ? 'sorting'
+              : basicShapes
+                ? 'basic-shapes'
+                : rotationPrewarm
+                  ? 'rotation-prewarm'
+                  : layout
+                    ? 'prefab-layout'
+                    : boundaries
+                      ? 'boundaries'
+                      : distributions
+                        ? 'random'
+                        : shape
+                          ? 'shape'
+                          : '.',
 );
 const baseline = resolve(output, fitting ? 'noise-fit-output.json' : `unity-${version}.json`);
 await mkdir(output, { recursive: true });
@@ -84,43 +88,57 @@ try {
 } catch (error) {
   if (error.code !== 'ENOENT') throw error;
 }
+if (stretch) {
+  try {
+    await rename(
+      resolve(output, 'camera-motion.json'),
+      resolve(output, 'camera-motion.json.previous'),
+    );
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+  }
+}
 const log = resolve(output, 'editor.log');
 console.log(`Running Unity ${version}; editor log: ${log}`);
 const child = spawn(
   editor,
   [
     '-batchmode',
-    ...(layout || boundaries || distributions || sorting || noiseOptions ? [] : ['-nographics']),
+    ...(layout || boundaries || distributions || sorting || noiseOptions || stretch
+      ? []
+      : ['-nographics']),
     '-noUpm',
     '-projectPath',
     project,
     '-executeMethod',
-    rectLayout
-      ? 'NatsumeLayoutProbe.Run'
-      : noiseOptions
-        ? 'NatsumeNoiseOptionsProbe.Run'
-        : sweeps
-          ? 'NatsumeSweepProbe.Run'
-          : spaces
-            ? 'NatsumeSpaceProbe.Run'
-            : sorting
-              ? 'NatsumeSortingProbe.Run'
-              : basicShapes
-                ? 'NatsumeBasicShapeProbe.Run'
-                : rotationPrewarm
-                  ? 'NatsumeRotationPrewarmProbe.Run'
-                  : shape
-                    ? 'NatsumeShapeProbe.Run'
-                    : distributions
-                      ? 'NatsumeRandomProbe.Run'
-                      : layout
-                        ? 'NatsumePrefabLayoutProbe.Run'
-                        : boundaries
-                          ? 'NatsumeBoundaryProbe.Run'
-                          : fitting
-                            ? 'NatsumeNoiseFitProbe.Run'
-                            : 'NatsumeProbe.Run',
-    '-quit',
+    stretch
+      ? 'NatsumeStretchProbe.Run'
+      : rectLayout
+        ? 'NatsumeLayoutProbe.Run'
+        : noiseOptions
+          ? 'NatsumeNoiseOptionsProbe.Run'
+          : sweeps
+            ? 'NatsumeSweepProbe.Run'
+            : spaces
+              ? 'NatsumeSpaceProbe.Run'
+              : sorting
+                ? 'NatsumeSortingProbe.Run'
+                : basicShapes
+                  ? 'NatsumeBasicShapeProbe.Run'
+                  : rotationPrewarm
+                    ? 'NatsumeRotationPrewarmProbe.Run'
+                    : shape
+                      ? 'NatsumeShapeProbe.Run'
+                      : distributions
+                        ? 'NatsumeRandomProbe.Run'
+                        : layout
+                          ? 'NatsumePrefabLayoutProbe.Run'
+                          : boundaries
+                            ? 'NatsumeBoundaryProbe.Run'
+                            : fitting
+                              ? 'NatsumeNoiseFitProbe.Run'
+                              : 'NatsumeProbe.Run',
+    ...(stretch ? [] : ['-quit']),
     '-logFile',
     log,
   ],
@@ -136,6 +154,22 @@ await new Promise((accept, reject) => {
 });
 const current = JSON.parse(await readFile(baseline, 'utf8'));
 assert.equal(current.unityVersion, version);
+if (stretch) {
+  current.motion = JSON.parse(await readFile(resolve(output, 'camera-motion.json'), 'utf8')).cases;
+  assert.equal(current.cases.length, 12);
+  assert.equal(current.motion.length, 16);
+  assert(
+    current.motion.some((sample) => Math.abs(sample.viewVelocity.y - 3) < 0.01),
+    'Moving-view probe must record a nonzero native camera velocity',
+  );
+  if (process.argv.includes('--update-fixtures'))
+    await writeFile(
+      resolve(root, 'packages/natsume/tests/fixtures/unity-stretch.json'),
+      JSON.stringify(current, null, 2) + '\n',
+    );
+  console.log(`Stretch measurements: ${current.cases.length} cases, ${baseline}`);
+  process.exit(0);
+}
 if (rectLayout) {
   assert.equal(current.rootSize.x, -100);
   if (process.argv.includes('--update-fixtures'))

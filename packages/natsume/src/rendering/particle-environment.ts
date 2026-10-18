@@ -20,6 +20,8 @@ export interface ParticleEnvironment {
   readonly fog: ParticleFog;
   /** Acceleration in Unity world units per second squared. */
   readonly gravity?: readonly [number, number, number] | undefined;
+  /** View translation velocity in Unity world units per second. Omit for a stationary view. */
+  readonly viewVelocity?: readonly [number, number, number] | undefined;
   /** View distance, or coefficients ax+by+cz+d in Unity world coordinates. Defaults to container.zIndex; negative distances clamp to zero. */
   readonly depth?: number | readonly [number, number, number, number] | undefined;
   /** Omit to disable soft particles. R stores linear view distance in the same units as depth. */
@@ -64,6 +66,12 @@ export function copyEnvironment(
     'Invalid particle gravity',
   );
   const d = value.depth;
+  const velocity = value.viewVelocity;
+  check(
+    velocity === undefined || (velocity.length === 3 && velocity.every(Number.isFinite)),
+    'HOST',
+    'View velocity requires three finite world-space components',
+  );
   check(
     d === undefined ||
       (typeof d === 'number' ? Number.isFinite(d) : d.length === 4 && d.every(Number.isFinite)),
@@ -89,6 +97,7 @@ export function copyEnvironment(
   return {
     fog: f.mode === 'none' ? { mode: 'none' } : { ...f, color: [...f.color] },
     gravity: g ? [...g] : undefined,
+    viewVelocity: velocity ? [...velocity] : undefined,
     depth: typeof d === 'number' || d === undefined ? d : [...d],
     softParticles: soft
       ? {

@@ -68,12 +68,16 @@ effect.container.zIndex = 10;
 // 可在暂停时更新；颜色使用源项目工作色彩空间。
 effect.setParticleEnvironment({
   fog: { mode: 'linear', color: [0.5, 0.5, 0.5], start: 5, end: 30 },
+  gravity: [0, -9.81, 0],
+  viewVelocity: [0, 0, 0],
   depth: 10,
   softParticles: { depthTexture: sceneDepthTexture },
 });
 ```
 
 `gravity` 是宿主提供的 Unity 世界空间加速度，单位与粒子的位置和速度一致；当包中的 `gravityMultiplier` 非零时必须提供它。Natsume 不使用隐含的 Unity 默认重力。
+
+`viewVelocity` 为视图在 Unity 世界空间中的移动速度，单位为每秒；省略时视图静止。更新显示矩阵时，可同步用 `setParticleEnvironment` 更新它，让 Stretched Billboard 计入视图移动。该方法替换整个环境配置，需要一并保留重力等输入。
 
 雾效支持 `none`、`linear`、`exp`、`exp2`。`depth` 也可传 `[a, b, c, d]`，以 Unity 世界坐标计算 `ax + by + cz + d`。当前采用固定 +Z 观察与仿射深度，不提供完整 Unity 相机。
 
@@ -134,7 +138,9 @@ runtime.registerScript(
 | Noise                        | 内置 Curl Noise 近似：质量维度、多 octave、Scroll、Remap、位置 / 旋转 / 尺寸影响                                                                                                                                                                                 | Unity 原生噪声函数及同种子轨迹；扩展参数尚无整体误差拟合      |
 | Texture Sheet Animation      | Lifetime、Whole Sheet、UV0                                                                                                                                                                                                                                       | Single Row、Speed / FPS 时间模式、Sprites 模式、其他 UV 通道  |
 | Custom Data                  | Custom1 / Custom2 Vector（1–4 维）与 Color                                                                                                                                                                                                                       | 已知材质只消费 Custom1.x，其余分量保留为求值数据              |
-| Renderer                     | World / Local / 固定 +Z View Billboard、有限 Stretched Billboard、World / Local / View 单 Mesh 与单材质；None / Distance / Oldest / Youngest / Depth 排序；Pivot、Flip、最小尺寸；ParticleAddAlpha、ParticleUnlit、Legacy Additive / Alpha Blended、雾效与软粒子 | 其他对齐方式、横 / 竖 Billboard、多 Mesh / 材质、其他材质模型 |
+| Renderer                     | World / Local / 固定 +Z View Billboard、Stretched Billboard（非 Freeform，含速度 / 视图速度拉伸）、World / Local / View 单 Mesh 与单材质；None / Distance / Oldest / Youngest / Depth 排序；Pivot、Flip、最小尺寸；ParticleAddAlpha、ParticleUnlit、Legacy Additive / Alpha Blended、雾效与软粒子 | Freeform 拉伸、其他对齐方式、横 / 竖 Billboard、多 Mesh / 材质、其他材质模型 |
+
+Stretched Billboard 的三维长度使用完整速度；宽度采用固定 +Z 视图，斜向三维速度不复现 Unity 基于粒子到相机射线的横边方向。
 
 排序使用仿射显示矩阵，Distance 与 Depth 均按变换后的 Z 深度排序；Oldest / Youngest 将指定年龄的粒子绘制在前方。`sortingFudge` 仅调整相同 Sorting Layer / Order 的粒子系统顺序，负值靠前，不参与宿主其他 Pixi 对象的深度排序。
 

@@ -193,7 +193,7 @@ export class EffectInstance {
     this.colorSpace = value;
     this.render();
   }
-  /** Replaces fog/depth inputs. Host depth textures remain borrowed. */
+  /** Replaces particle environment inputs. Host depth textures remain borrowed. */
   setParticleEnvironment(value: ParticleEnvironment): void {
     this.assertAlive();
     const next = copyEnvironment(value);
