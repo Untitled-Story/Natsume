@@ -1,4 +1,4 @@
-import { mat4, vec3 } from 'gl-matrix';
+import { mat4, quat, vec3 } from 'gl-matrix';
 import { check } from '../errors.js';
 import type { DeepReadonly as R } from '../pack.js';
 import type { ParticleSystemT } from '../format/generated/noa/ir/particle-system.js';
@@ -91,6 +91,8 @@ export class Emitter {
   readonly simulationMatrix = mat4.create();
   readonly inverseSimulationMatrix = mat4.create();
   private readonly vectorMatrix = mat4.create();
+  private readonly limitRotation = quat.create();
+  private readonly inverseLimitRotation = quat.create();
   gravity: readonly [number, number, number] = [0, 0, 0];
   private readonly scratch = new Float64Array(3);
   private readonly direction = vec3.create();
@@ -224,14 +226,6 @@ export class Emitter {
       );
     }
 
-    if (this.limit)
-      check(
-        !this.limit.separateAxes &&
-          this.limit.space === Space.Local &&
-          constantZero(this.limit.drag),
-        'CAPABILITY',
-        'Initial limit velocity supports scalar local limit without drag',
-      );
     if (this.sheet)
       check(
         this.sheet.timeMode === SheetTime.Lifetime &&
@@ -335,6 +329,14 @@ export class Emitter {
       mat4.transpose(this.inverseSimulationMatrix, this.inverseSimulationMatrix);
     }
     mat4.multiply(this.vectorMatrix, this.inverseSimulationMatrix, this.node.worldMatrix);
+    // Native limit axes use inverse module rotation relative to the simulation frame.
+    // Scale does not scale their thresholds.
+    if (this.limit?.space === Space.Local) {
+      quat.conjugate(this.limitRotation, this.node.worldRotation);
+      if (frame) quat.multiply(this.limitRotation, this.limitRotation, frame.worldRotation);
+    } else if (frame) quat.copy(this.limitRotation, frame.worldRotation);
+    else quat.identity(this.limitRotation);
+    quat.conjugate(this.inverseLimitRotation, this.limitRotation);
   }
   private vector(x: number, y: number, z: number, local: boolean): Float64Array {
     const m = local ? this.vectorMatrix : this.inverseSimulationMatrix;
@@ -650,19 +652,54 @@ export class Emitter {
         }
       }
       if (this.limit) {
-        const speed = Math.hypot(vx, vy, vz),
-          limit = scalar(this.limit.limit?.x, t, rnd(40));
-        if (speed > limit) {
-          const factor = (limit + (speed - limit) * limitDecay) / speed;
-          // Native GetParticles stores the correction to the base velocity;
-          // lifecycle velocity is added again on the next step.
-          this.velocities[o] = this.velocities[o]! + vx * (factor - 1);
-          this.velocities[o + 1] = this.velocities[o + 1]! + vy * (factor - 1);
-          this.velocities[o + 2] = this.velocities[o + 2]! + vz * (factor - 1);
+        const l = this.limit;
+        const beforeX = vx,
+          beforeY = vy,
+          beforeZ = vz;
+        if (l.separateAxes) {
+          vec3.transformQuat(this.direction, [vx, vy, vz], this.inverseLimitRotation);
+          for (let axis = 0; axis < 3; axis++) {
+            const key = axis === 0 ? l.limit?.x : axis === 1 ? l.limit?.y : l.limit?.z;
+            const maximum = Math.max(0, scalar(key, t, rnd(40 + axis)));
+            const value = this.direction[axis]!;
+            if (Math.abs(value) > maximum)
+              this.direction[axis] =
+                Math.sign(value) * (maximum + (Math.abs(value) - maximum) * limitDecay);
+          }
+          vec3.transformQuat(this.direction, this.direction, this.limitRotation);
+          vx = this.direction[0]!;
+          vy = this.direction[1]!;
+          vz = this.direction[2]!;
+        } else {
+          const speed = Math.hypot(vx, vy, vz),
+            maximum = Math.max(0, scalar(l.limit?.x, t, rnd(40)));
+          if (speed > maximum) {
+            const factor = (maximum + (speed - maximum) * limitDecay) / speed;
+            vx *= factor;
+            vy *= factor;
+            vz *= factor;
+          }
+        }
+        const speed = Math.hypot(vx, vy, vz);
+        if (speed > 0) {
+          let drag = Math.max(0, scalar(l.drag, t, rnd(43))) * dt;
+          if (l.multiplyDragBySize) {
+            const size =
+              this.startSizes[o]! *
+              scalar(this.sizeModule?.size?.x, this.ages[i]! / this.lifetimes[i]!, rnd(50), 1) *
+              (this.noiseSizes?.[o] ?? 1);
+            drag *= Math.PI * size * size;
+          }
+          if (l.multiplyDragByVelocity) drag *= speed * speed;
+          const factor = Math.max(0, 1 - drag / speed);
           vx *= factor;
           vy *= factor;
           vz *= factor;
         }
+        // Store only the correction; lifecycle velocity is evaluated again next step.
+        this.velocities[o] = this.velocities[o]! + vx - beforeX;
+        this.velocities[o + 1] = this.velocities[o + 1]! + vy - beforeY;
+        this.velocities[o + 2] = this.velocities[o + 2]! + vz - beforeZ;
       }
       if (this.renderVelocities) {
         this.renderVelocities[o] = vx * multiplier;
