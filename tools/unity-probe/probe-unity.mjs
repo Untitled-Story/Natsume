@@ -21,6 +21,7 @@ async function saveJson(path, contents) {
 const tool = dirname(fileURLToPath(import.meta.url));
 const root = resolve(tool, '../..');
 const version = '2022.3.21f1';
+const compatibility = process.argv.includes('--compatibility');
 const fitting = process.argv.includes('--noise-fit');
 const layout = process.argv.includes('--prefab-layout');
 const boundaries = process.argv.includes('--boundaries');
@@ -37,7 +38,8 @@ const customData = process.argv.includes('--custom-data');
 const stretch = process.argv.includes('--stretch');
 const rectLayout = process.argv.includes('--rect-layout');
 assert(
-  Number(fitting) +
+  Number(compatibility) +
+    Number(fitting) +
     Number(layout) +
     Number(boundaries) +
     Number(distributions) +
@@ -61,35 +63,37 @@ const project = resolve(root, 'data/unity-probe');
 const output = resolve(
   root,
   'data/unity-baselines',
-  noiseStatistics
-    ? 'noise-statistics'
-    : customData
-      ? 'custom-data'
-      : stretch
-        ? 'stretch'
-        : rectLayout
-          ? 'layout'
-          : noiseOptions
-            ? 'noise-options'
-            : sweeps
-              ? 'sweeps'
-              : spaces
-                ? 'spaces'
-                : sorting
-                  ? 'sorting'
-                  : basicShapes
-                    ? 'basic-shapes'
-                    : rotationPrewarm
-                      ? 'rotation-prewarm'
-                      : layout
-                        ? 'prefab-layout'
-                        : boundaries
-                          ? 'boundaries'
-                          : distributions
-                            ? 'random'
-                            : shape
-                              ? 'shape'
-                              : '.',
+  compatibility
+    ? 'compatibility'
+    : noiseStatistics
+      ? 'noise-statistics'
+      : customData
+        ? 'custom-data'
+        : stretch
+          ? 'stretch'
+          : rectLayout
+            ? 'layout'
+            : noiseOptions
+              ? 'noise-options'
+              : sweeps
+                ? 'sweeps'
+                : spaces
+                  ? 'spaces'
+                  : sorting
+                    ? 'sorting'
+                    : basicShapes
+                      ? 'basic-shapes'
+                      : rotationPrewarm
+                        ? 'rotation-prewarm'
+                        : layout
+                          ? 'prefab-layout'
+                          : boundaries
+                            ? 'boundaries'
+                            : distributions
+                              ? 'random'
+                              : shape
+                                ? 'shape'
+                                : '.',
 );
 const baseline = resolve(output, fitting ? 'noise-fit-output.json' : `unity-${version}.json`);
 await mkdir(output, { recursive: true });
@@ -124,7 +128,8 @@ const child = spawn(
   editor,
   [
     '-batchmode',
-    ...(layout ||
+    ...(compatibility ||
+    layout ||
     boundaries ||
     distributions ||
     sorting ||
@@ -137,42 +142,44 @@ const child = spawn(
     '-projectPath',
     project,
     '-executeMethod',
-    noiseStatistics
-      ? 'NatsumeNoiseStatisticsProbe.Run'
-      : customData
-        ? 'NatsumeCustomDataProbe.Run'
-        : stretch
-          ? 'NatsumeStretchProbe.Run'
-          : rectLayout
-            ? 'NatsumeLayoutProbe.Run'
-            : noiseOptions
-              ? 'NatsumeNoiseOptionsProbe.Run'
-              : sweeps
-                ? 'NatsumeSweepProbe.Run'
-                : spaces
-                  ? 'NatsumeSpaceProbe.Run'
-                  : sorting
-                    ? 'NatsumeSortingProbe.Run'
-                    : basicShapes
-                      ? 'NatsumeBasicShapeProbe.Run'
-                      : rotationPrewarm
-                        ? 'NatsumeRotationPrewarmProbe.Run'
-                        : shape
-                          ? 'NatsumeShapeProbe.Run'
-                          : distributions
-                            ? 'NatsumeRandomProbe.Run'
-                            : layout
-                              ? 'NatsumePrefabLayoutProbe.Run'
-                              : boundaries
-                                ? 'NatsumeBoundaryProbe.Run'
-                                : fitting
-                                  ? 'NatsumeNoiseFitProbe.Run'
-                                  : 'NatsumeProbe.Run',
+    compatibility
+      ? 'NatsumeCompatibilityProbe.Run'
+      : noiseStatistics
+        ? 'NatsumeNoiseStatisticsProbe.Run'
+        : customData
+          ? 'NatsumeCustomDataProbe.Run'
+          : stretch
+            ? 'NatsumeStretchProbe.Run'
+            : rectLayout
+              ? 'NatsumeLayoutProbe.Run'
+              : noiseOptions
+                ? 'NatsumeNoiseOptionsProbe.Run'
+                : sweeps
+                  ? 'NatsumeSweepProbe.Run'
+                  : spaces
+                    ? 'NatsumeSpaceProbe.Run'
+                    : sorting
+                      ? 'NatsumeSortingProbe.Run'
+                      : basicShapes
+                        ? 'NatsumeBasicShapeProbe.Run'
+                        : rotationPrewarm
+                          ? 'NatsumeRotationPrewarmProbe.Run'
+                          : shape
+                            ? 'NatsumeShapeProbe.Run'
+                            : distributions
+                              ? 'NatsumeRandomProbe.Run'
+                              : layout
+                                ? 'NatsumePrefabLayoutProbe.Run'
+                                : boundaries
+                                  ? 'NatsumeBoundaryProbe.Run'
+                                  : fitting
+                                    ? 'NatsumeNoiseFitProbe.Run'
+                                    : 'NatsumeProbe.Run',
     ...(stretch ? [] : ['-quit']),
     '-logFile',
     log,
   ],
-  { stdio: 'inherit' },
+  { stdio: 'inherit', env: { ...process.env, NATSUME_COMPAT_OUTPUT: baseline } },
 );
 await new Promise((accept, reject) => {
   child.once('error', reject);
@@ -184,6 +191,16 @@ await new Promise((accept, reject) => {
 });
 const current = JSON.parse(await readFile(baseline, 'utf8'));
 assert.equal(current.unityVersion, version);
+if (compatibility) {
+  assert(current.curves.length >= 11 && current.gradient.length === 5);
+  if (process.argv.includes('--update-fixtures'))
+    await saveJson(
+      resolve(root, 'data/unity-baselines/fixtures/unity-compatibility.json'),
+      JSON.stringify(current, null, 2) + '\n',
+    );
+  console.log('Compatibility measurements: ' + baseline);
+  process.exit(0);
+}
 if (noiseStatistics || customData) {
   assert.equal(current.cases.length, noiseStatistics ? 86 : 4);
   if (process.argv.includes('--update-fixtures'))

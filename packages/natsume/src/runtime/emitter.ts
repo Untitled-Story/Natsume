@@ -44,11 +44,12 @@ export function prewarmDuration(main: NonNullable<R<ParticleSystemT>['main']>): 
         lifetime = Math.max(lifetime, k.value * p.multiplier);
         if (next && k.interpolation >= 2) {
           const dt = next.time - k.time;
-          // Hermite's Bezier control envelope bounds peaks between keys.
+          // Bezier control values bound weighted and Hermite segment peaks.
           lifetime = Math.max(
             lifetime,
-            (k.value + (k.outSlope * dt) / 3) * p.multiplier,
-            (next.value - (next.inSlope * dt) / 3) * p.multiplier,
+            (k.value + k.outSlope * dt * (k.weightedOut ? k.outWeight : 1 / 3)) * p.multiplier,
+            (next.value - next.inSlope * dt * (next.weightedIn ? next.inWeight : 1 / 3)) *
+              p.multiplier,
           );
         }
       }
