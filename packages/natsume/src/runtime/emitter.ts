@@ -18,7 +18,6 @@ import { ScalingMode } from '../format/generated/noa/ir/scaling-mode.js';
 import { SeedMode } from '../format/generated/noa/ir/seed-mode.js';
 import { sampleShape, validateShape } from './shapes.js';
 import { SheetTime } from '../format/generated/noa/ir/sheet-time.js';
-import { SheetAnimation } from '../format/generated/noa/ir/sheet-animation.js';
 import { CustomDataMode } from '../format/generated/noa/ir/custom-data-mode.js';
 import { scalar, color, random, validateParameters, constantZero } from './parameters.js';
 import { CurlNoiseField } from '../particles/noise/curl-field.js';
@@ -226,14 +225,6 @@ export class Emitter {
       );
     }
 
-    if (this.sheet)
-      check(
-        this.sheet.timeMode === SheetTime.Lifetime &&
-          this.sheet.animation === SheetAnimation.WholeSheet &&
-          (this.sheet.uvChannelMask & 1) !== 0,
-        'CAPABILITY',
-        'Initial texture sheets support lifetime, whole-sheet UV0',
-      );
     this.seed =
       main.seedMode === SeedMode.Fixed
         ? main.seed
@@ -259,6 +250,7 @@ export class Emitter {
     const cap = main.maxParticles;
     this.positions = new Float32Array(cap * 3);
     this.velocities = new Float32Array(cap * 3);
+    if (this.sheet?.timeMode === SheetTime.Speed) this.renderVelocities = new Float32Array(cap * 3);
     this.startSizes = new Float32Array(cap * 3);
     this.rotations = new Float32Array(cap * 3);
     this.startColors = new Float32Array(cap * 4);

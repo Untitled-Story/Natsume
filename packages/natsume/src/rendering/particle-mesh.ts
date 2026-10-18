@@ -581,10 +581,22 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
         cz = Math.cos(e.rotations[o + 2]!),
         snz = Math.sin(e.rotations[o + 2]!) * rotationSign;
       color(e.colorModule?.color ?? null, t, rnd(53), this.scratchColor);
-      const sheet = e.sheet,
+      const sheet = e.sheet && e.sheet.uvChannelMask & 1 ? e.sheet : undefined,
         cols = sheet?.columns ?? 1,
         rows = sheet?.rows ?? 1;
-      const frame = sheetFrame(sheet, t, rnd(54), rnd(55)),
+      const frame = sheetFrame(
+          sheet,
+          t,
+          rnd(54),
+          rnd(55),
+          e.ages[i]!,
+          Math.hypot(
+            (e.renderVelocities ?? e.velocities)[o]!,
+            (e.renderVelocities ?? e.velocities)[o + 1]!,
+            (e.renderVelocities ?? e.velocities)[o + 2]!,
+          ),
+          rnd(59),
+        ),
         col = frame % cols,
         row = Math.floor(frame / cols);
       const flip = this.definition.flip;

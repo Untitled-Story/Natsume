@@ -10,6 +10,9 @@ import { Interpolation } from '../format/generated/noa/ir/interpolation.js';
 import { ColorMode } from '../format/generated/noa/ir/color-mode.js';
 import { ColorSpace } from '../format/generated/noa/ir/color-space.js';
 import { GradientMode } from '../format/generated/noa/ir/gradient-mode.js';
+import { SheetTime } from '../format/generated/noa/ir/sheet-time.js';
+import { SheetRow } from '../format/generated/noa/ir/sheet-row.js';
+import { SheetAnimation } from '../format/generated/noa/ir/sheet-animation.js';
 import type { TextureSheetModuleT } from '../format/generated/noa/ir/texture-sheet-module.js';
 
 export function sheetFrame(
@@ -17,21 +20,46 @@ export function sheetFrame(
   age: number,
   startRandom: number,
   frameRandom: number,
+  seconds = 0,
+  speed = 0,
+  rowRandom = 0,
+  meshIndex = 0,
 ): number {
   if (!sheet) return 0;
   // Native cycles wrap lifetime before evaluating the curve, including for
   // constant and nonlinear curves. Preserve the final frame at lifetime end.
   const cycles = sheet.cycles;
   const progress = Math.min(Math.max(age, 0) * cycles, Math.max(0, cycles - 1e-7));
-  const phase = progress % 1;
+  const phase =
+    sheet.timeMode === SheetTime.Speed
+      ? Math.max(
+          0,
+          Math.min(
+            1,
+            (speed - (sheet.speedRange?.x ?? 0)) /
+              ((sheet.speedRange?.y ?? 1) - (sheet.speedRange?.x ?? 0) || 1),
+          ),
+        )
+      : progress % 1;
   const start = Math.max(0, Math.min(1, scalar(sheet.startFrame, 0, startRandom)));
-  let value = scalar(sheet.frameOverTime, phase, frameRandom) + start;
+  const singleRow = sheet.animation === SheetAnimation.SingleRow;
+  const count = sheet.columns * (singleRow ? 1 : sheet.rows);
+  let value =
+    (sheet.timeMode === SheetTime.FPS
+      ? (seconds * sheet.fps) / count
+      : scalar(sheet.frameOverTime, phase, frameRandom)) + start;
   if (value < 0 || value > 1) {
     const wrapped = ((value % 1) + 1) % 1;
     value = wrapped === 0 && value > 0 ? 1 : wrapped;
   }
-  const count = sheet.columns * sheet.rows;
-  return Math.max(0, Math.min(count - 1, Math.floor(value * count)));
+  const row = !singleRow
+    ? 0
+    : sheet.rowMode === SheetRow.Random
+      ? Math.min(sheet.rows - 1, Math.floor(rowRandom * sheet.rows))
+      : sheet.rowMode === SheetRow.MeshIndex
+        ? meshIndex % sheet.rows
+        : sheet.row;
+  return Math.max(0, Math.min(count - 1, Math.floor(value * count))) + row * sheet.columns;
 }
 
 export function validateParameters(value: unknown): void {

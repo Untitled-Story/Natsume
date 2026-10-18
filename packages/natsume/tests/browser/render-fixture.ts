@@ -523,3 +523,45 @@ export function checkEnvironmentReplacement() {
   effect.simulation.emitters.delete(second.id);
   return { rejected, preserved, updated };
 }
+
+export async function measureSheetUV() {
+  const { effect } = getPreview();
+  if (!effect) throw new Error('Missing preview');
+  const { TextureSheetModuleT } =
+    await import('../../src/format/generated/noa/ir/texture-sheet-module.js');
+  const { constant, linear } = await import('../particle-fixtures.js');
+  effect.pause();
+  const original = effect.container.children[0] as ParticleMesh;
+  const document = minimalDocument();
+  const pack = {
+    nodes: document.nodes,
+    components: [],
+    getNode: (id: number) => document.nodes.find((n) => n.id === id),
+  } as unknown as EffectPack;
+  const source = particleSource();
+  const sheet = new TextureSheetModuleT(4, 3);
+  sheet.frameOverTime = linear(0, 1);
+  sheet.startFrame = constant(0);
+  source.modules.push(new ParticleModuleT(M.TextureSheetModule, sheet));
+  const e = new Emitter(3, new Scene(pack, [1]).nodes.get(1)!, source, true, 1, []);
+  manualParticle(e);
+  e.ages[0] = 0.5;
+  e.lifetimes[0] = 1;
+  const def = structuredClone(original.definition) as ParticleRendererT;
+  def.mode = RenderMode.Billboard;
+  def.alignment = Alignment.World;
+  const mesh = new ParticleMesh(e, def, original.materialDefinition, Texture.WHITE, pack);
+  const result = [];
+  const matrix = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+  for (const mask of [1, 2, 3, 0]) {
+    sheet.uvChannelMask = mask;
+    mesh.sync(matrix, 'gamma');
+    const buffer = mesh.geometry.getBuffer('aPosition').data as Float32Array;
+    result.push({
+      mask,
+      uv: [0, 1, 2, 3].map((i) => [buffer[i * 16 + 3]!, 1 - buffer[i * 16 + 4]!]),
+    });
+  }
+  mesh.destroy();
+  return result;
+}
