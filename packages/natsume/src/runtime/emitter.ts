@@ -92,6 +92,9 @@ export class Emitter {
   readonly emitterMatrix = mat4.create();
   readonly particleScale = vec3.fromValues(1, 1, 1);
   private readonly vectorMatrix = mat4.create();
+  private readonly orbitalRotation = quat.create();
+  private readonly inverseOrbitalRotation = quat.create();
+  private readonly orbitalOrigin = vec3.create();
   private readonly limitRotation = quat.create();
   private readonly inverseLimitRotation = quat.create();
   gravity: readonly [number, number, number] = [0, 0, 0];
@@ -345,6 +348,17 @@ export class Emitter {
     } else if (frame) quat.copy(this.limitRotation, frame.worldRotation);
     else quat.identity(this.limitRotation);
     quat.conjugate(this.inverseLimitRotation, this.limitRotation);
+    if (frame) quat.conjugate(this.orbitalRotation, frame.worldRotation);
+    else quat.identity(this.orbitalRotation);
+    quat.multiply(this.orbitalRotation, this.orbitalRotation, this.node.worldRotation);
+    quat.conjugate(this.inverseOrbitalRotation, this.orbitalRotation);
+    vec3.set(
+      this.orbitalOrigin,
+      this.node.worldMatrix[12]!,
+      this.node.worldMatrix[13]!,
+      this.node.worldMatrix[14]!,
+    );
+    vec3.transformMat4(this.orbitalOrigin, this.orbitalOrigin, this.inverseSimulationMatrix);
   }
   private vector(x: number, y: number, z: number, local: boolean): Float64Array {
     const m = local ? this.vectorMatrix : this.inverseSimulationMatrix;
@@ -681,9 +695,17 @@ export class Emitter {
           wz = scalar(v.orbital?.z, t, rnd(29));
         // Native probe: orbital displacement participates in speedModifier and
         // the scalar limit, but is not itself accumulated in stored velocity.
-        let px = x - ox,
-          py = y - oy,
-          pz = z - oz;
+        // Native orbital/radial axes remain emitter-local, independently of linear velocity space.
+        vec3.set(
+          this.direction,
+          x - this.orbitalOrigin[0]!,
+          y - this.orbitalOrigin[1]!,
+          z - this.orbitalOrigin[2]!,
+        );
+        vec3.transformQuat(this.direction, this.direction, this.inverseOrbitalRotation);
+        let px = this.direction[0]! - ox,
+          py = this.direction[1]! - oy,
+          pz = this.direction[2]! - oz;
         const angularDt = dt * multiplier;
         if (wz && angularDt) {
           const c = Math.cos(wz * angularDt),
@@ -707,25 +729,37 @@ export class Emitter {
           px = a;
         }
         if ((wx || wy || wz) && angularDt) {
-          orbitalX = (px + ox - x) / dt;
-          orbitalY = (py + oy - y) / dt;
-          orbitalZ = (pz + oz - z) / dt;
-          // Preserve the existing rotated position used by Noise sampling.
-          x = px + ox;
-          y = py + oy;
-          z = pz + oz;
+          vec3.set(this.direction, px + ox, py + oy, pz + oz);
+          vec3.transformQuat(this.direction, this.direction, this.orbitalRotation);
+          const nx = this.direction[0]! + this.orbitalOrigin[0]!,
+            ny = this.direction[1]! + this.orbitalOrigin[1]!,
+            nz = this.direction[2]! + this.orbitalOrigin[2]!;
+          orbitalX = (nx - x) / dt;
+          orbitalY = (ny - y) / dt;
+          orbitalZ = (nz - z) / dt;
+          x = nx;
+          y = ny;
+          z = nz;
           vx += orbitalX / multiplier;
           vy += orbitalY / multiplier;
           vz += orbitalZ / multiplier;
         }
         const radial = scalar(v.radial, t, rnd(23));
         if (radial) {
-          const length = Math.hypot(x, y, z) || 1;
-          vx += (x / length) * radial;
-          vy += (y / length) * radial;
-          vz += (z / length) * radial;
+          const length = Math.hypot(px, py, pz) || 1;
+          vec3.set(
+            this.direction,
+            (px / length) * radial,
+            (py / length) * radial,
+            (pz / length) * radial,
+          );
+          vec3.transformQuat(this.direction, this.direction, this.orbitalRotation);
+          vx += this.direction[0]!;
+          vy += this.direction[1]!;
+          vz += this.direction[2]!;
         }
       }
+
       if (this.limit) {
         const l = this.limit;
         const beforeX = vx,
