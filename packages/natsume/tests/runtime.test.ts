@@ -198,3 +198,47 @@ it('random channels are stable, uint32 bounded and decorrelated', () => {
   expect(random(0, 0, 0)).not.toBe(random(0, 0, 1));
   expect(random(0xffffffff, 0xffffffff, 0xffffffff)).toBeLessThan(1);
 });
+
+it('preserves Unity signed RectTransform sizes and child anchor positions', async () => {
+  const native = JSON.parse(
+    readFileSync(new URL('./fixtures/unity-layout.json', import.meta.url), 'utf8'),
+  );
+  const d = minimalDocument();
+  d.nodes.push(new NodeT(4, 'child', 1, true, d.nodes[0]!.transform));
+  d.components = [
+    new ComponentT(
+      3,
+      1,
+      true,
+      ComponentData.RectLayout,
+      new RectLayoutT(
+        new Vec2T(),
+        new Vec2T(),
+        new Vec2T(0.25, 0.75),
+        new Vec3T(),
+        new Vec2T(-100, -200),
+      ),
+    ),
+    new ComponentT(
+      5,
+      4,
+      true,
+      ComponentData.RectLayout,
+      new RectLayoutT(
+        new Vec2T(0.1, 0.2),
+        new Vec2T(0.8, 0.9),
+        new Vec2T(0.3, 0.6),
+        new Vec3T(5, 6, 7),
+        new Vec2T(-20, 0),
+      ),
+    ),
+  ];
+  const pack = await loadPack(await archive((await import('./helpers.js')).encode(d)));
+  const scene = new Scene(pack, [1]);
+  expect(scene.layoutSize).toEqual({ width: native.rootSize.x, height: native.rootSize.y });
+  expect(Math.abs(scene.nodes.get(4)!.layout!.width - native.childSize.x)).toBeLessThan(1e-5);
+  expect(Math.abs(scene.nodes.get(4)!.layout!.height - native.childSize.y)).toBeLessThan(1e-5);
+  for (const [i, k] of (['x', 'y', 'z'] as const).entries())
+    expect(scene.nodes.get(4)!.localMatrix[12 + i]).toBeCloseTo(native.childPosition[k], 5);
+  pack.dispose();
+});

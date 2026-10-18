@@ -124,7 +124,13 @@ Unity Circle PingPong 在实测整周期 2 秒处出现反射端点跳变；Nats
 
 扩展探针包含 11 组配置。Constant Remap ±0.25 与零 Strength 的位置各分量回归容差 < 10⁻⁵；原生旋转增量为对应位置噪声速率 × 0.5 × dt（角度制）。Size Amount 按当前噪声对各轴初始尺寸乘 `1 + noise × 0.5 × amount`，不累积；该变化只出现在 BakeMesh，GetCurrentSize 不包含它。上述参数关系已核对；Low / Medium 的降维、多 octave、Scroll 与零 Frequency 使用连续场近似，未量化它们的原生轨迹误差。
 
+## RectTransform
+
+根尺寸 `(-100,-200)`、拉伸子节点尺寸 `(-90,-140)`、子节点位置 `(-1,32,7)` 与 Unity 一致，坐标回归容差 < 10⁻⁵。保留有符号布局参与锚点计算；Pixi 的容器边界取对应矩形的非负宽高，不改变子节点布局。
+
 ## 数据
+
+- [unity-layout.json](../../packages/natsume/tests/fixtures/unity-layout.json)：有符号矩形与锚点位置。
 
 - [unity-noise-options.json](../../packages/natsume/tests/fixtures/unity-noise-options.json)：Noise 参数、旋转和 BakeMesh 尺寸。
 

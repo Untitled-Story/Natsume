@@ -134,11 +134,13 @@ export class EffectInstance {
     const size = simulation.scene.layoutSize;
     if (size) {
       const pivot = simulation.scene.nodes.get(simulation.entry.roots[0]!)?.rect?.pivot;
+      const x = -size.width * (pivot?.x ?? 0.5),
+        y = -size.height * (1 - (pivot?.y ?? 0.5));
       this.container.boundsArea = new Rectangle(
-        -size.width * (pivot?.x ?? 0.5),
-        -size.height * (1 - (pivot?.y ?? 0.5)),
-        size.width,
-        size.height,
+        Math.min(x, x + size.width),
+        Math.min(y, y + size.height),
+        Math.abs(size.width),
+        Math.abs(size.height),
       );
     }
     if (options.displayMatrix) this.setDisplayMatrix(options.displayMatrix);

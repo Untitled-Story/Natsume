@@ -89,11 +89,6 @@ export class Scene {
           width: (parentSize?.width ?? 0) * stretchX + delta.x,
           height: (parentSize?.height ?? 0) * stretchY + delta.y,
         });
-        check(
-          node.layout.width >= 0 && node.layout.height >= 0,
-          'HOST',
-          'Layout has negative dimensions',
-        );
         if (parent) {
           const pp = parent.rect?.pivot ?? { x: 0.5, y: 0.5 };
           x = (parentSize?.width ?? 0) * (min.x + stretchX * pivot.x - pp.x) + pos.x;
