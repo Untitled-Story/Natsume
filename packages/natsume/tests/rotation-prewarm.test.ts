@@ -24,12 +24,16 @@ interface NativeCase {
     count: number;
     rotations: { x: number; y: number; z: number }[];
     remaining: number[];
+    lifetimes: number[];
+    seeds: number[];
   }[];
 }
 const native: { cases: NativeCase[] } = JSON.parse(
   readNativeFixture('unity-rotation-prewarm.json'),
 );
-for (const c of native.cases.filter((c) => c.label !== 'prewarm'))
+for (const c of native.cases.filter(
+  (c) => c.label !== 'prewarm' && !c.label.startsWith('prewarm-direct-boundary-'),
+))
   it((c.lifetimeCurve ? 'measures Unity ' : 'matches Unity ') + c.label, async () => {
     const pack = await loadPack(await archive());
     const source = particleSource();
@@ -146,3 +150,66 @@ it('bounds prewarm work and includes bounded curve-lifetime peaks', async () => 
   expect(new Emitter(3, node, s, true, 1, []).prewarmSeconds).toBe(35);
   pack.dispose();
 });
+
+for (const c of native.cases.filter((c) => c.label.startsWith('prewarm-direct-boundary-')))
+  it('matches native newborn frames and initial lifetimes ' + c.label, async () => {
+    const pack = await loadPack(await archive());
+    const source = particleSource();
+    const main = source.main!;
+    main.loop = main.prewarm = true;
+    main.durationSeconds = c.duration;
+    main.maxParticles = 100;
+    main.simulationSpeed = c.speed;
+    main.lifetime = linear(c.lifetime / 2, c.lifetime);
+    source.modules.push(
+      new ParticleModuleT(M.EmissionModule, new EmissionModuleT(constant(c.rate))),
+    );
+    const e = new Emitter(3, new Scene(pack, [1]).nodes.get(1)!, source, true, 12345, []);
+    e.sync();
+    let knownSerials = new Set(e.serials.slice(0, e.count));
+    let knownSeeds = new Set(c.samples[0]!.seeds);
+    for (const sample of c.samples.slice(1)) {
+      e.step(c.dt ?? 1 / 60);
+      const actual = Array.from({ length: e.count }, (_, i) => i)
+        .filter((i) => !knownSerials.has(e.serials[i]!))
+        .map((i) => ({ life: e.lifetimes[i]!, age: e.ages[i]! }))
+        .sort((a, b) => b.age - a.age);
+      const expected = sample.seeds
+        .flatMap((seed, i) =>
+          knownSeeds.has(seed)
+            ? []
+            : [{ life: sample.lifetimes[i]!, age: sample.lifetimes[i]! - sample.remaining[i]! }],
+        )
+        .sort((a, b) => b.age - a.age);
+      const label = `${c.label}/${sample.frame}`;
+      // Retained prewarm particles can already differ by one 0.02 s birth step.
+      // Measure that residual separately from the live newborn boundary regression.
+      recordError('prewarm.boundary.count', e.count - sample.count, 'particles', label);
+      expect(Math.abs(e.count - sample.count)).toBeLessThanOrEqual(1);
+      if (e.count === sample.count) {
+        const remaining = Array.from(
+          e.ages.slice(0, e.count),
+          (age, i) => e.lifetimes[i]! - age,
+        ).sort((a, b) => a - b);
+        const nativeRemaining = [...sample.remaining].sort((a, b) => a - b);
+        for (let i = 0; i < remaining.length; i++) {
+          const error = remaining[i]! - nativeRemaining[i]!;
+          recordError('prewarm.boundary.remainingLifetime', error, 's', `${label}/${i}`);
+          expect(Math.abs(error)).toBeLessThan(c.lifetime * 0.02);
+        }
+      }
+      recordError('prewarm.birth.count', actual.length - expected.length, 'particles', label);
+      expect(actual.length).toBe(expected.length);
+      for (let i = 0; i < actual.length; i++) {
+        const lifeError = actual[i]!.life - expected[i]!.life;
+        const ageError = actual[i]!.age - expected[i]!.age;
+        recordError('prewarm.birth.lifetime', lifeError, 's', `${label}/${i}`);
+        recordError('prewarm.birth.age', ageError, 's', `${label}/${i}`);
+        expect(Math.abs(lifeError)).toBeLessThan(2e-5);
+        expect(Math.abs(ageError)).toBeLessThan(2e-5);
+      }
+      knownSerials = new Set(e.serials.slice(0, e.count));
+      knownSeeds = new Set(sample.seeds);
+    }
+    pack.dispose();
+  });

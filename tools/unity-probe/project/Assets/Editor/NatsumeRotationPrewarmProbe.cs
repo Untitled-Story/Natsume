@@ -7,10 +7,10 @@ using UnityEngine;
 
 public static class NatsumeRotationPrewarmProbe
 {
-    [Serializable] public class Sample {public int frame,count; public float time; public Vector3[] rotations, positions, velocities; public Vector4[] custom; public float[] remaining, lifetimes;}
+    [Serializable] public class Sample {public int frame,count; public float time; public Vector3[] rotations, positions, velocities; public Vector4[] custom; public float[] remaining, lifetimes;public uint[] seeds;}
     [Serializable] public class Result {public string label;public float speed, duration, lifetime, rate, dt;public bool lifetimeCurve;public Sample[] samples;}
     [Serializable] public class Output {public string unityVersion;public Result[] cases;}
-    static Result Measure(string label, bool prewarm, bool axes, bool curve, float lifetime = 2, float duration = 1, float speed = 1, float rate = 10, float dt = 1f/60)
+    static Result Measure(string label, bool prewarm, bool axes, bool curve, float lifetime = 2, float duration = 1, float speed = 1, float rate = 10, float dt = 1f/60, bool everyFrame = false)
     {
         var go=new GameObject(label);
         try {
@@ -35,10 +35,10 @@ public static class NatsumeRotationPrewarmProbe
             var samples=new List<Sample>();
             for(int frame=0;frame<=60;frame++){
                 if(frame>0)ps.Simulate(dt,false,false,false);
-                if(frame!=0&&frame!=1&&frame!=30&&frame!=60)continue;
+                if(!everyFrame&&frame!=0&&frame!=1&&frame!=30&&frame!=60)continue;
                 var particles=new ParticleSystem.Particle[ps.particleCount];ps.GetParticles(particles);
                 var customValues=new List<Vector4>(); if(label.Contains("gravity"))ps.GetCustomParticleData(customValues,ParticleSystemCustomData.Custom1);
-                samples.Add(new Sample{custom=customValues.ToArray(),frame=frame,time=ps.time,count=particles.Length,rotations=particles.Select(p=>p.rotation3D).ToArray(),remaining=particles.Select(p=>p.remainingLifetime).ToArray(),lifetimes=particles.Select(p=>p.startLifetime).ToArray(),positions=label.Contains("gravity")?particles.Select(p=>p.position).ToArray():new Vector3[0],velocities=label.Contains("gravity")?particles.Select(p=>p.velocity).ToArray():new Vector3[0]});
+                samples.Add(new Sample{seeds=particles.Select(p=>p.randomSeed).ToArray(),custom=customValues.ToArray(),frame=frame,time=ps.time,count=particles.Length,rotations=particles.Select(p=>p.rotation3D).ToArray(),remaining=particles.Select(p=>p.remainingLifetime).ToArray(),lifetimes=particles.Select(p=>p.startLifetime).ToArray(),positions=label.Contains("gravity")?particles.Select(p=>p.position).ToArray():new Vector3[0],velocities=label.Contains("gravity")?particles.Select(p=>p.velocity).ToArray():new Vector3[0]});
             }
             return new Result{label=label,dt=dt,speed=speed,duration=duration,lifetime=lifetime,rate=rate,lifetimeCurve=label.Contains("lifetime-curve")||label=="prewarm-direct-curve",samples=samples.ToArray()};
         }finally{UnityEngine.Object.DestroyImmediate(go);}
@@ -62,6 +62,10 @@ public static class NatsumeRotationPrewarmProbe
                         results.Add(Measure("prewarm-direct-window-"+duration+"-"+life+"-"+speed+(curve?"-lifetime-curve":""),true,false,false,life,duration,speed,11));
         foreach(float dt in new [] {0.005f,0.025f,0.05f})
             results.Add(Measure("prewarm-direct-window-step-"+dt,true,false,false,0.5f,1,1,17,dt));
+        foreach(float duration in new [] {0.7f,1f,2.3f})
+            foreach(float life in new [] {1.3f,3.7f,4f})
+                foreach(float rate in new [] {7f,17f})
+                    results.Add(Measure("prewarm-direct-boundary-"+duration+"-"+life+"-"+rate+"-lifetime-curve",true,false,false,life,duration,1,rate,1f/60,true));
         string output=Path.GetFullPath(Path.Combine(Application.dataPath,"../../unity-baselines/rotation-prewarm"));Directory.CreateDirectory(output);
         File.WriteAllText(Path.Combine(output,"unity-2022.3.21f1.json"),JsonUtility.ToJson(new Output{unityVersion=Application.unityVersion,cases=results.ToArray()},true));
     }catch(Exception e){Debug.LogException(e);EditorApplication.Exit(1);}}

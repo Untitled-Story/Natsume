@@ -908,6 +908,11 @@ export class Emitter {
       const end = this.time + dt;
       const previousRateTime = this.rateTime;
       this.rateTime = Math.fround(this.rateTime + Math.fround(dt));
+      const rateDt = this.rateTime - previousRateTime;
+      // Keep the live emission clock within a loop: absolute Float32 time drifts
+      // enough to move boundary births to another step and change their initial values.
+      if (!this.warming && this.main.loop && this.rateTime >= this.main.durationSeconds)
+        this.rateTime = Math.fround(this.rateTime % this.main.durationSeconds);
       this.bursts(this.time, end);
       const activeDt = this.main.loop
         ? dt
@@ -924,7 +929,6 @@ export class Emitter {
         0,
         scalar(this.emission?.rateOverTime, phase, random(this.seed, 0, 90)),
       );
-      const rateDt = this.rateTime - previousRateTime;
       const birthDt = this.warming
         ? Math.max(0, this.rateTime - Math.max(previousRateTime, this.warmStart))
         : !this.main.loop && this.rateTime >= this.main.durationSeconds
