@@ -21,7 +21,7 @@ public static class NatsumeBoundaryProbe
     }
     [Serializable] public class Result {
         public string label;
-        public float stepSeconds, duration, burstStart, burstInterval;
+        public float stepSeconds, duration, burstStart, burstInterval, threshold;
         public int burstCycles;
         public bool loop;
         public Sample[] samples;
@@ -113,6 +113,34 @@ public static class NatsumeBoundaryProbe
             return new Result { label = label, samples = samples.ToArray() };
         }
         finally { UnityEngine.Object.DestroyImmediate(ps.gameObject); }
+    }
+    static Result SheetThreshold(float age, Camera camera) {
+        var ps=Create();
+        try {
+            Sheet(ps,0,1); ps.Simulate(0,false,true,false);
+            ps.SetParticles(new [] {new ParticleSystem.Particle {
+                position=Vector3.zero,startSize=1,startLifetime=1,remainingLifetime=1-age,
+                startColor=Color.white,randomSeed=1000
+            }},1);
+            var first=Read(ps,0,.001f,camera,true);
+            ps.Simulate(.001f,false,false,false);
+            return new Result {label="sheet-threshold-"+age,samples=new [] {first,Read(ps,1,.001f,camera,true)}};
+        } finally {UnityEngine.Object.DestroyImmediate(ps.gameObject);}
+    }
+    static Result SheetSearch(float boundary, Camera camera) {
+        var ps=Create();
+        try {
+            Sheet(ps,0,1); ps.Simulate(0,false,true,false);
+            float lo=boundary-.01f,hi=boundary+.01f;
+            for(int i=0;i<22;i++){
+                float age=(lo+hi)/2;
+                ps.SetParticles(new [] {new ParticleSystem.Particle {position=Vector3.zero,startSize=1,startLifetime=1,remainingLifetime=1-age,startColor=Color.white,randomSeed=1000}},1);
+                var sample=Read(ps,0,0,camera,true);
+                int tile=Mathf.RoundToInt(sample.uv[0].x*4)+(2-Mathf.RoundToInt(sample.uv[0].y*2))*4;
+                if(tile>=Mathf.RoundToInt(boundary*8))hi=age;else lo=age;
+            }
+            return new Result {label="sheet-search-"+boundary,threshold=hi,samples=new [] {Read(ps,0,0,camera,true),Read(ps,1,0,camera,true)}};
+        } finally {UnityEngine.Object.DestroyImmediate(ps.gameObject);}
     }
     static void Rate(ParticleSystem ps, float rate, bool loop = false)
     {
@@ -230,6 +258,12 @@ public static class NatsumeBoundaryProbe
                 Manual("sheet-constant-quarter-twice", ps => { Sheet(ps, 0, 2); var s = ps.textureSheetAnimation; s.frameOverTime = 0.25f; }, camera, true),
                 Manual("sheet-nonlinear-twice", ps => { Sheet(ps, 0, 2); var s = ps.textureSheetAnimation; s.frameOverTime = new ParticleSystem.MinMaxCurve(1, new AnimationCurve(new Keyframe(0,0,0,0), new Keyframe(1,1,2,2))); }, camera, true)
             };
+            foreach(float boundary in new [] {.125f,.25f,.375f,.5f,.625f,.75f,.875f})cases.Add(SheetSearch(boundary,camera));
+            foreach(float boundary in new [] {.125f,.25f,.5f,.75f})
+                foreach(float delta in new [] {-.00001f,0f,.00001f})
+                    cases.Add(SheetThreshold(boundary+delta,camera));
+            foreach (float dt in new [] {.12499f,.124999f,.125f,.125001f,.12501f,.249999f,.25f,.250001f})
+                cases.Add(Manual("sheet-edge-"+dt, ps=>Sheet(ps,0,1),camera,true,dt));
             foreach (float dt in new [] {1f/100f, 1f/60f, 1f/40f, 1f/30f})
                 foreach (float duration in new [] {.1f,.2f}) foreach (float start in new [] {0f,.025f}) {
                     string label = "repeat-grid-" + dt + "-" + duration + "-" + start;

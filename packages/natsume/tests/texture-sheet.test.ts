@@ -10,7 +10,10 @@ import { readNativeFixture } from './native-fixture.js';
 import { recordError } from './measurement.js';
 
 const native = JSON.parse(readNativeFixture('unity-compatibility.json')) as {
-  cases: { label: string; samples: { frame: number; uv: { x: number; y: number }[] }[] }[];
+  cases: {
+    label: string;
+    samples: { frame: number; remaining: number[]; uv: { x: number; y: number }[] }[];
+  }[];
 };
 for (const c of native.cases.filter(
   (c) => c.label.startsWith('sheet-') && c.label !== 'sheet-no-uv',
@@ -42,9 +45,11 @@ for (const c of native.cases.filter(
     if (c.label === 'sheet-speed-clamp') sheet.speedRange = new Vec2T(0, 1);
     for (const s of c.samples) {
       const expected = Math.round(s.uv[0]!.x * 4) + (3 - Math.round(s.uv[0]!.y * 3)) * 4;
-      const actual = sheetFrame(sheet, s.frame / 120, 0, 0, s.frame / 60, Math.sqrt(5.25), 0, 0);
+      const seconds = 2 - s.remaining[0]!;
+      const age = seconds;
+      const actual = sheetFrame(sheet, age / 2, 0, 0, seconds, Math.sqrt(5.25), 0, 0);
       recordError('textureSheet.' + c.label.slice(6), actual - expected, 'tiles', String(s.frame));
-      expect(Math.abs(actual - expected)).toBeLessThanOrEqual(1);
+      expect(actual).toBe(expected);
     }
   });
 

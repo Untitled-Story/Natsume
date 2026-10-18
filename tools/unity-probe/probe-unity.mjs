@@ -383,6 +383,7 @@ if (boundaries) {
   if (process.argv.includes('--update-fixtures')) {
     const cases = current.cases.map((sample) => ({
       label: sample.label,
+      ...(sample.label.startsWith('sheet-search-') ? { threshold: sample.threshold } : {}),
       ...(sample.label.startsWith('repeat-grid-')
         ? {
             stepSeconds: sample.stepSeconds,

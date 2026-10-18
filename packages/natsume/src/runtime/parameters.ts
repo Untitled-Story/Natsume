@@ -27,7 +27,8 @@ export function sheetFrame(
 ): number {
   if (!sheet) return 0;
   // Native cycles wrap lifetime before evaluating the curve, including for
-  // constant and nonlinear curves. Preserve the final frame at lifetime end.
+  // constant and nonlinear curves. Native lifetime phase contracts by 0.9999,
+  // delaying exact tile boundaries slightly without delaying a simulation step.
   const cycles = sheet.cycles;
   const progress = Math.min(Math.max(age, 0) * cycles, Math.max(0, cycles - 1e-7));
   const phase =
@@ -40,7 +41,7 @@ export function sheetFrame(
               ((sheet.speedRange?.y ?? 1) - (sheet.speedRange?.x ?? 0) || 1),
           ),
         )
-      : progress % 1;
+      : (progress % 1) * 0.9999;
   const start = Math.max(0, Math.min(1, scalar(sheet.startFrame, 0, startRandom)));
   const singleRow = sheet.animation === SheetAnimation.SingleRow;
   const count = sheet.columns * (singleRow ? 1 : sheet.rows);
