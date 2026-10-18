@@ -216,8 +216,8 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
     );
     check(
       definition.alignment === Alignment.World ||
-        ((definition.mode === RenderMode.Mesh || definition.mode === RenderMode.Billboard) &&
-          definition.alignment === Alignment.View),
+        definition.alignment === Alignment.Local ||
+        definition.alignment === Alignment.View,
       'CAPABILITY',
       'System ' +
         emitter.id +
@@ -579,14 +579,17 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
             across = (uv.y - 0.5) * sx * localScale.x * Math.sign(this.definition.lengthScale);
           wx += -stretchX * along + stretchY * across;
           wy += -stretchY * along - stretchX * across;
-        } else if (this.definition.mode === RenderMode.Mesh) {
+        } else {
+          if (this.definition.alignment === Alignment.Local) {
+            const lx = rotation[0]! * x + rotation[4]! * y + rotation[8]! * z;
+            const ly = rotation[1]! * x + rotation[5]! * y + rotation[9]! * z;
+            z = rotation[2]! * x + rotation[6]! * y + rotation[10]! * z;
+            x = lx;
+            y = ly;
+          }
           wx += rotation[0]! * x + rotation[4]! * y + rotation[8]! * z;
           wy += rotation[1]! * x + rotation[5]! * y + rotation[9]! * z;
           wz += rotation[2]! * x + rotation[6]! * y + rotation[10]! * z;
-        } else {
-          wx += x;
-          wy += y;
-          wz += z;
         }
         const w = matrix[3]! * wx + matrix[7]! * wy + matrix[11]! * wz + matrix[15]!;
         const k = (i * stride + j) * 16;

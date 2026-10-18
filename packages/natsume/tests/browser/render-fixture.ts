@@ -169,6 +169,10 @@ export async function measureParticleGeometry() {
     'mesh-view',
     'mesh-view-node-rotated',
     'mesh-world-node-rotated',
+    'mesh-local-node-rotated',
+    'billboard-local-node-rotated',
+    'billboard-world-node-rotated',
+    'stretch-view',
     'stretch-negative-four',
     'stretch-negative-one',
     'stretch-positive',
@@ -181,7 +185,7 @@ export async function measureParticleGeometry() {
     const scene = new Scene(pack, [1]);
     const mode = label.startsWith('stretch-')
       ? RenderMode.StretchedBillboard
-      : label === 'appearance-blend'
+      : label === 'appearance-blend' || label.startsWith('billboard-')
         ? RenderMode.Billboard
         : RenderMode.Mesh;
     const source = particleSource(label.startsWith('appearance-') ? 'appearance-blend' : '');
@@ -198,7 +202,11 @@ export async function measureParticleGeometry() {
     manualParticle(emitter);
     const definition = structuredClone(original.definition) as ParticleRendererT;
     definition.mode = mode;
-    definition.alignment = label.startsWith('mesh-view') ? Alignment.View : Alignment.World;
+    definition.alignment = label.includes('local-')
+      ? Alignment.Local
+      : label.startsWith('mesh-view') || label === 'stretch-view'
+        ? Alignment.View
+        : Alignment.World;
     definition.cameraVelocityScale = definition.velocityScale = 0;
     definition.lengthScale =
       label === 'stretch-positive' ? 2 : label === 'stretch-negative-one' ? -1 : -4;

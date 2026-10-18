@@ -38,6 +38,8 @@ Limit 测量例：`limit=0.12`、`dampen=0.26`、初速度 `(10,0,0)`。dt=1/60 
 
 Stretch 已测范围：`cameraVelocityScale=0`、`velocityScale=0`、`rotateWithStretchDirection=true`，非 Freeform，沿 +Z 观察，速度位于 XY 平面。
 
+Local 对齐补测覆盖 Mesh / Billboard 与节点绕 Z 旋转 90°，另覆盖 Stretched View；顶点距离回归容差 < 10⁻⁵。
+
 ## 粒子排序
 
 Unity 2022.3.21f1 正交相机下，3 个手动粒子的 BakeMesh 索引顺序对照：
