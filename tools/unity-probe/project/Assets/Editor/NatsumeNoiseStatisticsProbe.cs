@@ -7,7 +7,8 @@ using UnityEngine;
 // Fixed spatial population; compare distributions, never seeded particle paths.
 public static class NatsumeNoiseStatisticsProbe
 {
-    const int Count = 512;
+    static int Count = 512;
+    [Serializable] public class Input { public int count = 512; public Case[] cases; }
     [Serializable] public class Sample { public int frame; public double displacementRms, rotationRms, sizeDeltaRms; }
     [Serializable] public class Case {
         public string label; public uint seed, pointSeed;
@@ -90,6 +91,14 @@ public static class NatsumeNoiseStatisticsProbe
         camera.orthographic = true; camera.orthographicSize = 100; camera.transform.position = new Vector3(0,0,-100);
         try {
             var cases = new List<Case>();
+            var inputPath = Environment.GetEnvironmentVariable("NATSUME_NOISE_STATISTICS_INPUT");
+            if (!string.IsNullOrEmpty(inputPath)) {
+                var input = JsonUtility.FromJson<Input>(File.ReadAllText(inputPath));
+                if (input.count < 1 || input.count > 65536 || input.cases == null || input.cases.Length == 0)
+                    throw new Exception("Invalid Noise statistics input");
+                Count = input.count;
+                foreach (var config in input.cases) cases.Add(Measure(config, camera));
+            } else {
             foreach (uint seed in new uint[] {2, 4294967295})
                 foreach (string label in new [] {"calibrated-high","high","low","medium","scroll","octaves","frequency-zero","rotation","size"})
                     cases.Add(Measure(new Case {
@@ -111,10 +120,13 @@ public static class NatsumeNoiseStatisticsProbe
                 cases.Add(Measure(new Case {label="medium-octaves",seed=seed,pointSeed=seed+1234567,quality=1,octaves=3},camera));
                 cases.Add(Measure(new Case {label="scroll-weak",seed=seed,pointSeed=seed+1234567,scroll=1,strength=0.1f},camera));
             }
+            }
             var output = new Output {unityVersion=Application.unityVersion,cases=cases.ToArray()};
             var directory = Path.GetFullPath(Path.Combine(Application.dataPath,"../../unity-baselines/noise-statistics"));
             Directory.CreateDirectory(directory);
-            File.WriteAllText(Path.Combine(directory,"unity-2022.3.21f1.json"),JsonUtility.ToJson(output,true));
+            var outputPath = Environment.GetEnvironmentVariable("NATSUME_COMPAT_OUTPUT") ?? Path.Combine(directory,"unity-2022.3.21f1.json");
+            Directory.CreateDirectory(Path.GetDirectoryName(outputPath));
+            File.WriteAllText(outputPath,JsonUtility.ToJson(output,true));
         } catch(Exception error) {Debug.LogException(error);EditorApplication.Exit(1);}
         finally { UnityEngine.Object.DestroyImmediate(cameraObject); }
     }

@@ -59,6 +59,11 @@ assert(
     1,
   'Choose one probe mode',
 );
+if (noiseStatistics && process.env.NATSUME_NOISE_STATISTICS_INPUT)
+  assert(
+    !process.argv.includes('--update-fixtures'),
+    'Custom statistics must not replace default fixtures',
+  );
 const editor = process.env.UNITY_EDITOR;
 assert(editor, 'Set UNITY_EDITOR to the Unity executable inside Unity.app/Contents/MacOS/Unity');
 const project = resolve(root, 'data/unity-probe');
@@ -70,7 +75,9 @@ const output = resolve(
     : compatibility
       ? 'compatibility'
       : noiseStatistics
-        ? 'noise-statistics'
+        ? process.env.NATSUME_NOISE_STATISTICS_INPUT
+          ? 'noise-statistics-custom'
+          : 'noise-statistics'
         : customData
           ? 'custom-data'
           : stretch
@@ -225,7 +232,15 @@ if (compatibility) {
   process.exit(0);
 }
 if (noiseStatistics || customData) {
-  assert.equal(current.cases.length, noiseStatistics ? 86 : 8);
+  if (noiseStatistics && process.env.NATSUME_NOISE_STATISTICS_INPUT) {
+    const input = JSON.parse(await readFile(process.env.NATSUME_NOISE_STATISTICS_INPUT, 'utf8'));
+    assert.equal(current.count, input.count);
+    assert.equal(current.cases.length, input.cases.length);
+    assert(
+      !process.argv.includes('--update-fixtures'),
+      'Custom statistics must not replace default fixtures',
+    );
+  } else assert.equal(current.cases.length, noiseStatistics ? 86 : 8);
   if (process.argv.includes('--update-fixtures'))
     await saveJson(
       resolve(

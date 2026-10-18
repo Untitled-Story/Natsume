@@ -41,6 +41,25 @@ pnpm probe:unity --prefab-layout # 原始 prefab 布局
 
 `--noise-fit` 需要先准备 `data/unity-baselines/noise-fit-input.json`。`--prefab-layout` 默认使用相邻 Noa 项目的 `data/scenario/effect/kirakira_01_rip/`；可通过 `NATSUME_PREFAB_SOURCE` 指定其他同结构资源目录。
 
+## 扩展 Noise 采样
+
+`--noise-statistics` 可读取本地 JSON，自定粒子数和参数组合：
+
+```json
+{
+  "count": 2048,
+  "cases": [{ "label": "low", "seed": 31415, "pointSeed": 1265982, "quality": 0, "frequency": 0.1 }]
+}
+```
+
+`count` 范围为 1–65,536；`quality` 为 Low=0、Medium=1、High=2。可另设 `strength`、`damping`、`scroll`、`octaves`、`multiplier` 和 `scale`。各组使用固定空间窗口 `[-16,16)`，记录第 1 / 15 / 60 帧的总体统计。
+
+```sh
+NATSUME_NOISE_STATISTICS_INPUT="$PWD/path/to/input.json" pnpm probe:unity --noise-statistics
+```
+
+自定义结果写入 `data/unity-baselines/noise-statistics-custom/`，保留默认测量；不允许与 `--update-fixtures` 同用。
+
 ## 更新回归数据
 
 核对结果后，显式更新本地数值夹具：
