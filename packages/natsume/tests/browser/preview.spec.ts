@@ -18,8 +18,17 @@ test('uses one stable lifetime-size random factor across axes, matching Unity st
     .locator('#file')
     .setInputFiles(fileURLToPath(new URL('../../../../data/kirakira.noap', import.meta.url)));
   await expect(page.locator('#status')).toHaveText('预览就绪');
+  test.skip(
+    !existsSync(
+      new URL('../../../../data/unity-baselines/fixtures/unity-random.json', import.meta.url),
+    ),
+    'Local Unity fixture is absent',
+  );
   const native = JSON.parse(
-    readFileSync(new URL('../fixtures/unity-random.json', import.meta.url), 'utf8'),
+    readFileSync(
+      new URL('../../../../data/unity-baselines/fixtures/unity-random.json', import.meta.url),
+      'utf8',
+    ),
   );
   for (const seed of [12345, 98765, 24680]) {
     const results = await page.evaluate(
@@ -129,8 +138,17 @@ test('matches Unity Billboard, Mesh and Stretch vertices with UVs', async ({ pag
     async (path) => (await import(`/@fs${path}`)).measureParticleGeometry(),
     new URL('./render-fixture.ts', import.meta.url).pathname,
   );
+  test.skip(
+    !existsSync(
+      new URL('../../../../data/unity-baselines/fixtures/unity-boundaries.json', import.meta.url),
+    ),
+    'Local Unity fixture is absent',
+  );
   const native = JSON.parse(
-    readFileSync(new URL('../fixtures/unity-boundaries.json', import.meta.url), 'utf8'),
+    readFileSync(
+      new URL('../../../../data/unity-baselines/fixtures/unity-boundaries.json', import.meta.url),
+      'utf8',
+    ),
   );
   for (const result of actual) {
     const label = result.label;
@@ -677,8 +695,17 @@ test('orders transparent particles by Unity sort modes', async ({ page }) => {
     async (path) => (await import(`/@fs${path}`)).measureParticleSorting(),
     new URL('./render-fixture.ts', import.meta.url).pathname,
   );
+  test.skip(
+    !existsSync(
+      new URL('../../../../data/unity-baselines/fixtures/unity-sorting.json', import.meta.url),
+    ),
+    'Local Unity fixture is absent',
+  );
   const native = JSON.parse(
-    readFileSync(new URL('../fixtures/unity-sorting.json', import.meta.url), 'utf8'),
+    readFileSync(
+      new URL('../../../../data/unity-baselines/fixtures/unity-sorting.json', import.meta.url),
+      'utf8',
+    ),
   );
   for (const sample of native.cases) {
     const name = sample.label.replace('InFront', 'First');
@@ -697,8 +724,17 @@ test('orders transparent particles by Unity sort modes', async ({ page }) => {
 });
 
 test('matches Unity stretch velocity and moving-view geometry', async ({ page }) => {
+  test.skip(
+    !existsSync(
+      new URL('../../../../data/unity-baselines/fixtures/unity-stretch.json', import.meta.url),
+    ),
+    'Local Unity fixture is absent',
+  );
   const native = JSON.parse(
-    readFileSync(new URL('../fixtures/unity-stretch.json', import.meta.url), 'utf8'),
+    readFileSync(
+      new URL('../../../../data/unity-baselines/fixtures/unity-stretch.json', import.meta.url),
+      'utf8',
+    ),
   );
   const cases = [
     ...native.cases.filter(
@@ -793,8 +829,17 @@ test('matches Unity renderer pivot and deterministic flip geometry', async ({ pa
     .locator('#file')
     .setInputFiles(fileURLToPath(new URL('../../../../data/kirakira.noap', import.meta.url)));
   await expect(page.locator('#status')).toHaveText('预览就绪');
+  test.skip(
+    !existsSync(
+      new URL('../../../../data/unity-baselines/fixtures/unity-boundaries.json', import.meta.url),
+    ),
+    'Local Unity fixture is absent',
+  );
   const native = JSON.parse(
-    readFileSync(new URL('../fixtures/unity-boundaries.json', import.meta.url), 'utf8'),
+    readFileSync(
+      new URL('../../../../data/unity-baselines/fixtures/unity-boundaries.json', import.meta.url),
+      'utf8',
+    ),
   );
   const actual = await page.evaluate(
     async ({ path, labels }) => (await import(`/@fs${path}`)).measureParticleGeometry(labels),

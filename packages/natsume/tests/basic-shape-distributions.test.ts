@@ -1,5 +1,5 @@
+import { readNativeFixture } from './native-fixture.js';
 import { recordError } from './measurement.js';
-import { readFileSync } from 'node:fs';
 import { expect, it } from 'vitest';
 import { sampleShape, validateShape } from '../src/runtime/shapes.js';
 import { constant } from './particle-fixtures.js';
@@ -27,9 +27,7 @@ interface NativeCase {
   position: Stats;
   velocity: Stats;
 }
-const native: { cases: NativeCase[] } = JSON.parse(
-  readFileSync(new URL('./fixtures/unity-basic-shapes.json', import.meta.url), 'utf8'),
-);
+const native: { cases: NativeCase[] } = JSON.parse(readNativeFixture('unity-basic-shapes.json'));
 for (const c of native.cases.filter((c) => !c.align))
   it('matches native basic shape distribution ' + c.label, () => {
     const s = new ShapeModuleT();

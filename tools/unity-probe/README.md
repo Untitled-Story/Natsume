@@ -41,9 +41,10 @@ pnpm probe:unity --prefab-layout # 原始 prefab 布局
 
 ## 更新回归数据
 
-核对结果后，显式更新可提交的数值夹具：
+核对结果后，显式更新本地数值夹具：
 
 ```sh
+pnpm probe:unity --update-fixtures
 pnpm probe:unity --boundaries --update-fixtures
 pnpm probe:unity --random --update-fixtures
 pnpm probe:unity --shape --update-fixtures
@@ -60,7 +61,7 @@ pnpm probe:unity --stretch --update-fixtures
 pnpm test
 ```
 
-夹具位于 `packages/natsume/tests/fixtures/`，不包含原始游戏素材。详细测量结论、已测范围和近似差异见 [MEASUREMENTS.md](MEASUREMENTS.md)。
+夹具位于 `data/unity-baselines/fixtures/`，由 Git 忽略；缺少文件时，对应的 Unity 对照测试会跳过。详细测量结论、已测范围和近似差异见 [MEASUREMENTS.md](MEASUREMENTS.md)。
 
 ## 误差汇总
 
@@ -68,6 +69,6 @@ pnpm test
 node tools/unity-probe/measure.mjs --refresh-unity
 ```
 
-依次刷新全部数值探针（不包含原始 prefab 布局和外部拟合输入），运行单元与浏览器对比，将最大绝对差、误差 RMS、比较次数与输入哈希写入 `measurements.json`。已测输入数值相同时保留夹具文件内容，避免纯格式变动。省略 `--refresh-unity` 可复用本地原生结果。
+依次刷新全部数值探针（不包含原始 prefab 布局和外部拟合输入），运行单元与浏览器对比，将最大绝对差、误差 RMS、比较次数与输入哈希写入 `data/unity-baselines/measurements.json`。已测输入数值相同时保留夹具文件内容，避免纯格式变动。省略 `--refresh-unity` 可复用本地原生结果。
 
 完整浏览器测量需要本地 `data/kirakira.noap`；其他游戏样本存在时一并运行功能回归。原生完整输出和逐项误差记录位于 `data/unity-baselines/`。汇总区分 Unity 数值对照与解析像素对照；已知近似的测量不等于严格一致性验收。

@@ -78,6 +78,11 @@ for (const mode of modes) {
   });
 }
 await writeFile(events, '');
+for (const mode of modes) {
+  const name = mode === 'rect-layout' ? 'layout' : mode || 'curves';
+  const path = resolve(directory, 'fixtures', `unity-${name}.json`);
+  assert((await stat(path).catch(() => null))?.isFile(), `Missing Unity fixture: ${path}`);
+}
 const env = { ...process.env, NATSUME_MEASUREMENTS: events };
 await run('pnpm', ['test'], env);
 await run('pnpm', ['exec', 'playwright', 'test'], env);
@@ -119,9 +124,9 @@ assert(
   'Browser comparisons were skipped',
 );
 const fixtures = [];
-for (const file of (await readdir(resolve(root, 'packages/natsume/tests/fixtures'))).sort()) {
+for (const file of (await readdir(resolve(root, 'data/unity-baselines/fixtures'))).sort()) {
   if (!file.startsWith('unity-') || !file.endsWith('.json')) continue;
-  const path = resolve(root, 'packages/natsume/tests/fixtures', file);
+  const path = resolve(root, 'data/unity-baselines/fixtures', file);
   fixtures.push({
     file: relative(root, path),
     sha256: createHash('sha256')
@@ -142,7 +147,7 @@ const report = {
     .sort((a, b) => a.metric.localeCompare(b.metric))
     .map(({ sumSquares, ...item }) => ({ ...item, rms: Math.sqrt(sumSquares / item.samples) })),
 };
-await writeFile(resolve(tool, 'measurements.json'), JSON.stringify(report, null, 2) + '\n');
+await writeFile(resolve(directory, 'measurements.json'), JSON.stringify(report, null, 2) + '\n');
 console.log(
-  `Recorded ${entries.length} scalar errors in ${report.metrics.length} metrics; ${relative(root, resolve(tool, 'measurements.json'))}`,
+  `Recorded ${entries.length} scalar errors in ${report.metrics.length} metrics; ${relative(root, resolve(directory, 'measurements.json'))}`,
 );

@@ -1,5 +1,5 @@
+import { readNativeFixture } from './native-fixture.js';
 import { recordError } from './measurement.js';
-import { readFileSync } from 'node:fs';
 import { expect, it } from 'vitest';
 import { sampleShape } from '../src/runtime/shapes.js';
 import { ShapeModuleT } from '../src/format/generated/noa/ir/shape-module.js';
@@ -16,9 +16,7 @@ import { ParticleModuleT } from '../src/format/generated/noa/ir/particle-module.
 import { ParticleModuleData as M } from '../src/format/generated/noa/ir/particle-module-data.js';
 import { EmissionModuleT } from '../src/format/generated/noa/ir/emission-module.js';
 import { BurstT } from '../src/format/generated/noa/ir/burst.js';
-const native = JSON.parse(
-  readFileSync(new URL('./fixtures/unity-sweeps.json', import.meta.url), 'utf8'),
-) as {
+const native = JSON.parse(readNativeFixture('unity-sweeps.json')) as {
   cases: {
     label: string;
     samples: {

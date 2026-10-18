@@ -1,10 +1,10 @@
 # Unity 行为对照
 
-复测时间：**2026-10-18 06:08:46 UTC**。Unity **2022.3.21f1**，运行模拟采用 `1/60 s`；Shape 扫描另含 `0.25 s` 与端点邻域步进。浏览器为 Chromium / WebGL2。原生数据覆盖 14 种探针，282 项单元测试与 20 项浏览器测试通过。
+复测时间：**2026-10-18 07:27:34 UTC**。Unity **2022.3.21f1**，运行模拟采用 `1/60 s`；Shape 扫描另含 `0.25 s` 与端点邻域步进。浏览器为 Chromium / WebGL2。原生数据覆盖 14 种探针，282 项单元测试与 20 项浏览器测试通过。
 
 下表为本次采样的**最大实测绝对差**，数值四舍五入，不再以测试容差代替误差。`0` 仅表示已测输入相同；位置 / 速度使用场景单位，角度为 rad。随机分布比较统计量，不要求同种子逐粒子一致。部分已知差异仅作记录；Noise 统计与 Pivot 几何有数值回归边界，测试通过不代表所有参数组合一致。
 
-完整数值、比较次数、误差 RMS、最大差对应案例和输入 SHA-256 见 [measurements.json](measurements.json)。本次记录 7,194 个标量比较、222 项指标；不同单位不合并为整体百分比。
+完整数值、比较次数、误差 RMS、最大差对应案例和输入 SHA-256 见 `data/unity-baselines/measurements.json`。本次记录 7,194 个标量比较、222 项指标；不同单位不合并为整体百分比。
 
 ## 参数、运动与生命周期
 
@@ -129,7 +129,7 @@ Constant Remap ±0.25 与零 Strength 的位置分量差为 **0**。上述范围
 
 ## 数据与复测
 
-原生夹具位于 [tests/fixtures](../../packages/natsume/tests/fixtures/)：`unity-curves`、`unity-boundaries`、`unity-random`、`unity-shape`、`unity-basic-shapes`、`unity-sweeps`、`unity-spaces`、`unity-rotation-prewarm`、`unity-noise-options`、`unity-noise-statistics`、`unity-custom-data`、`unity-sorting`、`unity-stretch`、`unity-layout`。完整数值范围与对应输入摘要见 [measurements.json](measurements.json)。
+原生夹具位于 `data/unity-baselines/fixtures/`：`unity-curves`、`unity-boundaries`、`unity-random`、`unity-shape`、`unity-basic-shapes`、`unity-sweeps`、`unity-spaces`、`unity-rotation-prewarm`、`unity-noise-options`、`unity-noise-statistics`、`unity-custom-data`、`unity-sorting`、`unity-stretch`、`unity-layout`。完整数值范围与对应输入摘要见 `data/unity-baselines/measurements.json`。
 
 ```sh
 # 刷新全部原生测量后，运行单元 / 浏览器对比并汇总误差

@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readNativeFixture } from './native-fixture.js';
 import { recordError } from './measurement.js';
 import { expect, it } from 'vitest';
 import { Emitter } from '../src/runtime/emitter.js';
@@ -40,9 +40,7 @@ it('evaluates both custom streams with vector and authored HDR color values', ()
   expect(e.customData![7]).toBe(0.5);
 });
 
-const native = JSON.parse(
-  readFileSync(new URL('./fixtures/unity-custom-data.json', import.meta.url), 'utf8'),
-) as {
+const native = JSON.parse(readNativeFixture('unity-custom-data.json')) as {
   cases: {
     components: number;
     samples: {

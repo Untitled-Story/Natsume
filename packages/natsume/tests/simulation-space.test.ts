@@ -1,5 +1,5 @@
+import { readNativeFixture } from './native-fixture.js';
 import { recordError } from './measurement.js';
-import { readFileSync } from 'node:fs';
 import { expect, it } from 'vitest';
 import { vec3 } from 'gl-matrix';
 import { Emitter } from '../src/runtime/emitter.js';
@@ -14,9 +14,7 @@ import { EmissionModuleT } from '../src/format/generated/noa/ir/emission-module.
 import { VelocityModuleT } from '../src/format/generated/noa/ir/velocity-module.js';
 import { BurstT } from '../src/format/generated/noa/ir/burst.js';
 
-const native = JSON.parse(
-  readFileSync(new URL('./fixtures/unity-spaces.json', import.meta.url), 'utf8'),
-) as {
+const native = JSON.parse(readNativeFixture('unity-spaces.json')) as {
   cases: {
     label: string;
     samples: {

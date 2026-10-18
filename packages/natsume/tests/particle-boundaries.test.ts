@@ -1,5 +1,5 @@
+import { readNativeFixture, hasNativeFixture } from './native-fixture.js';
 import { recordError } from './measurement.js';
-import { readFileSync } from 'node:fs';
 import { beforeAll, expect, it } from 'vitest';
 import { loadPack } from '../src/loader/load.js';
 import { Scene } from '../src/runtime/scene.js';
@@ -31,7 +31,7 @@ interface NativeSample {
   uv: { x: number; y: number }[];
 }
 const native: { cases: { label: string; samples: NativeSample[] }[] } = JSON.parse(
-  readFileSync(new URL('./fixtures/unity-boundaries.json', import.meta.url), 'utf8'),
+  readNativeFixture('unity-boundaries.json'),
 );
 let scene: Scene;
 beforeAll(async () => {
@@ -73,32 +73,35 @@ it('applies host gravity through the authored multiplier', () => {
 });
 
 for (const label of ['burst-zero', 'burst-loop', 'burst-end']) {
-  it(`matches native ${label} counts at fixed-step boundaries`, () => {
-    const source = particleSource();
-    source.main!.durationSeconds = Math.fround(0.1);
-    source.main!.loop = label === 'burst-loop' || label === 'burst-end';
-    const burst =
-      label === 'burst-repeat'
-        ? new BurstT(Math.fround(0.025), constant(2), 4, Math.fround(0.02))
-        : new BurstT(label === 'burst-end' ? Math.fround(0.1) : 0, constant(3));
-    source.modules.push(
-      new ParticleModuleT(M.EmissionModule, new EmissionModuleT(null, null, [burst])),
-    );
-    const emitter = new Emitter(3, scene.nodes.get(1)!, source, true, 1, []);
-    emitter.sync();
-    const fixture = native.cases.find((c) => c.label === label)!;
-    // Natsume intentionally exposes the zero-time burst immediately on play.
-    for (let frame = 1; frame <= 18; frame++) {
-      emitter.step(1 / 60);
-      recordError(
-        'emission.burst.count',
-        emitter.count - fixture.samples.find((s) => s.frame === frame)!.count,
-        'particles',
-        label + '/' + frame,
+  it.skipIf(!hasNativeFixture('unity-boundaries.json'))(
+    `matches native ${label} counts at fixed-step boundaries`,
+    () => {
+      const source = particleSource();
+      source.main!.durationSeconds = Math.fround(0.1);
+      source.main!.loop = label === 'burst-loop' || label === 'burst-end';
+      const burst =
+        label === 'burst-repeat'
+          ? new BurstT(Math.fround(0.025), constant(2), 4, Math.fround(0.02))
+          : new BurstT(label === 'burst-end' ? Math.fround(0.1) : 0, constant(3));
+      source.modules.push(
+        new ParticleModuleT(M.EmissionModule, new EmissionModuleT(null, null, [burst])),
       );
-      expect(emitter.count).toBe(fixture.samples.find((s) => s.frame === frame)!.count);
-    }
-  });
+      const emitter = new Emitter(3, scene.nodes.get(1)!, source, true, 1, []);
+      emitter.sync();
+      const fixture = native.cases.find((c) => c.label === label)!;
+      // Natsume intentionally exposes the zero-time burst immediately on play.
+      for (let frame = 1; frame <= 18; frame++) {
+        emitter.step(1 / 60);
+        recordError(
+          'emission.burst.count',
+          emitter.count - fixture.samples.find((s) => s.frame === frame)!.count,
+          'particles',
+          label + '/' + frame,
+        );
+        expect(emitter.count).toBe(fixture.samples.find((s) => s.frame === frame)!.count);
+      }
+    },
+  );
 }
 
 for (const label of [
@@ -107,45 +110,48 @@ for (const label of [
   'burst-infinite-delayed',
   'burst-finite-zero-interval',
 ]) {
-  it('loads and matches native ' + label + ' across cycle boundaries', async () => {
-    const source = particleSource();
-    source.main!.durationSeconds = Math.fround(label.includes('zero-interval') ? 0.1 : 0.2);
-    source.main!.color = new ColorParameterT();
-    source.main!.color.colorMax = new ColorT(1, 1, 1, 1);
-    source.main!.loop = label.endsWith('-loop');
-    source.modules.push(
-      new ParticleModuleT(
-        M.EmissionModule,
-        new EmissionModuleT(null, null, [
-          new BurstT(
-            label.endsWith('-delayed') ? Math.fround(0.025) : 0,
-            constant(2),
-            label.includes('finite-zero') ? 3 : 0,
-            label.includes('zero-interval') ? 0 : Math.fround(0.05),
-          ),
-        ]),
-      ),
-    );
-    const document = minimalDocument();
-    document.colorContext = new ColorContextT(1);
-    document.features = [new FeatureRequirementT('color.authored', 1, true)];
-    document.components = [new ComponentT(3, 1, true, ComponentData.ParticleSystem, source)];
-    const pack = await loadPack(await archive(encode(document)));
-    pack.dispose();
-    const emitter = new Emitter(3, scene.nodes.get(1)!, source, true, 1, []);
-    emitter.sync();
-    const fixture = native.cases.find((c) => c.label === label)!;
-    for (let frame = 1; frame <= 18; frame++) {
-      emitter.step(1 / 60);
-      recordError(
-        'emission.burst.count',
-        emitter.count - fixture.samples.find((s) => s.frame === frame)!.count,
-        'particles',
-        label + '/' + frame,
+  it.skipIf(!hasNativeFixture('unity-boundaries.json'))(
+    'loads and matches native ' + label + ' across cycle boundaries',
+    async () => {
+      const source = particleSource();
+      source.main!.durationSeconds = Math.fround(label.includes('zero-interval') ? 0.1 : 0.2);
+      source.main!.color = new ColorParameterT();
+      source.main!.color.colorMax = new ColorT(1, 1, 1, 1);
+      source.main!.loop = label.endsWith('-loop');
+      source.modules.push(
+        new ParticleModuleT(
+          M.EmissionModule,
+          new EmissionModuleT(null, null, [
+            new BurstT(
+              label.endsWith('-delayed') ? Math.fround(0.025) : 0,
+              constant(2),
+              label.includes('finite-zero') ? 3 : 0,
+              label.includes('zero-interval') ? 0 : Math.fround(0.05),
+            ),
+          ]),
+        ),
       );
-      expect(emitter.count).toBe(fixture.samples.find((s) => s.frame === frame)!.count);
-    }
-  });
+      const document = minimalDocument();
+      document.colorContext = new ColorContextT(1);
+      document.features = [new FeatureRequirementT('color.authored', 1, true)];
+      document.components = [new ComponentT(3, 1, true, ComponentData.ParticleSystem, source)];
+      const pack = await loadPack(await archive(encode(document)));
+      pack.dispose();
+      const emitter = new Emitter(3, scene.nodes.get(1)!, source, true, 1, []);
+      emitter.sync();
+      const fixture = native.cases.find((c) => c.label === label)!;
+      for (let frame = 1; frame <= 18; frame++) {
+        emitter.step(1 / 60);
+        recordError(
+          'emission.burst.count',
+          emitter.count - fixture.samples.find((s) => s.frame === frame)!.count,
+          'particles',
+          label + '/' + frame,
+        );
+        expect(emitter.count).toBe(fixture.samples.find((s) => s.frame === frame)!.count);
+      }
+    },
+  );
 }
 
 it('rejects unbounded burst work and infinite bursts without a positive interval', () => {
@@ -160,34 +166,37 @@ it('rejects unbounded burst work and infinite bursts without a positive interval
   expect(create).toThrow(/Too many burst repetitions/);
 });
 
-it('keeps short repeated bursts bounded without copying native early cutoff', () => {
-  const source = particleSource();
-  source.main!.durationSeconds = Math.fround(0.1);
-  source.modules.push(
-    new ParticleModuleT(
-      M.EmissionModule,
-      new EmissionModuleT(null, null, [
-        new BurstT(Math.fround(0.025), constant(2), 4, Math.fround(0.02)),
-      ]),
-    ),
-  );
-  const emitter = new Emitter(3, scene.nodes.get(1)!, source, true, 1, []);
-  emitter.sync();
-  const fixture = native.cases.find((c) => c.label === 'burst-repeat')!;
-  for (let frame = 1; frame <= 18; frame++) {
-    emitter.step(1 / 60);
-    const count = fixture.samples.find((s) => s.frame === frame)!.count;
-    // Measured native short-duration cutoff drops the last two-particle burst.
-    recordError(
-      'emission.shortBurst.count',
-      emitter.count - count,
-      'particles',
-      'burst-repeat/' + frame,
+it.skipIf(!hasNativeFixture('unity-boundaries.json'))(
+  'keeps short repeated bursts bounded without copying native early cutoff',
+  () => {
+    const source = particleSource();
+    source.main!.durationSeconds = Math.fround(0.1);
+    source.modules.push(
+      new ParticleModuleT(
+        M.EmissionModule,
+        new EmissionModuleT(null, null, [
+          new BurstT(Math.fround(0.025), constant(2), 4, Math.fround(0.02)),
+        ]),
+      ),
     );
-    expect(Math.abs(emitter.count - count)).toBeLessThanOrEqual(2);
-  }
-  expect(emitter.count).toBe(8);
-});
+    const emitter = new Emitter(3, scene.nodes.get(1)!, source, true, 1, []);
+    emitter.sync();
+    const fixture = native.cases.find((c) => c.label === 'burst-repeat')!;
+    for (let frame = 1; frame <= 18; frame++) {
+      emitter.step(1 / 60);
+      const count = fixture.samples.find((s) => s.frame === frame)!.count;
+      // Measured native short-duration cutoff drops the last two-particle burst.
+      recordError(
+        'emission.shortBurst.count',
+        emitter.count - count,
+        'particles',
+        'burst-repeat/' + frame,
+      );
+      expect(Math.abs(emitter.count - count)).toBeLessThanOrEqual(2);
+    }
+    expect(emitter.count).toBe(8);
+  },
+);
 
 it('keeps burst boundaries single, includes duration-end and resets loop curve phase', () => {
   const source = particleSource();

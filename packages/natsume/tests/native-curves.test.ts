@@ -1,17 +1,15 @@
-import { readFileSync } from 'node:fs';
+import { readNativeFixture, hasNativeFixture } from './native-fixture.js';
 import { expect, it } from 'vitest';
 import { curve } from '../src/runtime/parameters.js';
 import { ScalarCurveT } from '../src/format/generated/noa/ir/scalar-curve.js';
 import { FloatKeyT } from '../src/format/generated/noa/ir/float-key.js';
 import { WrapMode } from '../src/format/generated/noa/ir/wrap-mode.js';
 import { recordError } from './measurement.js';
-const native = JSON.parse(
-  readFileSync(new URL('./fixtures/unity-curves.json', import.meta.url), 'utf8'),
-) as {
+const native = JSON.parse(readNativeFixture('unity-curves.json')) as {
   cases: { label: string; samples: { time: number; value: number }[] }[];
 };
 for (const label of ['raw-2', 'public-1', 'public-2', 'public-4', 'public-8'])
-  it('matches Unity curve ' + label, () => {
+  it.skipIf(!hasNativeFixture('unity-curves.json'))('matches Unity curve ' + label, () => {
     const c = new ScalarCurveT();
     c.preWrap = c.postWrap =
       label === 'raw-2'

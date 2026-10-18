@@ -1,6 +1,6 @@
+import { readNativeFixture } from './native-fixture.js';
 import { recordError } from './measurement.js';
 import { beforeAll, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
 import { Emitter } from '../src/runtime/emitter.js';
 import { Scene } from '../src/runtime/scene.js';
 import { loadPack } from '../src/loader/load.js';
@@ -129,7 +129,7 @@ interface Stats {
 }
 const native: {
   cases: { seed: number; thickness: number; arc: number; count: number; distributions: Stats[] }[];
-} = JSON.parse(readFileSync(new URL('./fixtures/unity-random.json', import.meta.url), 'utf8'));
+} = JSON.parse(readNativeFixture('unity-random.json'));
 for (const fixture of native.cases) {
   it(
     'matches native distribution summaries ' +

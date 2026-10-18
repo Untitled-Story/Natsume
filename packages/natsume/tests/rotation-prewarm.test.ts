@@ -1,5 +1,5 @@
+import { readNativeFixture } from './native-fixture.js';
 import { recordError } from './measurement.js';
-import { readFileSync } from 'node:fs';
 import { expect, it } from 'vitest';
 import { Emitter } from '../src/runtime/emitter.js';
 import { Scene } from '../src/runtime/scene.js';
@@ -22,7 +22,7 @@ interface NativeCase {
   }[];
 }
 const native: { cases: NativeCase[] } = JSON.parse(
-  readFileSync(new URL('./fixtures/unity-rotation-prewarm.json', import.meta.url), 'utf8'),
+  readNativeFixture('unity-rotation-prewarm.json'),
 );
 for (const c of native.cases.filter((c) => c.label !== 'prewarm'))
   it(

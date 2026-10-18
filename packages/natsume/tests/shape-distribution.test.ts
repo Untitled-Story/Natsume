@@ -1,5 +1,5 @@
+import { readNativeFixture } from './native-fixture.js';
 import { recordError } from './measurement.js';
-import { readFileSync } from 'node:fs';
 import { beforeAll, expect, it } from 'vitest';
 import { Emitter } from '../src/runtime/emitter.js';
 import { Scene } from '../src/runtime/scene.js';
@@ -28,9 +28,7 @@ interface NativeCase {
   radiusSquaredMean: number;
   radiusSquaredVariance: number;
 }
-const native: { cases: NativeCase[] } = JSON.parse(
-  readFileSync(new URL('./fixtures/unity-shape.json', import.meta.url), 'utf8'),
-);
+const native: { cases: NativeCase[] } = JSON.parse(readNativeFixture('unity-shape.json'));
 let scene: Scene;
 beforeAll(async () => {
   scene = new Scene(await loadPack(await archive()), [1]);

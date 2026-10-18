@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readNativeFixture } from './native-fixture.js';
 import { expect, it } from 'vitest';
 import { Emitter } from '../src/runtime/emitter.js';
 import { Scene } from '../src/runtime/scene.js';
@@ -16,9 +16,7 @@ interface Sample {
   rotationRms: number;
   sizeDeltaRms: number;
 }
-const native = JSON.parse(
-  readFileSync(new URL('./fixtures/unity-noise-statistics.json', import.meta.url), 'utf8'),
-) as {
+const native = JSON.parse(readNativeFixture('unity-noise-statistics.json')) as {
   count: number;
   pointSeed: number;
   cases: {

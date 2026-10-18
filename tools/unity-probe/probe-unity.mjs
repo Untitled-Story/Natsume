@@ -14,6 +14,7 @@ async function saveJson(path, contents) {
   } catch (error) {
     if (error.code !== 'ENOENT' && !(error instanceof SyntaxError)) throw error;
   }
+  await mkdir(dirname(path), { recursive: true });
   await writeFile(path, contents);
 }
 
@@ -189,7 +190,7 @@ if (noiseStatistics || customData) {
     await saveJson(
       resolve(
         root,
-        `packages/natsume/tests/fixtures/unity-${noiseStatistics ? 'noise-statistics' : 'custom-data'}.json`,
+        `data/unity-baselines/fixtures/unity-${noiseStatistics ? 'noise-statistics' : 'custom-data'}.json`,
       ),
       JSON.stringify(current, null, 2) + '\n',
     );
@@ -206,7 +207,7 @@ if (stretch) {
   );
   if (process.argv.includes('--update-fixtures'))
     await saveJson(
-      resolve(root, 'packages/natsume/tests/fixtures/unity-stretch.json'),
+      resolve(root, 'data/unity-baselines/fixtures/unity-stretch.json'),
       JSON.stringify(current, null, 2) + '\n',
     );
   console.log(`Stretch measurements: ${current.cases.length} cases, ${baseline}`);
@@ -216,7 +217,7 @@ if (rectLayout) {
   assert.equal(current.rootSize.x, -100);
   if (process.argv.includes('--update-fixtures'))
     await saveJson(
-      resolve(root, 'packages/natsume/tests/fixtures/unity-layout.json'),
+      resolve(root, 'data/unity-baselines/fixtures/unity-layout.json'),
       JSON.stringify(current, null, 2) + '\n',
     );
   console.log(`Signed RectTransform measurement: ${baseline}`);
@@ -226,7 +227,7 @@ if (noiseOptions) {
   assert.equal(current.cases.length, 11);
   if (process.argv.includes('--update-fixtures'))
     await saveJson(
-      resolve(root, 'packages/natsume/tests/fixtures/unity-noise-options.json'),
+      resolve(root, 'data/unity-baselines/fixtures/unity-noise-options.json'),
       JSON.stringify(current, null, 2) + '\n',
     );
   console.log(`Noise parameter measurements: ${current.cases.length} cases, ${baseline}`);
@@ -236,7 +237,7 @@ if (sweeps) {
   assert.equal(current.cases.length, 11);
   if (process.argv.includes('--update-fixtures'))
     await saveJson(
-      resolve(root, 'packages/natsume/tests/fixtures/unity-sweeps.json'),
+      resolve(root, 'data/unity-baselines/fixtures/unity-sweeps.json'),
       JSON.stringify(current, null, 2) + '\n',
     );
   console.log(`Shape sweep measurements: ${current.cases.length} cases, ${baseline}`);
@@ -246,7 +247,7 @@ if (spaces) {
   assert.equal(current.cases.length, 9);
   if (process.argv.includes('--update-fixtures'))
     await saveJson(
-      resolve(root, 'packages/natsume/tests/fixtures/unity-spaces.json'),
+      resolve(root, 'data/unity-baselines/fixtures/unity-spaces.json'),
       JSON.stringify(current, null, 2) + '\n',
     );
   console.log(`Simulation space measurements: ${current.cases.length} cases, ${baseline}`);
@@ -257,7 +258,7 @@ if (sorting) {
   assert(current.cases.every((c) => c.order.length === 3));
   if (process.argv.includes('--update-fixtures'))
     await saveJson(
-      resolve(root, 'packages/natsume/tests/fixtures/unity-sorting.json'),
+      resolve(root, 'data/unity-baselines/fixtures/unity-sorting.json'),
       JSON.stringify(current, null, 2) + '\n',
     );
   console.log(`Particle sorting: ${current.cases.length} cases, ${baseline}`);
@@ -269,7 +270,7 @@ if (basicShapes || rotationPrewarm) {
     await saveJson(
       resolve(
         root,
-        `packages/natsume/tests/fixtures/unity-${basicShapes ? 'basic-shapes' : 'rotation-prewarm'}.json`,
+        `data/unity-baselines/fixtures/unity-${basicShapes ? 'basic-shapes' : 'rotation-prewarm'}.json`,
       ),
       JSON.stringify(current, null, 2) + '\n',
     );
@@ -309,7 +310,7 @@ if (shape) {
       };
     });
     await saveJson(
-      resolve(root, 'packages/natsume/tests/fixtures/unity-shape.json'),
+      resolve(root, 'data/unity-baselines/fixtures/unity-shape.json'),
       JSON.stringify({ unityVersion: current.unityVersion, cases }, null, 2) +
         String.fromCharCode(10),
     );
@@ -321,13 +322,13 @@ if (distributions) {
   assert.equal(current.cases.length, 14);
   assert(current.cases.every((c) => c.count === 16384 && c.distributions.length === 17));
   if (process.argv.includes('--update-fixtures')) {
-    await mkdir(resolve(root, 'packages/natsume/tests/fixtures'), { recursive: true });
+    await mkdir(resolve(root, 'data/unity-baselines/fixtures'), { recursive: true });
     const cases = current.cases.map((c) => ({
       ...c,
       correlations: c.correlations.filter((r) => Math.abs(r.value) > 0.1),
     }));
     await saveJson(
-      resolve(root, 'packages/natsume/tests/fixtures/unity-random.json'),
+      resolve(root, 'data/unity-baselines/fixtures/unity-random.json'),
       JSON.stringify({ unityVersion: current.unityVersion, cases }, null, 2) +
         String.fromCharCode(10),
     );
@@ -365,9 +366,9 @@ if (boundaries) {
               : { frame: s.frame, count: s.count },
         ),
     }));
-    await mkdir(resolve(root, 'packages/natsume/tests/fixtures'), { recursive: true });
+    await mkdir(resolve(root, 'data/unity-baselines/fixtures'), { recursive: true });
     await saveJson(
-      resolve(root, 'packages/natsume/tests/fixtures/unity-boundaries.json'),
+      resolve(root, 'data/unity-baselines/fixtures/unity-boundaries.json'),
       `${JSON.stringify(
         {
           unityVersion: current.unityVersion,
@@ -399,7 +400,7 @@ if (fitting) {
 }
 if (process.argv.includes('--update-fixtures'))
   await saveJson(
-    resolve(root, 'packages/natsume/tests/fixtures/unity-curves.json'),
+    resolve(root, 'data/unity-baselines/fixtures/unity-curves.json'),
     JSON.stringify({ unityVersion: current.unityVersion, cases: current.curves }, null, 2) + '\n',
   );
 const report = verifyUnityBaseline(current);
