@@ -78,3 +78,53 @@ test('reports malformed local input in the console', async ({ page }) => {
   await expect(page.locator('#status')).toHaveText('无法预览，请查看控制台');
   await expect(page.locator('#play')).toBeDisabled();
 });
+
+test('provides editable world gravity in the preview host', async ({ page }) => {
+  test.skip(!existsSync(sample), 'Local Noa sample is not distributed');
+  await page.goto('/');
+  await expect(page.locator('#gravity-y')).toBeDisabled();
+  await page.locator('#file').setInputFiles(sample);
+  await expect(page.locator('#status')).toHaveText('预览就绪');
+  await page.locator('#pause').click();
+  await page.locator('#gravity-y').fill('3');
+  await page.locator('#gravity-y').press('Tab');
+  await expect(page.locator('#console')).toContainText('世界重力 (0, 3, 0)');
+  const currentGravity = () =>
+    page.evaluate(async () => {
+      const path = '/src/preview.ts';
+      const { effect } = (await import(path)).getPreview();
+      return [...effect.simulation.emitters.values()].map((e: { gravity: number[] }) =>
+        Array.from(e.gravity),
+      );
+    });
+  expect(
+    (await currentGravity()).every((g: number[]) => g[0] === 0 && g[1] === 3 && g[2] === 0),
+  ).toBe(true);
+  await page.locator('#gravity-y').fill('');
+  await page.locator('#gravity-y').press('Tab');
+  await expect(page.locator('#gravity-y')).toHaveValue('3');
+  await expect(page.locator('#console')).toContainText('重力 Y 必须是有限数字');
+  expect((await currentGravity()).every((g: number[]) => g[1] === 3)).toBe(true);
+  await page.locator('#file').setInputFiles(sample);
+  await expect(page.locator('#status')).toHaveText('预览就绪');
+  expect((await currentGravity()).every((g: number[]) => g[1] === 3)).toBe(true);
+});
+
+test('previews a package that requires host gravity', async ({ page }) => {
+  const local = new URL('../../../../data/minori.noap', import.meta.url);
+  test.skip(!existsSync(local), 'Local Noa sample is not distributed');
+  await page.goto('/');
+  await page.locator('#file').setInputFiles(fileURLToPath(local));
+  await expect(page.locator('#status')).toHaveText('预览就绪');
+  const result = await page.evaluate(async () => {
+    const path = '/src/preview.ts';
+    const { app, effect } = (await import(path)).getPreview();
+    app.ticker.stop();
+    effect.restart();
+    for (let i = 0; i < 60; i++) effect.update(1 / 60);
+    app.render();
+    return { particles: effect.particleCount, glError: app.renderer.gl.getError() };
+  });
+  expect(result.particles).toBeGreaterThan(0);
+  expect(result.glError).toBe(0);
+});

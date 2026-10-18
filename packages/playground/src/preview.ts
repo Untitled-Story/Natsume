@@ -8,10 +8,12 @@ extensions.add(NatsumePlugin);
 
 const viewport = document.getElementById('viewport')!;
 const playbackStatus = document.getElementById('playback-status')!;
-const controls = document.querySelectorAll<HTMLButtonElement | HTMLSelectElement>(
-  '[data-playback]',
-);
+const controls = document.querySelectorAll<
+  HTMLButtonElement | HTMLSelectElement | HTMLInputElement
+>('[data-playback]');
 const focus = document.getElementById('focus') as HTMLSelectElement;
+const gravityInput = document.getElementById('gravity-y') as HTMLInputElement;
+let gravityY = -9.81;
 const overlayButton = document.getElementById('overlay')!;
 let overlay: OverlayView | undefined;
 let overlayEnabled = false;
@@ -194,7 +196,7 @@ export async function showPreview(pack: EffectPack, signal: AbortSignal): Promis
   if (signal.aborted) return;
   const created = await runtime!.instantiate(pack, {
     seed: 12345,
-    particleEnvironment: { fog: { mode: 'none' } },
+    particleEnvironment: { fog: { mode: 'none' }, gravity: [0, gravityY, 0] },
   });
   if (signal.aborted) {
     created.destroy();
@@ -219,6 +221,7 @@ export async function showPreview(pack: EffectPack, signal: AbortSignal): Promis
   );
   fit();
   const entry = effect.simulation.entry;
+  log(`预览环境 · 世界重力 (0, ${gravityY}, 0) · 无雾 · 软粒子关闭`);
   log(
     `播放入口 ${entry.name} #${entry.id} · 根节点 ${entry.roots.join(', ')} · 观察节点只调整取景`,
   );
@@ -246,6 +249,17 @@ for (const [id, message, action] of [
   });
 }
 document.getElementById('fit')!.addEventListener('click', fit);
+gravityInput.addEventListener('change', () => {
+  const next = gravityInput.valueAsNumber;
+  if (!Number.isFinite(next)) {
+    gravityInput.value = String(gravityY);
+    log('重力 Y 必须是有限数字', 'error');
+    return;
+  }
+  effect?.setParticleEnvironment({ fog: { mode: 'none' }, gravity: [0, next, 0] });
+  gravityY = next;
+  log(`预览环境 · 世界重力 (0, ${gravityY}, 0)`);
+});
 overlayButton.addEventListener('click', () => {
   if (!effect || effect.destroyed) return;
   overlayEnabled = !overlayEnabled;

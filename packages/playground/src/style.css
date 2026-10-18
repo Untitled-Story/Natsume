@@ -262,7 +262,8 @@ button:focus-visible,
   font-size: 11px;
   white-space: nowrap;
 }
-.node-picker select {
+.node-picker select,
+.node-picker input {
   max-width: 200px;
   border: 1px solid #ffffff12;
   border-radius: 6px;
@@ -273,10 +274,15 @@ button:focus-visible,
   font-size: 12px;
   height: 34px;
 }
-.node-picker select:disabled {
+.gravity-picker input {
+  width: 76px;
+}
+.node-picker select:disabled,
+.node-picker input:disabled {
   opacity: 0.28;
 }
-.node-picker select:focus-visible {
+.node-picker select:focus-visible,
+.node-picker input:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 3px;
 }
