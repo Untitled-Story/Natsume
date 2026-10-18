@@ -1,4 +1,4 @@
-import { rendererVertexStride } from '../rendering/mesh-selection.js';
+import { rendererVertexStride, particleMaterialSlots } from '../rendering/mesh-selection.js';
 import { NatsumeError, type ErrorCode } from '../errors.js';
 import type { EffectPack, DeepReadonly as R } from '../pack.js';
 import type { InstanceOptions, ScriptIdentity } from './runtime.js';
@@ -318,41 +318,59 @@ export function checkCompatibility(
         definition.systemComponentId,
         'Renderer system is outside entry',
       );
-      const material = pack.document.materials.find((m) => m.id === definition.materials[0]);
-      rules.require(
-        material,
-        'SEMANTIC',
-        'materials.0',
-        definition.materials[0],
-        'Missing material',
-      );
-      if (system && material) {
-        rules.issues.push(
-          ...rendererSupport(definition, material, pack, system.main!.maxParticles, env),
+      const slots = [...particleMaterialSlots(definition)];
+      // A missing primary material is a Unity error shader, not a supported material model.
+      if (!slots.includes(0)) slots.unshift(0);
+      const queues = slots
+        .map(
+          (slot) =>
+            pack.document.materials.find((m) => m.id === definition.materials[slot])?.renderQueue,
+        )
+        .filter((q) => q !== undefined);
+      if (new Set(queues).size > 1)
+        rules.warn(
+          'APPROXIMATE_MATERIAL_ORDER',
+          'materials.renderQueue',
+          queues,
+          'Particle material passes follow slot order; different render queues are not globally interleaved.',
         );
-        vertices += system.main!.maxParticles * rendererVertexStride(definition, pack);
-        if (!materials.has(material.id)) {
-          materials.add(material.id);
-          for (const [index, binding] of material.textures.entries()) {
-            const size = pack.getImageSize(binding.imageId);
-            rules.require(
-              size,
-              'SEMANTIC',
-              `materials.${material.id}.textures.${index}.imageId`,
-              binding.imageId,
-              'Missing texture bytes',
-            );
-            if (!size) continue;
-            rules.require(
-              size.width <= context.maxTextureSize &&
-                size.height <= context.maxTextureSize &&
-                size.width * size.height <= 16_777_216,
-              'LIMIT',
-              `materials.${material.id}.textures.${index}.size`,
-              size,
-              'Decoded texture exceeds GPU/pixel limit',
-            );
-            if (!context.cachedMaterialIds.has(material.id)) pixels += size.width * size.height;
+      for (const slot of slots) {
+        const material = pack.document.materials.find((m) => m.id === definition.materials[slot]);
+        rules.require(
+          material,
+          'SEMANTIC',
+          `materials.${slot}`,
+          definition.materials[slot],
+          'Missing material',
+        );
+        if (system && material) {
+          rules.issues.push(
+            ...rendererSupport(definition, material, pack, system.main!.maxParticles, env),
+          );
+          vertices += system.main!.maxParticles * rendererVertexStride(definition, pack);
+          if (!materials.has(material.id)) {
+            materials.add(material.id);
+            for (const [index, binding] of material.textures.entries()) {
+              const size = pack.getImageSize(binding.imageId);
+              rules.require(
+                size,
+                'SEMANTIC',
+                `materials.${material.id}.textures.${index}.imageId`,
+                binding.imageId,
+                'Missing texture bytes',
+              );
+              if (!size) continue;
+              rules.require(
+                size.width <= context.maxTextureSize &&
+                  size.height <= context.maxTextureSize &&
+                  size.width * size.height <= 16_777_216,
+                'LIMIT',
+                `materials.${material.id}.textures.${index}.size`,
+                size,
+                'Decoded texture exceeds GPU/pixel limit',
+              );
+              if (!context.cachedMaterialIds.has(material.id)) pixels += size.width * size.height;
+            }
           }
         }
       }

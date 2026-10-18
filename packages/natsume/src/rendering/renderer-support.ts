@@ -126,13 +126,6 @@ export function rendererSupport(
     );
   }
   r.require(
-    definition.materials.filter((id) => id !== 0).length === 1,
-    'CAPABILITY',
-    'materials',
-    definition.materials,
-    'Multiple materials unsupported',
-  );
-  r.require(
     definition.vertexStreams.every(
       (s) =>
         s.semantic >= 0 &&

@@ -155,3 +155,39 @@ test('draws mixed mesh sizes with stable rows, pivots and sorted indices', async
       }
     }
 });
+
+test('matches native particle material slots and transparent pass order', async ({ page }) => {
+  const sample = fileURLToPath(new URL('../../../../data/kirakira.noap', import.meta.url));
+  const fixture = new URL(
+    '../../../../data/unity-baselines/fixtures/unity-meshes.json',
+    import.meta.url,
+  );
+  test.skip(!existsSync(sample) || !existsSync(fixture), 'Local native inputs are absent');
+  const native = JSON.parse(readFileSync(fixture, 'utf8')).materialCases as {
+    label: string;
+    pixels: number[];
+  }[];
+  await page.goto('/');
+  await page.locator('#file').setInputFiles(sample);
+  await expect(page.locator('#status')).toHaveText('预览就绪');
+  const actual = await page.evaluate(
+    async (path) => (await import('/@fs' + path)).measureMaterialPasses(),
+    new URL('./render-fixture.ts', import.meta.url).pathname,
+  );
+  for (const row of actual) {
+    const reference = native.find((c) => c.label === row.label);
+    if (!reference) throw new Error(`Missing native material case: ${row.label}`);
+    for (let i = 0; i < row.pixels.length; i++) {
+      const error = (Math.abs(row.pixels[i] - reference.pixels[i]!) / 255) * 100;
+      recordError('renderer.materials.pixel', error, 'percent', row.label + '/' + i);
+      expect(error, row.label + '/' + i).toBeLessThan(10);
+    }
+    expect(row.passes).toBe(
+      row.label.includes('0-1-2-3')
+        ? 3
+        : row.label.includes('0-1-2') || row.label.includes('transparent-order')
+          ? 2
+          : 1,
+    );
+  }
+});

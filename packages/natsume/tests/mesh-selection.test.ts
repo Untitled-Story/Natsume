@@ -42,6 +42,7 @@ it.skipIf(!existsSync(fixture))(
   'matches native mesh and row distributions within ten percent',
   () => {
     const native = JSON.parse(readFileSync(fixture, 'utf8')) as {
+      multipleSubmeshesRejected: boolean;
       cases: {
         label: string;
         weights: number[];
@@ -53,6 +54,7 @@ it.skipIf(!existsSync(fixture))(
         rowCounts: number[];
       }[];
     };
+    expect(native.multipleSubmeshesRejected).toBe(true);
     for (const sample of native.cases) {
       const renderer = new ParticleRendererT();
       renderer.meshAssetIds = [1, 2, 3];

@@ -88,7 +88,7 @@ it('reports independent blocking fields and preserves every issue in the thrown 
   f.source.main!.durationSeconds = 0.001;
   f.source.main!.gravityMultiplier = constant(1);
   f.renderer.alignment = Alignment.Facing;
-  f.renderer.materials.push(5);
+  f.renderer.materials.push(0, 99);
   const pack = f.pack();
   const report = checkCompatibility(pack, {}, context);
   expect(report.compatible).toBe(false);
@@ -98,13 +98,13 @@ it('reports independent blocking fields and preserves every issue in the thrown 
     [3, 'main.gravityMultiplier'],
     [3, 'main.durationSeconds'],
     [4, 'particleEnvironment.viewPosition'],
-    [4, 'materials'],
+    [4, 'materials.2'],
   ]);
   const error = new NatsumeCompatibilityError(report);
   expect(error.code).toBe('HOST');
   expect(error.issues).toBe(report.issues);
   expect(error.message).toContain('root / component 3 / main.durationSeconds=0.001');
-  expect(error.message).toContain('component 4 / materials=[5,5]');
+  expect(error.message).toContain('component 4 / materials.2=99');
 });
 
 it('checks dimensions and texture budgets without copying image data', () => {
@@ -266,4 +266,34 @@ it('checks every mesh slot, weighted inputs and the largest vertex reservation',
   expect(report.issues.filter((i) => i.severity === 'error').map((i) => i.field)).toEqual(
     expect.arrayContaining(['meshWeights', 'meshAssetIds.0', 'maxParticles*vertices']),
   );
+});
+
+it('ignores the trail material slot and checks every particle material pass', () => {
+  const f = fixture();
+  f.renderer.materials = [5, 999, 5];
+  const report = checkCompatibility(f.pack(), {}, context);
+  expect(report.compatible).toBe(true);
+  const queues = fixture();
+  const extra = structuredClone(queues.material);
+  extra.id = 7;
+  extra.renderQueue = 3100;
+  queues.doc.materials.push(extra);
+  queues.renderer.materials = [5, 0, 7];
+  expect(
+    checkCompatibility(queues.pack(), {}, context).issues.some(
+      (i) => i.code === 'APPROXIMATE_MATERIAL_ORDER',
+    ),
+  ).toBe(true);
+  const budget = fixture();
+  budget.renderer.materials = [5, 0, 5];
+  budget.source.main!.maxParticles = 130000;
+  const blocked = checkCompatibility(budget.pack(), {}, context);
+  expect(
+    blocked.issues.some((i) => i.code === 'LIMIT' && i.field === 'maxParticles*vertices'),
+  ).toBe(true);
+  const missing = fixture();
+  missing.renderer.materials = [0, 5];
+  expect(
+    checkCompatibility(missing.pack(), {}, context).issues.some((i) => i.field === 'materials.0'),
+  ).toBe(true);
 });

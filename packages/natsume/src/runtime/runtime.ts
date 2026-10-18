@@ -1,4 +1,4 @@
-import { rendererVertexStride } from '../rendering/mesh-selection.js';
+import { rendererVertexStride, particleMaterialSlots } from '../rendering/mesh-selection.js';
 import { Alignment } from '../format/generated/noa/ir/alignment.js';
 import { Container, ImageSource, Rectangle, Texture, type WebGLRenderer } from 'pixi.js';
 import { mat4 } from 'gl-matrix';
@@ -499,21 +499,23 @@ export class NatsumeRuntime {
         check(emitter, 'SEMANTIC', 'Renderer system is outside entry');
         const count = rendererVertexStride(data, pack);
         check(count !== undefined, 'SEMANTIC', 'Missing mesh');
-        return sum + emitter.main.maxParticles * count;
+        return sum + emitter.main.maxParticles * count * particleMaterialSlots(data).length;
       }, 0);
       check(totalVertices <= 1_000_000, 'LIMIT', 'Instance expanded vertex budget exceeded');
       for (const { data } of renderers) {
         const emitter = simulation.emitters.get(data.systemComponentId);
         check(emitter, 'SEMANTIC', 'Renderer system is outside entry');
-        const material = pack.document.materials.find((m) => m.id === data.materials[0]);
-        check(material, 'SEMANTIC', 'Missing material');
-        const lease = this.acquireTexture(pack, material);
-        releases.push(lease.release);
-        const texture = await lease.promise;
-        check(!this.disposed, 'DISPOSED', 'Runtime was destroyed during instantiation');
-        instance.addMesh(
-          new ParticleMesh(emitter, data, material, texture, pack, options.particleEnvironment),
-        );
+        for (const slot of particleMaterialSlots(data)) {
+          const material = pack.document.materials.find((m) => m.id === data.materials[slot]);
+          check(material, 'SEMANTIC', 'Missing material');
+          const lease = this.acquireTexture(pack, material);
+          releases.push(lease.release);
+          const texture = await lease.promise;
+          check(!this.disposed, 'DISPOSED', 'Runtime was destroyed during instantiation');
+          instance.addMesh(
+            new ParticleMesh(emitter, data, material, texture, pack, options.particleEnvironment),
+          );
+        }
       }
       instance.initializeScripts();
       for (const issue of compatibility.issues)

@@ -32,3 +32,8 @@ export function rendererVertexStride(definition: R<ParticleRendererT>, pack: Eff
     ? Math.max(0, ...definition.meshAssetIds.map((id) => pack.getMesh(id)?.positions.length ?? 0))
     : 4;
 }
+
+/** Slot one belongs to Trails; remaining slots render the particle geometry in order. */
+export function particleMaterialSlots(definition: R<ParticleRendererT>): readonly number[] {
+  return definition.materials.flatMap((id, index) => (index !== 1 && id !== 0 ? [index] : []));
+}

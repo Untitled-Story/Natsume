@@ -969,3 +969,147 @@ export async function measureMeshChoices() {
   }
   return results;
 }
+
+export async function measureMaterialPasses() {
+  const { app, effect } = getPreview();
+  if (!app || !effect) throw new Error('Missing preview');
+  effect.pause();
+  const { ComponentT } = await import('../../src/format/generated/noa/ir/component.js');
+  const { ParticleRendererT } =
+    await import('../../src/format/generated/noa/ir/particle-renderer.js');
+  const { MaterialT } = await import('../../src/format/generated/noa/ir/material.js');
+  const { TextureBindingT } = await import('../../src/format/generated/noa/ir/texture-binding.js');
+  const { RenderStateT } = await import('../../src/format/generated/noa/ir/render-state.js');
+  const { ColorT } = await import('../../src/format/generated/noa/ir/color.js');
+  const { VertexStreamT } = await import('../../src/format/generated/noa/ir/vertex-stream.js');
+  const { MeshT } = await import('../../src/format/generated/noa/mesh/mesh.js');
+  const { SubmeshT } = await import('../../src/format/generated/noa/mesh/submesh.js');
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 1;
+  const ctx = canvas.getContext('2d')!;
+  ctx.fillStyle = 'white';
+  ctx.fillRect(0, 0, 1, 1);
+  const blob = await new Promise<Blob>((resolve) => canvas.toBlob((b) => resolve(b!)));
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  const results = [];
+  const cases = [
+    ['0', [0]],
+    ['0-1', [0, 1]],
+    ['0-1-2', [0, 1, 2]],
+    ['0-1-2-3', [0, 1, 2, 3]],
+    ['0--1', [0, -1]],
+  ] as const;
+  for (const mode of [RenderMode.Mesh, RenderMode.Billboard]) {
+    for (const [label, slots] of [...cases, ['transparent-order', [0, 1, 2]] as const]) {
+      if (mode === RenderMode.Billboard && label === 'transparent-order') continue;
+      const doc = minimalDocument();
+      const source = particleSource();
+      const renderer = new ParticleRendererT();
+      renderer.systemComponentId = 3;
+      renderer.mode = mode;
+      renderer.alignment = Alignment.World;
+      renderer.meshAssetIds = [20];
+      renderer.materials = slots.map((slot) => (slot < 0 ? 0 : 10 + slot));
+      renderer.maxSize = 100;
+      renderer.vertexStreams = [
+        new VertexStreamT(0, 3),
+        new VertexStreamT(2, 4),
+        new VertexStreamT(3, 2),
+      ];
+      doc.components = [
+        new ComponentT(3, 1, true, 3, source),
+        new ComponentT(4, 1, true, 4, renderer),
+      ];
+      doc.materials = [
+        [1, 0, 0],
+        [0, 1, 0],
+        [0, 0, 1],
+        [1, 235 / 255, 4 / 255],
+      ].map((rgb, i) => {
+        const m = new MaterialT();
+        m.id = 10 + i;
+        m.model = 1;
+        m.renderState = new RenderStateT();
+        m.renderState.srcAlpha = 4;
+        m.tint = new ColorT(
+          rgb[0],
+          rgb[1],
+          rgb[2],
+          label === 'transparent-order' && i !== 1 ? 0.5 : 1,
+        );
+        const binding = new TextureBindingT();
+        binding.imageId = 30;
+        binding.colorSpace = 1;
+        m.textures = [binding];
+        return m;
+      });
+      const geometry = new MeshT();
+      geometry.positions = [
+        new Vec3T(-2, -1, 0),
+        new Vec3T(2, -1, 0),
+        new Vec3T(2, 1, 0),
+        new Vec3T(-2, 1, 0),
+      ];
+      geometry.uv0 = geometry.positions.map(() => ({ x: 0, y: 0 })) as never;
+      geometry.indices = [0, 1, 2, 0, 2, 3];
+      geometry.submeshes = [new SubmeshT(0, 6)];
+      const pack = new EffectPack(
+        doc,
+        {
+          format: 'noa-package',
+          version: 1,
+          noir_version: [1, 0],
+          document: 'scene.noir',
+          files: [
+            {
+              path: 'white.png',
+              kind: 'image',
+              asset_id: 30,
+              byte_length: bytes.length,
+              sha256: '0'.repeat(64),
+            },
+          ],
+        },
+        new Map([['white.png', bytes]]),
+        new Map([[20, geometry]]),
+      );
+      const instance = await app.natsume.instantiate(pack, {
+        sourceColorSpace: 'gamma',
+        displayMatrix: [16, 0, 0, 0, 0, -16, 0, 0, 0, 0, 1, 0, 32, 32, 0, 1],
+      });
+      const target = RenderTexture.create({ width: 64, height: 64 });
+      try {
+        instance.pause();
+        const e = instance.simulation.emitters.get(3)!;
+        e.count = label === 'transparent-order' ? 2 : 1;
+        e.startSizes.fill(1);
+        e.lifetimes.fill(10);
+        e.startColors.fill(1);
+        instance.update(0);
+        app.renderer.render({ container: instance.container, target, clear: true });
+        const output = app.renderer.extract.pixels({ target }).pixels;
+        const pixels =
+          label === 'transparent-order'
+            ? Array.from(
+                output.slice(
+                  (32 * 64 + (mode === RenderMode.Mesh ? 16 : 32)) * 4,
+                  (32 * 64 + (mode === RenderMode.Mesh ? 16 : 32)) * 4 + 3,
+                ),
+              )
+            : [16, 32, 48].flatMap((x) =>
+                Array.from(output.slice((32 * 64 + x) * 4, (32 * 64 + x) * 4 + 3)),
+              );
+        results.push({
+          label: (mode === RenderMode.Mesh ? 'Mesh' : 'Billboard') + '-' + label,
+          pixels,
+          passes: instance.container.children.length,
+        });
+      } finally {
+        instance.destroy();
+        target.destroy(true);
+        pack.dispose();
+      }
+    }
+  }
+  return results;
+}

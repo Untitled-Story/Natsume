@@ -804,7 +804,7 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
       }
       order.sort((a, b) => keys[b]! - keys[a]! || a - b);
     }
-    if (sort !== ParticleSort.None || this.meshChoices.length > 0) {
+    if (sort !== ParticleSort.None || this.meshChoices.length > 1) {
       let offset = 0;
       for (let i = 0; i < n; i++) {
         const source = sort === ParticleSort.None ? i : this.particleOrder[i]!;

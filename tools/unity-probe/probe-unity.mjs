@@ -200,6 +200,12 @@ const current = JSON.parse(await readFile(baseline, 'utf8'));
 assert.equal(current.unityVersion, version);
 if (meshes) {
   assert.equal(current.cases.length, 8);
+  assert.equal(current.materialCases.length, 15);
+  assert.equal(current.multipleSubmeshesRejected, true);
+  assert.deepEqual(
+    current.materialCases.find((c) => c.label === 'Mesh-0').pixels,
+    [255, 0, 0, 255, 0, 0, 255, 0, 0],
+  );
   if (process.argv.includes('--update-fixtures'))
     await saveJson(
       resolve(root, 'data/unity-baselines/fixtures/unity-meshes.json'),
