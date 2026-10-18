@@ -18,6 +18,7 @@ const basicShapes = process.argv.includes('--basic-shapes');
 const rotationPrewarm = process.argv.includes('--rotation-prewarm');
 const sorting = process.argv.includes('--sorting');
 const spaces = process.argv.includes('--spaces');
+const sweeps = process.argv.includes('--sweeps');
 assert(
   Number(fitting) +
     Number(layout) +
@@ -27,7 +28,8 @@ assert(
     Number(basicShapes) +
     Number(rotationPrewarm) +
     Number(sorting) +
-    Number(spaces) <=
+    Number(spaces) +
+    Number(sweeps) <=
     1,
   'Choose one probe mode',
 );
@@ -37,23 +39,25 @@ const project = resolve(root, 'data/unity-probe');
 const output = resolve(
   root,
   'data/unity-baselines',
-  spaces
-    ? 'spaces'
-    : sorting
-      ? 'sorting'
-      : basicShapes
-        ? 'basic-shapes'
-        : rotationPrewarm
-          ? 'rotation-prewarm'
-          : layout
-            ? 'prefab-layout'
-            : boundaries
-              ? 'boundaries'
-              : distributions
-                ? 'random'
-                : shape
-                  ? 'shape'
-                  : '.',
+  sweeps
+    ? 'sweeps'
+    : spaces
+      ? 'spaces'
+      : sorting
+        ? 'sorting'
+        : basicShapes
+          ? 'basic-shapes'
+          : rotationPrewarm
+            ? 'rotation-prewarm'
+            : layout
+              ? 'prefab-layout'
+              : boundaries
+                ? 'boundaries'
+                : distributions
+                  ? 'random'
+                  : shape
+                    ? 'shape'
+                    : '.',
 );
 const baseline = resolve(output, fitting ? 'noise-fit-output.json' : `unity-${version}.json`);
 await mkdir(output, { recursive: true });
@@ -83,25 +87,27 @@ const child = spawn(
     '-projectPath',
     project,
     '-executeMethod',
-    spaces
-      ? 'NatsumeSpaceProbe.Run'
-      : sorting
-        ? 'NatsumeSortingProbe.Run'
-        : basicShapes
-          ? 'NatsumeBasicShapeProbe.Run'
-          : rotationPrewarm
-            ? 'NatsumeRotationPrewarmProbe.Run'
-            : shape
-              ? 'NatsumeShapeProbe.Run'
-              : distributions
-                ? 'NatsumeRandomProbe.Run'
-                : layout
-                  ? 'NatsumePrefabLayoutProbe.Run'
-                  : boundaries
-                    ? 'NatsumeBoundaryProbe.Run'
-                    : fitting
-                      ? 'NatsumeNoiseFitProbe.Run'
-                      : 'NatsumeProbe.Run',
+    sweeps
+      ? 'NatsumeSweepProbe.Run'
+      : spaces
+        ? 'NatsumeSpaceProbe.Run'
+        : sorting
+          ? 'NatsumeSortingProbe.Run'
+          : basicShapes
+            ? 'NatsumeBasicShapeProbe.Run'
+            : rotationPrewarm
+              ? 'NatsumeRotationPrewarmProbe.Run'
+              : shape
+                ? 'NatsumeShapeProbe.Run'
+                : distributions
+                  ? 'NatsumeRandomProbe.Run'
+                  : layout
+                    ? 'NatsumePrefabLayoutProbe.Run'
+                    : boundaries
+                      ? 'NatsumeBoundaryProbe.Run'
+                      : fitting
+                        ? 'NatsumeNoiseFitProbe.Run'
+                        : 'NatsumeProbe.Run',
     '-quit',
     '-logFile',
     log,
@@ -118,6 +124,16 @@ await new Promise((accept, reject) => {
 });
 const current = JSON.parse(await readFile(baseline, 'utf8'));
 assert.equal(current.unityVersion, version);
+if (sweeps) {
+  assert.equal(current.cases.length, 9);
+  if (process.argv.includes('--update-fixtures'))
+    await writeFile(
+      resolve(root, 'packages/natsume/tests/fixtures/unity-sweeps.json'),
+      JSON.stringify(current, null, 2) + '\n',
+    );
+  console.log(`Shape sweep measurements: ${current.cases.length} cases, ${baseline}`);
+  process.exit(0);
+}
 if (spaces) {
   assert.equal(current.cases.length, 9);
   if (process.argv.includes('--update-fixtures'))

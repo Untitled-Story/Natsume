@@ -85,6 +85,12 @@ Unity 2022.3.21f1 正交相机下，3 个手动粒子的 BakeMesh 索引顺序�
 
 30 组、Natsume 种子 12345 的最大实测统计差：各轴均值 **0.01741**、二阶矩 **0.02191**，半径均值 **0.00582**、半径二阶矩 **0.00916**。包含位置与单位速度，均为绝对差，不能解释为逐粒子误差或百分比。对应回归容差依次为 0.025、0.035、0.025、0.045。
 
+## Shape 扫描与对齐
+
+9 组案例覆盖 Circle / Cone Loop、Circle / Edge PingPong、Spread 量化，以及 Edge / Circle 的 Align to Direction 与初始 XYZ 旋转相加。位置各分量回归容差 < 10⁻⁵，旋转角各分量 < 10⁻⁵ rad。Arc Speed 按整圆周数/秒，Edge Speed 按半长度/秒。曲线速度使用固定 16 段 Simpson 积分近似。
+
+Unity Circle PingPong 在实测整周期 2 秒处出现反射端点跳变；Natsume 保留连续反射结果，该单个边界不纳入上述容差。
+
 ## 旋转与预热
 
 | 项目                   | 已测范围                                                                                   | 差异说明                                             |
@@ -117,6 +123,8 @@ Unity 2022.3.21f1 正交相机下，3 个手动粒子的 BakeMesh 索引顺序�
 近似范围：High、1 octave、scroll=0、remap 关闭、仅位置扰动。Natsume 使用纯 TypeScript Curl Noise；不复现 Unity 的原生噪声函数和同种子轨迹。
 
 ## 数据
+
+- [unity-sweeps.json](../../packages/natsume/tests/fixtures/unity-sweeps.json)：形状时间扫描、量化与出生对齐旋转。
 
 - [unity-spaces.json](../../packages/natsume/tests/fixtures/unity-spaces.json)：模拟空间、重力与世界线性速度。
 

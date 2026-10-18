@@ -83,14 +83,14 @@ for (const c of native.cases.filter((c) => !c.align))
     }
   });
 
-it('keeps degenerate cones finite and rejects unimplemented sweeps and alignment', () => {
+it('keeps degenerate cones and aligned sweeps finite', () => {
   const s = new ShapeModuleT(G.ConeShape, new ConeShapeT(constant(0), Math.PI / 2, 0));
   const out = new Float64Array(6);
   sampleShape(s, 1, 0, 0, 0, 1, out);
   expect([...out].every(Number.isFinite)).toBe(true);
   (s.geometry as ConeShapeT).arcMode = 1;
-  expect(() => validateShape(s)).toThrow('sweeps');
+  expect(() => validateShape(s)).not.toThrow();
   (s.geometry as ConeShapeT).arcMode = 0;
   s.alignToDirection = true;
-  expect(() => validateShape(s)).toThrow('Align');
+  expect(() => validateShape(s)).not.toThrow();
 });

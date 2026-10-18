@@ -16,26 +16,37 @@ export function validateShape(s: R<ShapeModuleT>): void {
     'CAPABILITY',
     'Unsupported shape',
   );
-  if (s.geometryType === G.CircleShape || s.geometryType === G.ConeShape) {
-    const a = c as R<CircleShapeT | ConeShapeT>;
-    check(
-      (a.arcMode === 0 || a.arcMode === 3) &&
-        a.radiusMode === 0 &&
-        a.radiusSpread === 0 &&
-        a.arcSpread === 0,
-      'CAPABILITY',
-      'Shape sweeps support Random/BurstSpread arcs without quantization',
-    );
-  }
-  if (s.geometryType === G.EdgeShape) {
-    const a = c as R<EdgeShapeT>;
-    check(
-      (a.mode === 0 || a.mode === 3) && !a.spread,
-      'CAPABILITY',
-      'Edge supports Random/BurstSpread without quantization',
-    );
-  }
-  check(!s.alignToDirection, 'CAPABILITY', 'Shape Align to Direction is not supported');
+}
+
+/** Integrates normalized emission-speed curves over elapsed system seconds. */
+function travel(
+  p: R<import('../format/generated/noa/ir/scalar-parameter.js').ScalarParameterT> | null,
+  seconds: number,
+  duration: number,
+  rnd: number,
+): number {
+  if (!p || p.mode === 0 || p.mode === 2) return scalar(p, 0, rnd, 1) * seconds;
+  const integrate = (end: number) => {
+    let sum = 0;
+    for (let i = 0; i <= 16; i++)
+      sum += scalar(p, (end * i) / 16, rnd) * (i === 0 || i === 16 ? 1 : i % 2 ? 4 : 2);
+    return (sum * end) / 48;
+  };
+  const cycles = Math.floor(seconds / duration),
+    phase = seconds / duration - cycles;
+  return (cycles * integrate(1) + integrate(phase)) * duration;
+}
+function sweep(mode: number, distance: number, rnd: number, burst: number, spread: number): number {
+  let value =
+    mode === 0
+      ? rnd
+      : mode === 3
+        ? burst
+        : mode === 2
+          ? 1 - Math.abs((((distance % 2) + 2) % 2) - 1)
+          : ((distance % 1) + 1) % 1;
+  if (spread > 0) value = Math.floor((value + 1e-8) / spread) * spread;
+  return Math.max(0, Math.min(1, value));
 }
 
 /** Samples local position and unit direction into six scalars, before Shape TRS. */
@@ -47,6 +58,8 @@ export function sampleShape(
   index: number,
   count: number,
   out: Float64Array,
+  seconds = phase,
+  duration = 1,
 ): void {
   const rnd = (ch: number) => random(seed, serial, ch);
   let x = 0,
@@ -60,11 +73,27 @@ export function sampleShape(
     case G.ConeShape: {
       const c = s.geometry as R<CircleShapeT | ConeShapeT>;
       const divisor = Math.max(1, count - (Math.abs(c.arcRadians - Math.PI * 2) < 1e-6 ? 0 : 1));
-      const angle = (c.arcMode === 3 ? index / divisor : rnd(1)) * c.arcRadians;
+      const arcTravel = travel(c.arcSpeed, seconds, duration, random(seed, 0, 71)) * Math.PI * 2;
+      const angle =
+        sweep(
+          c.arcMode,
+          c.arcRadians > 0 ? arcTravel / c.arcRadians : 0,
+          rnd(1),
+          index / divisor,
+          c.arcSpread,
+        ) * c.arcRadians;
       const outer = Math.max(0, scalar(c.radius, phase, rnd(2)));
       const inner =
         s.geometryType === G.ConeShape ? Math.sqrt(1 - c.radiusThickness) : 1 - c.radiusThickness;
-      const fraction = Math.sqrt(inner * inner + (1 - inner * inner) * rnd(3));
+      const radiusTravel = travel(c.radiusSpeed, seconds, duration, random(seed, 0, 72)) * 0.5;
+      const radialSample = sweep(
+        c.radiusMode,
+        radiusTravel,
+        rnd(3),
+        index / Math.max(1, count - 1),
+        c.radiusSpread,
+      );
+      const fraction = Math.sqrt(inner * inner + (1 - inner * inner) * radialSample);
       dx = Math.cos(angle);
       dy = Math.sin(angle);
       dz = 0;
@@ -130,7 +159,13 @@ export function sampleShape(
     }
     case G.EdgeShape: {
       const c = s.geometry as R<EdgeShapeT>;
-      const u = c.mode === 3 ? index / Math.max(1, count - 1) : rnd(1);
+      const u = sweep(
+        c.mode,
+        travel(c.speed, seconds, duration, random(seed, 0, 73)) * 0.5,
+        rnd(1),
+        index / Math.max(1, count - 1),
+        c.spread,
+      );
       x = (u * 2 - 1) * Math.max(0, scalar(c.halfLength, phase, rnd(2)));
       // Actual 2022.3 SingleSidedEdge points +Y; upstream's +Z comment is inaccurate.
       dy = 1;

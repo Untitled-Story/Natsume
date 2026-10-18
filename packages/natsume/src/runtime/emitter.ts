@@ -17,12 +17,12 @@ import { Space } from '../format/generated/noa/ir/space.js';
 import { ScalingMode } from '../format/generated/noa/ir/scaling-mode.js';
 import { SeedMode } from '../format/generated/noa/ir/seed-mode.js';
 import { sampleShape, validateShape } from './shapes.js';
-import { NoiseQuality } from '../format/generated/noa/ir/noise-quality.js';
 import { SheetTime } from '../format/generated/noa/ir/sheet-time.js';
 import { SheetAnimation } from '../format/generated/noa/ir/sheet-animation.js';
 import { CustomDataMode } from '../format/generated/noa/ir/custom-data-mode.js';
 import { scalar, color, random, validateParameters, constantZero } from './parameters.js';
 import { CurlNoiseField } from '../particles/noise/curl-field.js';
+import { NoiseQuality } from '../format/generated/noa/ir/noise-quality.js';
 import type { SceneNode } from './scene.js';
 
 export interface Diagnostic {
@@ -385,6 +385,7 @@ export class Emitter {
             this.emit(
               Math.round(scalar(b.count, phase, random(this.seed, cycle, index + 110))),
               phase,
+              when,
             );
         }
       }
@@ -392,6 +393,7 @@ export class Emitter {
   private emit(
     amount: number,
     phase = (this.time % this.main.durationSeconds) / this.main.durationSeconds,
+    seconds = this.time,
   ): void {
     const capacity = this.ages.length;
     for (let n = 0; n < amount && this.count < capacity; n++) {
@@ -410,7 +412,17 @@ export class Emitter {
         dy = 0,
         dz = 1;
       if (this.shape) {
-        sampleShape(this.shape, this.seed, serial, t, n, amount, this.birth);
+        sampleShape(
+          this.shape,
+          this.seed,
+          serial,
+          t,
+          n,
+          amount,
+          this.birth,
+          seconds,
+          this.main.durationSeconds,
+        );
         const [px, py, pz, bx, by, bz] = this.birth;
         const m = this.shapeMatrix;
         x = m[0]! * px! + m[4]! * py! + m[8]! * pz! + m[12]!;
@@ -457,6 +469,11 @@ export class Emitter {
       this.rotations[o] = this.main.rotation3d ? scalar(rot.x, t, rnd(8)) : 0;
       this.rotations[o + 1] = this.main.rotation3d ? scalar(rot.y, t, rnd(9)) : 0;
       this.rotations[o + 2] = scalar(rot.z, t, rnd(10));
+      if (this.shape?.alignToDirection) {
+        this.rotations[o] = this.rotations[o]! - Math.asin(Math.max(-1, Math.min(1, dy)));
+        this.rotations[o + 1] =
+          this.rotations[o + 1]! + (Math.hypot(dx, dz) < 1e-8 ? -Math.PI / 2 : Math.atan2(dx, dz));
+      }
       color(this.main.color, t, rnd(11), this.startColors, i * 4);
     }
   }
@@ -649,7 +666,7 @@ export class Emitter {
         ) * activeDt;
       const amount = Math.floor(this.carry + 1e-8);
       this.carry -= amount;
-      this.emit(amount);
+      this.emit(amount, undefined, end);
       this.time = end;
     }
   }
