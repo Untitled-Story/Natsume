@@ -201,15 +201,19 @@ export class EffectInstance {
     const gravity = [...this.simulation.emitters.values()].map(
       (emitter) => [emitter, emitter.resolveGravity(next?.gravity)] as const,
     );
-    for (const mesh of this.meshes)
+    for (const mesh of this.meshes) {
+      const definition = mesh.definition;
+      const requiresViewPosition =
+        (definition.mode === RenderMode.StretchedBillboard && definition.freeformStretching) ||
+        (definition.alignment === Alignment.Facing &&
+          definition.mode !== RenderMode.HorizontalBillboard &&
+          definition.mode !== RenderMode.VerticalBillboard);
       check(
-        mesh.definition.alignment !== Alignment.Facing ||
-          mesh.definition.mode === RenderMode.HorizontalBillboard ||
-          mesh.definition.mode === RenderMode.VerticalBillboard ||
-          next?.viewPosition,
+        !requiresViewPosition || next?.viewPosition,
         'HOST',
-        'Facing alignment requires particleEnvironment.viewPosition',
+        'Facing alignment and Freeform stretch require particleEnvironment.viewPosition',
       );
+    }
     this.environment = next;
     for (const [emitter, value] of gravity) emitter.gravity = value;
     for (const mesh of this.meshes) mesh.environment = next;

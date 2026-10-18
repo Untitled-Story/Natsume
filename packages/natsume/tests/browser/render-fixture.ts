@@ -319,10 +319,14 @@ export function measureParticleSorting() {
       mesh.sync([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1], 'gamma');
       result[name] = Array.from(mesh.geometry.indexBuffer!.data.slice(0, 3));
       if (sort === ParticleSort.Depth) {
-        emitter.node.worldMatrix[10] = -1;
+        document.nodes[0]!.transform!.scale!.z = -1;
+        emitter.node.localMatrix[10] = -1;
+        scene.update();
         mesh.sync([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1], 'gamma');
         result.transformed = Array.from(mesh.geometry.indexBuffer!.data.slice(0, 3));
-        emitter.node.worldMatrix[10] = 1;
+        document.nodes[0]!.transform!.scale!.z = 1;
+        emitter.node.localMatrix[10] = 1;
+        scene.update();
         emitter.positions.fill(0);
         mesh.sync([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1], 'gamma');
         result.ties = Array.from(mesh.geometry.indexBuffer!.data.slice(0, 3));
@@ -528,6 +532,41 @@ export function checkEnvironmentReplacement() {
     facingRejected = true;
   }
   const facingPreserved = meshes[0]!.environment === before && second.gravity[1] === -10;
+  definition.alignment = Alignment.World;
+  const stretchDefinition = structuredClone(definition) as ParticleRendererT;
+  stretchDefinition.mode = RenderMode.StretchedBillboard;
+  stretchDefinition.freeformStretching = true;
+  let freeformCreationRejected = false;
+  try {
+    new ParticleMesh(
+      meshes[0]!.emitter,
+      stretchDefinition,
+      meshes[0]!.materialDefinition,
+      Texture.WHITE,
+      effect.simulation.pack,
+      { fog: { mode: 'none' } },
+    ).destroy();
+  } catch (error) {
+    freeformCreationRejected = error instanceof Error && error.message.includes('viewPosition');
+  }
+  effect.addMesh(
+    new ParticleMesh(
+      meshes[0]!.emitter,
+      stretchDefinition,
+      meshes[0]!.materialDefinition,
+      Texture.WHITE,
+      effect.simulation.pack,
+      before,
+    ),
+  );
+  let freeformUpdateRejected = false;
+  try {
+    effect.setParticleEnvironment({ fog: { mode: 'none' }, gravity: [0, 0, 0] });
+  } catch (error) {
+    freeformUpdateRejected = error instanceof Error && error.message.includes('viewPosition');
+  }
+  const freeformPreserved =
+    meshes.every((mesh) => mesh.environment === before) && second.gravity[1] === -10;
   effect.setParticleEnvironment({
     fog: { mode: 'none' },
     gravity: [0, 0, 0],
@@ -541,7 +580,16 @@ export function checkEnvironmentReplacement() {
     effect.state === 'paused';
   effect.simulation.emitters.delete(first.id);
   effect.simulation.emitters.delete(second.id);
-  return { rejected, preserved, updated, facingRejected, facingPreserved };
+  return {
+    rejected,
+    preserved,
+    updated,
+    facingRejected,
+    facingPreserved,
+    freeformCreationRejected,
+    freeformUpdateRejected,
+    freeformPreserved,
+  };
 }
 
 export async function measureSheetUV() {
@@ -644,11 +692,13 @@ export async function measureCompatibilityGeometry(labels: string[]) {
     emitter.velocities.set([2, 1, 0.5]);
     emitter.lifetimes[0] = 2;
     const definition = structuredClone(original.definition) as ParticleRendererT;
-    definition.mode = label.includes('HorizontalBillboard')
-      ? RenderMode.HorizontalBillboard
-      : label.includes('VerticalBillboard')
-        ? RenderMode.VerticalBillboard
-        : RenderMode.Billboard;
+    definition.mode = label.startsWith('freeform')
+      ? RenderMode.StretchedBillboard
+      : label.includes('HorizontalBillboard')
+        ? RenderMode.HorizontalBillboard
+        : label.includes('VerticalBillboard')
+          ? RenderMode.VerticalBillboard
+          : RenderMode.Billboard;
     definition.alignment = label.startsWith('roll-View')
       ? Alignment.View
       : label.includes('Facing')
@@ -657,7 +707,31 @@ export async function measureCompatibilityGeometry(labels: string[]) {
           ? Alignment.Velocity
           : Alignment.World;
     definition.allowRoll = !label.endsWith('False');
-    if (label.includes('zero-')) emitter.rotations.fill(0);
+    if (label.startsWith('freeform')) {
+      definition.freeformStretching = true;
+      definition.rotateWithStretchDirection = label.endsWith('True');
+      definition.lengthScale = 2;
+      definition.velocityScale = 0.4;
+      definition.cameraVelocityScale = 0;
+      definition.alignment = Alignment.View;
+      if (label.startsWith('freeform-axis-')) {
+        const parts = label.split('-');
+        emitter.velocities.set([Number(parts[2]), 0, 0]);
+        definition.velocityScale = Number(parts[3]);
+        emitter.rotations.fill(0);
+      }
+      if (label.includes('negative-length')) definition.lengthScale = -2;
+      if (label.includes('negative-speed')) definition.velocityScale = -0.4;
+      if (label.includes('zero-length')) definition.lengthScale = 0;
+      if (label.includes('axial')) emitter.velocities.set([0, 0, 2]);
+      if (label.includes('parallel')) emitter.velocities.set([1, 0.5, 10.2]);
+    }
+    if (
+      label.startsWith('align-zero-') ||
+      label.startsWith('plane-zero-') ||
+      label.startsWith('freeform-zero-')
+    )
+      emitter.rotations.fill(0);
     const mesh = new ParticleMesh(
       emitter,
       definition,

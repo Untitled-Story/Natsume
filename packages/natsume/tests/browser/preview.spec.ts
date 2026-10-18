@@ -826,6 +826,9 @@ test('replaces gravity and view inputs atomically while paused', async ({ page }
     updated: true,
     facingRejected: true,
     facingPreserved: true,
+    freeformCreationRejected: true,
+    freeformUpdateRejected: true,
+    freeformPreserved: true,
   });
 });
 

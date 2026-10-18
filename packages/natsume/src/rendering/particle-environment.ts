@@ -22,7 +22,7 @@ export interface ParticleEnvironment {
   readonly gravity?: readonly [number, number, number] | undefined;
   /** View translation velocity in Unity world units per second. Omit for a stationary view. */
   readonly viewVelocity?: readonly [number, number, number] | undefined;
-  /** View origin in Unity world coordinates. Required for Facing alignment. */
+  /** View origin in Unity world coordinates. Required for Facing alignment and Freeform stretch. */
   readonly viewPosition?: readonly [number, number, number] | undefined;
   /** View distance, or coefficients ax+by+cz+d in Unity world coordinates. Defaults to container.zIndex; negative distances clamp to zero. */
   readonly depth?: number | readonly [number, number, number, number] | undefined;

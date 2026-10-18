@@ -1,10 +1,10 @@
 # Unity 行为对照
 
-复测时间：**2026-10-18 07:27:34 UTC**。Unity **2022.3.21f1**，运行模拟采用 `1/60 s`；Shape 扫描另含 `0.25 s` 与端点邻域步进。浏览器为 Chromium / WebGL2。原生数据覆盖 14 种探针，282 项单元测试与 20 项浏览器测试通过。
+复测时间：**2026-10-18 09:30:55 UTC**。Unity **2022.3.21f1**，运行模拟采用 `1/60 s`；Shape 扫描另含 `0.25 s` 与端点邻域步进。浏览器为 Chromium / WebGL2。原生数据覆盖 15 种探针，346 项单元测试与 22 项浏览器测试通过。最近一次原生刷新为对齐 / Freeform 探针，其余复用已有本地原生记录。
 
 下表为本次采样的**最大实测绝对差**，数值四舍五入，不再以测试容差代替误差。`0` 仅表示已测输入相同；位置 / 速度使用场景单位，角度为 rad。随机分布比较统计量，不要求同种子逐粒子一致。部分已知差异仅作记录；Noise 统计与 Pivot 几何有数值回归边界，测试通过不代表所有参数组合一致。
 
-完整数值、比较次数、误差 RMS、最大差对应案例和输入 SHA-256 见 `data/unity-baselines/measurements.json`。本次记录 7,194 个标量比较、222 项指标；不同单位不合并为整体百分比。
+完整数值、比较次数、误差 RMS、最大差对应案例和输入 SHA-256 见 `data/unity-baselines/measurements.json`。本次记录 9,793 个标量比较、281 项指标；不同单位不合并为整体百分比。
 
 ## 参数、运动与生命周期
 
@@ -47,6 +47,17 @@ Drag 使用速度长度的线性减量；尺寸乘算为 π×size.x²，速度�
 ## 对齐与视点
 
 Horizontal / Vertical Billboard、World / View / Local / Facing / Velocity 已补齐。Facing 使用宿主世界坐标视点；Velocity 以完整速度构造法线，零速度回退视图方向。View / Facing 的相机 Z 滚转 30°、allowRoll 开关经过 Unity 世界顶点对照；View 的 X/Y 倾斜符号与 World 不同，关闭滚转时在倾斜之前抵消 Z 角。已知无光照材质不消费法线，normalDirection 不改变其输出。
+
+## Freeform Stretch
+
+Unity BakeMesh 世界顶点覆盖 22 组：Rotate with Stretch Direction 开 / 关、XYZ 速度与初始 XYZ 旋转、零速度、零 / 负 Length Scale、零 / 负 Velocity Scale、轴向与平行视线速度；每组采样 0 / 1 / 2 / 3 / 15 / 30 / 60 帧，视点为 `(0,0,-10)`。
+
+| 比较                                        | 最大实测绝对差          |
+| ------------------------------------------- | ----------------------- |
+| 非退化视线方向：按 UV 对应的 476 个世界顶点 | **4.377×10⁻⁵** 场景单位 |
+| 速度平行视线：28 条边长                     | **6.160×10⁻⁷** 场景单位 |
+
+Freeform 先构造面向宿主 `viewPosition` 的平面，再沿完整相对速度拉伸；合成长度为负时取绝对值。零速度的 Unity 网格为空，Natsume 将四个顶点收拢为零面积。速度与视线平行时，Unity 的归一化残差导致平面内朝向随帧变化；Natsume 使用稳定基向量，该退化案例只比较边长和朝向平面，不计入逐顶点误差。上述结果未覆盖 Freeform 与非零 Pivot、移动视图、非均匀缩放及滚转的全部组合。
 
 ## 距离发射与零间隔 Burst
 
@@ -161,7 +172,7 @@ Constant Remap ±0.25 与零 Strength 的位置分量差为 **0**。上述范围
 
 ## 数据与复测
 
-原生夹具位于 `data/unity-baselines/fixtures/`：`unity-curves`、`unity-boundaries`、`unity-random`、`unity-shape`、`unity-basic-shapes`、`unity-sweeps`、`unity-spaces`、`unity-rotation-prewarm`、`unity-noise-options`、`unity-noise-statistics`、`unity-custom-data`、`unity-sorting`、`unity-stretch`、`unity-layout`。完整数值范围与对应输入摘要见 `data/unity-baselines/measurements.json`。
+原生夹具位于 `data/unity-baselines/fixtures/`：`unity-curves`、`unity-boundaries`、`unity-random`、`unity-shape`、`unity-basic-shapes`、`unity-sweeps`、`unity-spaces`、`unity-rotation-prewarm`、`unity-noise-options`、`unity-noise-statistics`、`unity-custom-data`、`unity-sorting`、`unity-stretch`、`unity-layout`、`unity-compatibility`。完整数值范围与对应输入摘要见 `data/unity-baselines/measurements.json`。
 
 ```sh
 # 刷新全部原生测量后，运行单元 / 浏览器对比并汇总误差

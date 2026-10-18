@@ -257,9 +257,9 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
     );
     if (definition.mode === RenderMode.StretchedBillboard) {
       check(
-        !definition.freeformStretching,
-        'CAPABILITY',
-        'Freeform Stretched Billboard is unsupported',
+        !definition.freeformStretching || environment?.viewPosition,
+        'HOST',
+        'System ' + emitter.id + ': Freeform stretch requires particleEnvironment.viewPosition',
       );
       check(
         [definition.lengthScale, definition.velocityScale, definition.cameraVelocityScale].every(
@@ -604,7 +604,9 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
         stretchZ = 0,
         stretchWidthX = 0,
         stretchWidthY = 0,
-        stretchLength = 0;
+        stretchLength = 0,
+        stretchSpeed = 0,
+        freeformFactor = 1;
       const stretched = this.definition.mode === RenderMode.StretchedBillboard;
       if (stretched) {
         const velocity = e.renderVelocities!,
@@ -621,6 +623,7 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
           world[2]! * vx + world[6]! * vy + world[10]! * vz - (view?.[2] ?? 0) * cameraScale;
         const length = Math.hypot(stretchX, stretchY, stretchZ),
           projected = Math.hypot(stretchX, stretchY);
+        stretchSpeed = length;
         stretchLength =
           sy * localScale.y * this.definition.lengthScale + length * this.definition.velocityScale;
         if (length > 1e-8) {
@@ -646,6 +649,48 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
           stretchX = stretchY = stretchZ = 0;
         }
       }
+      if (stretched && this.definition.freeformStretching) {
+        const position = this.environment!.viewPosition!;
+        const px = e.positions[o]!,
+          py = e.positions[o + 1]!,
+          pz = e.positions[o + 2]!;
+        vec3.set(
+          this.basisForward,
+          world[0]! * px + world[4]! * py + world[8]! * pz + world[12]! - position[0],
+          world[1]! * px + world[5]! * py + world[9]! * pz + world[13]! - position[1],
+          world[2]! * px + world[6]! * py + world[10]! * pz + world[14]! - position[2],
+        );
+        if (vec3.length(this.basisForward) < 1e-8) vec3.copy(this.basisForward, this.viewForward);
+        vec3.normalize(this.basisForward, this.basisForward);
+        if (this.definition.rotateWithStretchDirection) {
+          const dot =
+            this.basisForward[0]! * stretchX +
+            this.basisForward[1]! * stretchY +
+            this.basisForward[2]! * stretchZ;
+          vec3.set(
+            this.basisRight,
+            -stretchX + this.basisForward[0]! * dot,
+            -stretchY + this.basisForward[1]! * dot,
+            -stretchZ + this.basisForward[2]! * dot,
+          );
+        } else vec3.cross(this.basisRight, this.viewUp, this.basisForward);
+        // A parallel velocity has no projected heading; keep a stable world-up basis.
+        if (vec3.length(this.basisRight) < 1e-6)
+          vec3.cross(
+            this.basisRight,
+            Math.abs(this.basisForward[1]!) > 0.99 ? [1, 0, 0] : [0, 1, 0],
+            this.basisForward,
+          );
+        vec3.normalize(this.basisRight, this.basisRight);
+        vec3.cross(this.basisUp, this.basisForward, this.basisRight);
+        // Native Freeform keeps the stretch magnitude when the combined length is negative.
+        freeformFactor = Math.abs(
+          this.definition.lengthScale +
+            (stretchSpeed * this.definition.velocityScale) /
+              Math.max(1e-8, Math.abs(sy * localScale.y)),
+        );
+        if (stretchSpeed < 1e-8) sx = sy = sz = 0;
+      }
       // Native BakeMesh: World Billboard reverses particle Euler angles;
       // Mesh uses their original sign. Both use ZXY order.
       const tiltSign =
@@ -654,6 +699,7 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
           ? 1
           : rotationSign;
       const roll =
+        !stretched &&
         !this.definition.allowRoll &&
         (this.definition.alignment === Alignment.View ||
           this.definition.alignment === Alignment.Facing)
@@ -747,6 +793,21 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
             wy += ay;
             wz += ax * this.basisRight[2]! + (pivot?.z ?? 0) * sx * localScale.x;
           }
+        } else if (stretched && this.definition.freeformStretching) {
+          const qx = (uv.x - 0.5 + (pivot?.x ?? 0)) * sx * localScale.x;
+          const qy = (uv.y - 0.5 + (pivot?.y ?? 0)) * sy * localScale.y;
+          const ax = qx * cz + qy * snz,
+            ay = -qx * snz + qy * cz;
+          let dx = this.basisRight[0]! * ax + this.basisUp[0]! * ay;
+          let dy = this.basisRight[1]! * ax + this.basisUp[1]! * ay;
+          let dz = this.basisRight[2]! * ax + this.basisUp[2]! * ay;
+          const stretch = (dx * stretchX + dy * stretchY + dz * stretchZ) * (freeformFactor - 1);
+          dx += stretchX * stretch;
+          dy += stretchY * stretch;
+          dz += stretchZ * stretch;
+          wx += dx;
+          wy += dy;
+          wz += dz;
         } else if (stretched) {
           // Native stretch anchors UV.x=0 at the particle, ignores Euler rotation,
           // and flips the transverse edge when the combined length is negative.

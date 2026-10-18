@@ -92,6 +92,13 @@ public static class NatsumeCompatibilityProbe {
  camera.transform.rotation=Quaternion.identity;
 
  foreach(var speed in new[]{0f,2f})foreach(var scale in new[]{0f,.4f})foreach(var rotate in new[]{false,true})cases.Add(Manual("freeform-axis-"+speed+"-"+scale+"-"+rotate,ps=>{var r=ps.GetComponent<ParticleSystemRenderer>();r.renderMode=ParticleSystemRenderMode.Stretch;r.freeformStretching=true;r.rotateWithStretchDirection=rotate;r.lengthScale=2;r.velocityScale=scale;},true,Vector3.zero,new Vector3(speed,0,0)));
+ foreach(var kind in new[]{"negative-length","negative-speed","zero-length","axial","parallel"})foreach(var rotate in new[]{false,true}) {
+ var velocity=kind=="axial"?new Vector3(0,0,2):kind=="parallel"?new Vector3(1,.5f,10.2f):new Vector3(2,1,.5f);
+ cases.Add(Manual("freeform-boundary-"+kind+"-"+rotate,ps=>{
+ var r=ps.GetComponent<ParticleSystemRenderer>();r.renderMode=ParticleSystemRenderMode.Stretch;r.freeformStretching=true;r.rotateWithStretchDirection=rotate;
+ r.lengthScale=kind=="negative-length"?-2:kind=="zero-length"?0:2;r.velocityScale=kind=="negative-speed"?-.4f:.4f;
+ },true,null,velocity));
+ }
  var curves=new List<CurveCase>();foreach(var weight in new[]{0f,.1f,.5f,1f}){var a=new Keyframe(0,2,0,4,1f/3,weight);a.weightedMode=WeightedMode.Out;var b=new Keyframe(1,3,-2,0,.7f,1f/3);b.weightedMode=WeightedMode.In;var c=new AnimationCurve(a,b);curves.Add(new CurveCase{label="weighted-"+weight,values=Enumerable.Range(0,41).Select(i=>c.Evaluate(i/40f)).ToArray()});}
  foreach(var code in new[]{0,1,2,3,4,5,8}){var asset=ScriptableObject.CreateInstance<NatsumeCurveProbe>();asset.curve=AnimationCurve.Linear(0,2,1,6);var so=new SerializedObject(asset);var p=so.FindProperty("curve");p.FindPropertyRelative("m_PreInfinity").intValue=code;p.FindPropertyRelative("m_PostInfinity").intValue=code;so.ApplyModifiedPropertiesWithoutUndo();curves.Add(new CurveCase{label="wrap-"+code,values=new[]{-1.25f,-.25f,0,.25f,1,1.25f,2.25f}.Select(t=>asset.curve.Evaluate(t)).ToArray()});UnityEngine.Object.DestroyImmediate(asset);}
  var g=new Gradient();g.SetKeys(new[]{new GradientColorKey(Color.red,0),new GradientColorKey(Color.blue,1)},new[]{new GradientAlphaKey(.2f,0),new GradientAlphaKey(.8f,1)});g.mode=GradientMode.PerceptualBlend;var output=new Output{unityVersion=Application.unityVersion,renderChecks=renderChecks.ToArray(),cases=cases.ToArray(),curves=curves.ToArray(),gradient=Enumerable.Range(0,5).Select(i=>g.Evaluate(i/4f)).ToArray()};var path=Environment.GetEnvironmentVariable("NATSUME_COMPAT_OUTPUT");Directory.CreateDirectory(Path.GetDirectoryName(path));File.WriteAllText(path,JsonUtility.ToJson(output,true));

@@ -23,3 +23,22 @@ it('rejects nonfinite view velocity before changing particle inputs', () => {
       }),
     ).toThrow('View velocity requires three finite world-space components');
 });
+
+it('copies the view origin and rejects invalid coordinates', () => {
+  const position: [number, number, number] = [1, 2, -10];
+  const environment = copyEnvironment({ fog: { mode: 'none' }, viewPosition: position })!;
+  position[2] = 99;
+  expect(environment.viewPosition).toEqual([1, 2, -10]);
+  for (const viewPosition of [
+    [NaN, 0, 0],
+    [0, Infinity, 0],
+    [0, 0],
+    [1, 2, 3, 4],
+  ])
+    expect(() =>
+      copyEnvironment({
+        fog: { mode: 'none' },
+        viewPosition: viewPosition as [number, number, number],
+      }),
+    ).toThrow('View position requires three finite world-space components');
+});
