@@ -233,7 +233,7 @@ if (noiseOptions) {
   process.exit(0);
 }
 if (sweeps) {
-  assert.equal(current.cases.length, 9);
+  assert.equal(current.cases.length, 11);
   if (process.argv.includes('--update-fixtures'))
     await saveJson(
       resolve(root, 'packages/natsume/tests/fixtures/unity-sweeps.json'),

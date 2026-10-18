@@ -55,7 +55,8 @@ for (const c of native.cases)
     );
     const out = new Float64Array(6);
     for (const s of c.samples) {
-      // Native's exact PingPong period endpoint has a discontinuity; retain the continuous reflected limit.
+      // Unity's quarter-second stepping has an isolated endpoint anomaly.
+      // Fixed 1/60 steps and samples around the endpoint follow continuous reflection.
       if (c.label === 'circle-pingpong' && s.time === 2) {
         sampleShape(shape, 12345, 0, s.time / 3, 0, 1, out, s.time, 3);
         recordError(

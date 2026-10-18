@@ -16,9 +16,10 @@ public static class NatsumeSweepProbe
         s.arcSpeed=0.5f;s.arcSpread=label.Contains("spread")?0.25f:0;
         if(label.StartsWith("edge")){s.radiusMode=s.arcMode;s.radiusSpeed=0.5f;s.radiusSpread=s.arcSpread;}
         if(label.Contains("aligned")){s.alignToDirection=true;m.startRotation3D=true;m.startRotationX=10*Mathf.Deg2Rad;m.startRotationY=20*Mathf.Deg2Rad;m.startRotationZ=30*Mathf.Deg2Rad;}
-        ps.Simulate(0,false,true,false);var samples=new Sample[9];
-        for(int i=0;i<9;i++){if(i>0)ps.Simulate(0.25f,false,false,false);ps.Emit(1);var particles=new ParticleSystem.Particle[ps.particleCount];ps.GetParticles(particles);samples[i]=new Sample{time=i*0.25f,position=particles[particles.Length-1].position,rotation=particles[particles.Length-1].rotation3D};}
+        var times=label.EndsWith("boundary")?new[]{0f,0.99999f,1f,1.00001f,1.99999f,2f,2.00001f,2.25f}:Enumerable.Range(0,9).Select(i=>i*0.25f).ToArray();
+        ps.Simulate(0,false,true,false);var samples=new Sample[times.Length];
+        for(int i=0;i<times.Length;i++){if(i>0){if(label.EndsWith("fixedstep")){for(int step=0;step<15;step++)ps.Simulate(1f/60f,false,false,false);}else ps.Simulate(times[i]-times[i-1],false,false,false);}ps.Emit(1);var particles=new ParticleSystem.Particle[ps.particleCount];ps.GetParticles(particles);samples[i]=new Sample{time=times[i],position=particles[particles.Length-1].position,rotation=particles[particles.Length-1].rotation3D};}
         return new Case{label=label,samples=samples};
     }finally{UnityEngine.Object.DestroyImmediate(go);}}
-    public static void Run(){try{var output=new Output{unityVersion=Application.unityVersion,cases=new[]{"circle-loop","circle-pingpong","circle-spread","cone-loop","edge-loop","edge-pingpong","edge-spread","edge-aligned","circle-aligned"}.Select(Measure).ToArray()};var directory=Path.GetFullPath(Path.Combine(Application.dataPath,"../../unity-baselines/sweeps"));Directory.CreateDirectory(directory);File.WriteAllText(Path.Combine(directory,"unity-2022.3.21f1.json"),JsonUtility.ToJson(output,true));}catch(Exception e){Debug.LogException(e);EditorApplication.Exit(1);}}
+    public static void Run(){try{var output=new Output{unityVersion=Application.unityVersion,cases=new[]{"circle-loop","circle-pingpong","circle-pingpong-boundary","circle-pingpong-fixedstep","circle-spread","cone-loop","edge-loop","edge-pingpong","edge-spread","edge-aligned","circle-aligned"}.Select(Measure).ToArray()};var directory=Path.GetFullPath(Path.Combine(Application.dataPath,"../../unity-baselines/sweeps"));Directory.CreateDirectory(directory);File.WriteAllText(Path.Combine(directory,"unity-2022.3.21f1.json"),JsonUtility.ToJson(output,true));}catch(Exception e){Debug.LogException(e);EditorApplication.Exit(1);}}
 }
