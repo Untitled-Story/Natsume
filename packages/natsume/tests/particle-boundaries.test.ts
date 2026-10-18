@@ -419,7 +419,9 @@ for (const fixture of native.cases.filter((c) => c.label.startsWith('motion-')))
   });
 }
 
-for (const fixture of native.cases.filter((c) => c.label.startsWith('rate-'))) {
+for (const fixture of native.cases.filter(
+  (c) => c.label.startsWith('rate-') && !c.label.startsWith('rate-window-'),
+)) {
   it('measures native emission counts ' + fixture.label, () => {
     const source = particleSource();
     source.main!.durationSeconds = fixture.label === 'rate-delayed' ? 1 : Math.fround(0.1);

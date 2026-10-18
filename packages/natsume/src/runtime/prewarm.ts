@@ -2,9 +2,8 @@ import type { DeepReadonly as R } from '../pack.js';
 import type { ParticleSystemT } from '../format/generated/noa/ir/particle-system.js';
 import { scalar } from './parameters.js';
 
-/** Warm complete cycles until constant/ranged birth lifetimes can reach steady state. */
-export function prewarmDuration(main: NonNullable<R<ParticleSystemT>['main']>): number {
-  if (!main.prewarm || !main.loop) return 0;
+/** Conservative upper bound of authored birth lifetimes, including curve peaks. */
+export function maximumLifetime(main: NonNullable<R<ParticleSystemT>['main']>): number {
   const p = main.lifetime;
   let lifetime = Math.max(1e-6, scalar(p, 0, 0), scalar(p, 0, 1));
   if (p && (p.mode === 1 || p.mode === 3)) {
@@ -26,5 +25,11 @@ export function prewarmDuration(main: NonNullable<R<ParticleSystemT>['main']>): 
       }
     }
   }
-  return Math.ceil(lifetime / main.durationSeconds) * main.durationSeconds;
+  return lifetime;
+}
+
+/** Warm complete cycles until birth lifetimes can reach steady state. */
+export function prewarmDuration(main: NonNullable<R<ParticleSystemT>['main']>): number {
+  if (!main.prewarm || !main.loop) return 0;
+  return Math.ceil(maximumLifetime(main) / main.durationSeconds) * main.durationSeconds;
 }

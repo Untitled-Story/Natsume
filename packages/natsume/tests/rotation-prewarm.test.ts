@@ -73,7 +73,7 @@ for (const c of native.cases.filter((c) => c.label !== 'prewarm'))
           'particles',
           c.label + '/' + frame,
         );
-        expect(Math.abs(e.count - sample.count)).toBeLessThanOrEqual(2);
+        expect(Math.abs(e.count - sample.count)).toBeLessThanOrEqual(1);
         if (main.simulationSpeed === 0) {
           expect(e.count).toBe(0);
           continue;
@@ -83,7 +83,7 @@ for (const c of native.cases.filter((c) => c.label !== 'prewarm'))
           (age, i) => e.lifetimes[i]! - age,
         ).sort((a, b) => a - b);
         expect(remaining.every((v) => v > 0 && v <= life)).toBe(true);
-        // Native keeps a boundary birth pending; compare the median, not serial order.
+        // Native compacts expired particles; compare sorted remaining lifetimes.
         const expected = [...sample.remaining].sort((a, b) => a - b);
         const median = (a: number[]) => a[Math.floor(a.length / 2)]!;
         recordError(
@@ -92,9 +92,12 @@ for (const c of native.cases.filter((c) => c.label !== 'prewarm'))
           's',
           c.label + '/' + frame,
         );
-        if (!c.lifetimeCurve)
-          expect(Math.abs(median(remaining) - median(expected))).toBeLessThan(0.12);
-        else expect(Math.abs(median(remaining) - median(expected))).toBeLessThan(0.1);
+        const tolerance = c.label.includes('grid')
+          ? c.lifetime * 0.1
+          : c.lifetimeCurve
+            ? 0.00002
+            : 0.09;
+        expect(Math.abs(median(remaining) - median(expected))).toBeLessThan(tolerance);
       } else
         for (const [axis, key] of (['x', 'y', 'z'] as const).entries()) {
           recordError(

@@ -14,7 +14,7 @@ public static class NatsumeBoundaryProbe
         public int frame, count;
         public float time, systemTime;
         public Vector3[] positions, velocities, sizes, rotations;
-        public float[] remaining;
+        public float[] remaining, lifetimes;
         public Color[] colors;
         public Vector3[] vertices;
         public Vector2[] uv;
@@ -24,6 +24,8 @@ public static class NatsumeBoundaryProbe
         public float stepSeconds, duration, burstStart, burstInterval, threshold;
         public int burstCycles;
         public bool loop;
+        public float rate, lifetime;
+        public bool lifetimeCurve, rateCurve;
         public Sample[] samples;
     }
     [Serializable] public class Output { public string unityVersion, graphicsDevice; public Result[] cases; }
@@ -57,6 +59,7 @@ public static class NatsumeBoundaryProbe
             positions = particles.Select(p => p.position).ToArray(),
             velocities = particles.Select(p => p.velocity).ToArray(),
             remaining = particles.Select(p => p.remainingLifetime).ToArray(),
+            lifetimes = particles.Select(p => p.startLifetime).ToArray(),
             sizes = particles.Select(p => p.GetCurrentSize3D(ps)).ToArray(),
             colors = particles.Select(p => (Color)p.GetCurrentColor(ps)).ToArray(),
             rotations = particles.Select(p => p.rotation3D).ToArray()
@@ -87,6 +90,9 @@ public static class NatsumeBoundaryProbe
             var burst = ps.emission.burstCount > 0 ? ps.emission.GetBurst(0) : new ParticleSystem.Burst();
             return new Result { label = label, stepSeconds = dt, duration = ps.main.duration, loop = ps.main.loop,
                 burstStart = burst.time, burstInterval = burst.repeatInterval, burstCycles = burst.cycleCount,
+                rate = ps.emission.rateOverTime.Evaluate(1), lifetime = ps.main.startLifetime.constantMax,
+                lifetimeCurve = ps.main.startLifetime.mode == ParticleSystemCurveMode.Curve,
+                rateCurve = ps.emission.rateOverTime.mode == ParticleSystemCurveMode.Curve,
                 samples = samples.ToArray() };
         }
         finally { UnityEngine.Object.DestroyImmediate(ps.gameObject); }
@@ -272,6 +278,23 @@ public static class NatsumeBoundaryProbe
                         var e=ps.emission; e.SetBursts(new [] {new ParticleSystem.Burst(start,(short)2,(short)2,4,.02f)});
                     },camera,dt));
                 }
+            foreach (float dt in new [] {.01f,1f/60f,.02f,1f/30f})
+                foreach (float rate in new [] {7f,17f,60f}) foreach (bool curve in new [] {false,true}) {
+                    string label="rate-window-"+dt+"-"+rate+"-"+curve;
+                    cases.Add(Emission(label,ps=>{
+                        var main=ps.main;main.duration=1;main.startLifetime=curve
+                            ?new ParticleSystem.MinMaxCurve(1,AnimationCurve.Linear(0,.65f,1,1.3f))
+                            :new ParticleSystem.MinMaxCurve(1.3f);
+                        var emission=ps.emission;emission.enabled=true;emission.rateOverTime=rate;
+                    },camera,dt));
+                }
+            foreach (float duration in new [] {.1f,.7f}) foreach (float dt in new [] {1f/60f,.02f}) {
+                cases.Add(Emission("rate-window-curve-"+duration+"-"+dt,ps=>{
+                    var main=ps.main;main.duration=duration;main.startLifetime=1.3f;
+                    var emission=ps.emission;emission.enabled=true;
+                    emission.rateOverTime=new ParticleSystem.MinMaxCurve(1,AnimationCurve.Linear(0,0,1,60));
+                },camera,dt));
+            }
             string output = Path.GetFullPath(Path.Combine(Application.dataPath, "../../unity-baselines/boundaries"));
             Directory.CreateDirectory(output);
             File.WriteAllText(Path.Combine(output, "unity-2022.3.21f1.json"), JsonUtility.ToJson(new Output {

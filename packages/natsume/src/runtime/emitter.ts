@@ -23,7 +23,7 @@ import { scalar, color, random, constantZero } from './parameters.js';
 import { CurlNoiseField } from '../particles/noise/curl-field.js';
 import { ParticleNoise } from '../particles/noise/particle-noise.js';
 import type { SceneNode } from './scene.js';
-import { prewarmDuration } from './prewarm.js';
+import { maximumLifetime, prewarmDuration } from './prewarm.js';
 export { prewarmDuration } from './prewarm.js';
 import { emitterSupport } from './emitter-support.js';
 import { assertSupport } from './support-checks.js';
@@ -62,6 +62,7 @@ export class Emitter {
   readonly noiseSizes: Float32Array | undefined;
   private readonly noiseEvaluator: ParticleNoise | undefined;
   readonly prewarmSeconds: number;
+  private readonly maximumBirthLifetime: number;
   readonly delaySeconds: number;
   readonly shapeMatrix = mat4.create();
   readonly simulationMatrix = mat4.create();
@@ -85,7 +86,10 @@ export class Emitter {
   private readonly burstRepeats = new Map<number, number>();
   private carry = 0;
   private warming = false;
-  private warmEnd = false;
+  private warmStart = 0;
+  private rateTime = 0;
+  private rateSpacing = 0;
+  private pendingPrewarmStep = false;
   private distanceCarry = 0;
   private distanceStarted = false;
   private readonly lastEmissionPosition = new Float64Array(3);
@@ -123,6 +127,7 @@ export class Emitter {
     this.delayRemaining = this.delaySeconds;
     this.distanceStarted = this.delaySeconds > 0;
     this.prewarmSeconds = prewarmDuration(main);
+    this.maximumBirthLifetime = maximumLifetime(main);
     for (const m of source.modules) {
       switch (m.dataType) {
         case M.EmissionModule:
@@ -321,6 +326,9 @@ export class Emitter {
     this.noiseEvaluator?.reset();
     this.nextSerial = 0;
     this.time = 0;
+    this.rateTime = 0;
+    this.rateSpacing = 0;
+    this.pendingPrewarmStep = false;
     this.burstTime = this.burstCycle = 0;
     this.burstRepeats.clear();
     this.carry = 0;
@@ -352,7 +360,10 @@ export class Emitter {
       this.delayRemaining = this.delaySeconds;
       this.distanceStarted = this.delaySeconds > 0;
       this.time = 0;
-      this.warming = this.warmEnd = false;
+      this.rateTime = 0;
+      this.rateSpacing = 0;
+      this.pendingPrewarmStep = false;
+      this.warming = false;
       this.burstTime = this.burstCycle = 0;
       this.burstRepeats.clear();
       this.carry = 0;
@@ -374,17 +385,18 @@ export class Emitter {
   }
   private prewarm(): void {
     if (!this.main.simulationSpeed || !this.prewarmSeconds) return;
-    // Native prewarm uses a coarser birth phase and leaves the final rate birth pending.
+    // Native prewarm retains only the final maximum-lifetime window of rate births.
     this.warming = true;
+    this.warmStart = Math.max(0, this.prewarmSeconds - this.maximumBirthLifetime);
     try {
       const steps = Math.ceil(this.prewarmSeconds / 0.02);
       for (let i = 0; i < steps; i++) {
-        this.warmEnd = i === steps - 1;
         this.advance(Math.min(0.02, this.prewarmSeconds - i * 0.02));
       }
     } finally {
-      this.warming = this.warmEnd = false;
+      this.warming = false;
     }
+    this.pendingPrewarmStep = true;
   }
   private repeatBursts(dt: number): void {
     const bursts = this.emission?.bursts;
@@ -508,9 +520,15 @@ export class Emitter {
     amount: number,
     phase = (this.time % this.main.durationSeconds) / this.main.durationSeconds,
     seconds = this.time,
+    spacing = 0,
+    remainder = 0,
   ): void {
     const capacity = this.ages.length;
-    for (let n = 0; n < amount && this.count < capacity; n++) {
+    // Skip births already beyond every authored lifetime; bound saturated-step work.
+    const first =
+      spacing > 0 ? Math.max(0, amount - Math.ceil(this.maximumBirthLifetime / spacing) - 1) : 0;
+    this.nextSerial += first;
+    for (let n = first; n < amount && n < first + capacity * 2 && this.count < capacity; n++) {
       const i = this.count++,
         o = i * 3,
         serial = this.nextSerial++;
@@ -614,6 +632,8 @@ export class Emitter {
       }
       color(this.main.color, t, rnd(11), this.startColors, i * 4);
       this.updateCustom(i, 0);
+      const age = (amount - n - 1 + remainder) * spacing;
+      if (age > 0) this.advanceParticles(age, i);
     }
   }
   step(delta: number): void {
@@ -637,14 +657,23 @@ export class Emitter {
       if (dt <= 0) return;
     }
     this.advance(dt);
+    if (this.pendingPrewarmStep) {
+      this.pendingPrewarmStep = false;
+      // Native consumes one queued internal step on the first post-prewarm update.
+      this.advance(dt);
+    }
   }
   private advance(dt: number): void {
     this.noiseEvaluator?.advance(
       dt,
       (this.time % this.main.durationSeconds) / this.main.durationSeconds,
     );
+    this.advanceParticles(dt);
+    this.advanceEmission(dt);
+  }
+  private advanceParticles(dt: number, first = 0): void {
     const limitDecay = this.limit ? Math.pow(1 - this.limit.dampen, dt * 30) : 1;
-    for (let i = 0; i < this.count; ) {
+    for (let i = first; i < this.count; ) {
       const age = this.ages[i]! + dt;
       if (age >= this.lifetimes[i]!) {
         this.remove(i);
@@ -862,8 +891,12 @@ export class Emitter {
       this.ages[i] = age;
       i++;
     }
+  }
+  private advanceEmission(dt: number): void {
     if (this.emitting && this.started) {
       const end = this.time + dt;
+      const previousRateTime = this.rateTime;
+      this.rateTime = Math.fround(this.rateTime + Math.fround(dt));
       this.bursts(this.time, end);
       const activeDt = this.main.loop
         ? dt
@@ -872,18 +905,28 @@ export class Emitter {
             Math.min(end, this.main.durationSeconds) -
               Math.min(this.time, this.main.durationSeconds),
           );
-      this.carry +=
-        scalar(
-          this.emission?.rateOverTime,
-          (this.time % this.main.durationSeconds) / this.main.durationSeconds,
-          random(this.seed, 0, 90),
-        ) * activeDt;
-      const amount = this.warmEnd ? 0 : Math.floor(this.carry + 1e-8);
-      this.carry -= amount;
-      const phase = this.warming
-        ? ((end + dt) % this.main.durationSeconds) / this.main.durationSeconds
-        : undefined;
-      this.emit(amount, phase, end);
+      const phase =
+        (this.main.loop
+          ? this.rateTime % this.main.durationSeconds
+          : Math.min(this.rateTime, this.main.durationSeconds)) / this.main.durationSeconds;
+      const rate = Math.max(
+        0,
+        scalar(this.emission?.rateOverTime, phase, random(this.seed, 0, 90)),
+      );
+      const rateDt = this.rateTime - previousRateTime;
+      const birthDt = this.warming
+        ? Math.max(0, this.rateTime - Math.max(previousRateTime, this.warmStart))
+        : !this.main.loop && this.rateTime >= this.main.durationSeconds
+          ? 0
+          : rateDt;
+      const spacing = rate > 0 ? Math.fround(1 / rate) : 0;
+      if (spacing > 0 && this.rateSpacing > 0 && spacing !== this.rateSpacing)
+        this.carry *= spacing / this.rateSpacing;
+      if (spacing > 0) this.rateSpacing = spacing;
+      this.carry += spacing > 0 ? birthDt : 0;
+      const amount = spacing > 0 ? Math.floor(this.carry / spacing) : 0;
+      this.carry -= amount * spacing;
+      this.emit(amount, phase, end, spacing, spacing > 0 ? this.carry / spacing : 0);
       const m = this.node.worldMatrix;
       const distance = Math.hypot(
         m[12]! - this.lastEmissionPosition[0]!,

@@ -44,8 +44,18 @@ public static class NatsumeRotationPrewarmProbe
         }finally{UnityEngine.Object.DestroyImmediate(go);}
     }
     public static void Run(){try{
-        var results=new[]{Measure("rotation-z",false,false,false),Measure("rotation-xyz",false,true,false),Measure("rotation-curve",false,false,true),Measure("prewarm",true,false,false),Measure("prewarm-direct",true,false,false),Measure("prewarm-direct-curve",true,false,false),Measure("prewarm-direct-long",true,false,false,4),Measure("prewarm-direct-duration3-life1",true,false,false,1,3),Measure("prewarm-direct-duration3-life2",true,false,false,2,3),Measure("prewarm-direct-duration3-life4",true,false,false,4,3),Measure("rotation-speed-zero",false,false,false,2,1,0),Measure("rotation-speed-half",false,false,false,2,1,0.5f),Measure("rotation-speed-double",false,false,false,4,1,2),Measure("prewarm-direct-speed-zero",true,false,false,2,1,0),Measure("prewarm-direct-speed-half",true,false,false,2,1,0.5f),Measure("prewarm-direct-speed-double",true,false,false,2,1,2),Measure("prewarm-direct-gravity",true,false,false),Measure("prewarm-direct-lifetime-curve-long",true,false,false,4,1),Measure("prewarm-direct-lifetime-curve-duration3",true,false,false,2,3),Measure("prewarm-direct-rate17",true,false,false,2,1,1,17)};
+        var results=new List<Result>{Measure("rotation-z",false,false,false),Measure("rotation-xyz",false,true,false),Measure("rotation-curve",false,false,true),Measure("prewarm",true,false,false),Measure("prewarm-direct",true,false,false),Measure("prewarm-direct-curve",true,false,false),Measure("prewarm-direct-long",true,false,false,4),Measure("prewarm-direct-duration3-life1",true,false,false,1,3),Measure("prewarm-direct-duration3-life2",true,false,false,2,3),Measure("prewarm-direct-duration3-life4",true,false,false,4,3),Measure("rotation-speed-zero",false,false,false,2,1,0),Measure("rotation-speed-half",false,false,false,2,1,0.5f),Measure("rotation-speed-double",false,false,false,4,1,2),Measure("prewarm-direct-speed-zero",true,false,false,2,1,0),Measure("prewarm-direct-speed-half",true,false,false,2,1,0.5f),Measure("prewarm-direct-speed-double",true,false,false,2,1,2),Measure("prewarm-direct-gravity",true,false,false),Measure("prewarm-direct-lifetime-curve-long",true,false,false,4,1),Measure("prewarm-direct-lifetime-curve-duration3",true,false,false,2,3),Measure("prewarm-direct-rate17",true,false,false,2,1,1,17)};
+        foreach (float duration in new [] {0.7f,2.3f})
+            foreach (float life in new [] {1.3f,3.7f})
+                foreach (float rate in new [] {7f,17f})
+                    foreach (bool curve in new [] {false,true}) {
+                        string label="prewarm-direct-grid-"+duration+"-"+life+"-"+rate+(curve?"-lifetime-curve":"");
+                        results.Add(Measure(label,true,false,false,life,duration,1,rate));
+                    }
+        foreach (float speed in new [] {0.5f,2f})
+            foreach (float rate in new [] {7f,17f})
+                results.Add(Measure("prewarm-direct-speed-grid-"+speed+"-"+rate,true,false,false,1.3f,0.7f,speed,rate));
         string output=Path.GetFullPath(Path.Combine(Application.dataPath,"../../unity-baselines/rotation-prewarm"));Directory.CreateDirectory(output);
-        File.WriteAllText(Path.Combine(output,"unity-2022.3.21f1.json"),JsonUtility.ToJson(new Output{unityVersion=Application.unityVersion,cases=results},true));
+        File.WriteAllText(Path.Combine(output,"unity-2022.3.21f1.json"),JsonUtility.ToJson(new Output{unityVersion=Application.unityVersion,cases=results.ToArray()},true));
     }catch(Exception e){Debug.LogException(e);EditorApplication.Exit(1);}}
 }

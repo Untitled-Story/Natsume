@@ -305,7 +305,7 @@ if (sorting) {
   process.exit(0);
 }
 if (basicShapes || rotationPrewarm) {
-  assert.equal(current.cases.length, basicShapes ? 31 : 20);
+  assert.equal(current.cases.length, basicShapes ? 31 : 40);
   if (process.argv.includes('--update-fixtures'))
     await saveJson(
       resolve(
@@ -384,6 +384,15 @@ if (boundaries) {
     const cases = current.cases.map((sample) => ({
       label: sample.label,
       ...(sample.label.startsWith('sheet-search-') ? { threshold: sample.threshold } : {}),
+      ...(sample.label.startsWith('rate-window-')
+        ? {
+            stepSeconds: sample.stepSeconds,
+            rate: sample.rate,
+            lifetimeCurve: sample.lifetimeCurve,
+            rateCurve: sample.rateCurve,
+            duration: sample.duration,
+          }
+        : {}),
       ...(sample.label.startsWith('repeat-grid-')
         ? {
             stepSeconds: sample.stepSeconds,
@@ -412,9 +421,11 @@ if (boundaries) {
                   ? { vertices: s.vertices, uv: s.uv }
                   : {}),
               }
-            : sample.label.startsWith('sheet-')
-              ? { frame: s.frame, remaining: s.remaining, uv: s.uv }
-              : { frame: s.frame, count: s.count },
+            : sample.label.startsWith('rate-window-')
+              ? { frame: s.frame, count: s.count, remaining: s.remaining, lifetimes: s.lifetimes }
+              : sample.label.startsWith('sheet-')
+                ? { frame: s.frame, remaining: s.remaining, uv: s.uv }
+                : { frame: s.frame, count: s.count },
         ),
     }));
     await mkdir(resolve(root, 'data/unity-baselines/fixtures'), { recursive: true });
