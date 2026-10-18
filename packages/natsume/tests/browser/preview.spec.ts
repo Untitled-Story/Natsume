@@ -787,19 +787,25 @@ test('replaces gravity and view inputs atomically while paused', async ({ page }
   expect(result).toEqual({ rejected: true, preserved: true, updated: true });
 });
 
-test('measures Unity renderer pivot and deterministic flip geometry', async ({ page }) => {
+test('matches Unity renderer pivot and deterministic flip geometry', async ({ page }) => {
   await page.goto('/');
   await page
     .locator('#file')
     .setInputFiles(fileURLToPath(new URL('../../../../data/kirakira.noap', import.meta.url)));
   await expect(page.locator('#status')).toHaveText('预览就绪');
-  const actual = await page.evaluate(
-    async (path) =>
-      (await import(`/@fs${path}`)).measureParticleGeometry(['billboard-pivot', 'billboard-flip']),
-    new URL('./render-fixture.ts', import.meta.url).pathname,
-  );
   const native = JSON.parse(
     readFileSync(new URL('../fixtures/unity-boundaries.json', import.meta.url), 'utf8'),
+  );
+  const actual = await page.evaluate(
+    async ({ path, labels }) => (await import(`/@fs${path}`)).measureParticleGeometry(labels),
+    {
+      path: new URL('./render-fixture.ts', import.meta.url).pathname,
+      labels: native.cases
+        .filter(
+          (c: { label: string }) => c.label.includes('-pivot') || c.label === 'billboard-flip',
+        )
+        .map((c: { label: string }) => c.label),
+    },
   );
   for (const result of actual) {
     const expected = native.cases
@@ -814,12 +820,12 @@ test('measures Unity renderer pivot and deterministic flip geometry', async ({ p
       const p = expected.vertices[index];
       const error = Math.hypot(vertex[0] - p.x, vertex[1] - p.y, vertex[2] - p.z);
       recordError(
-        result.label === 'billboard-pivot' ? 'renderer.pivot' : 'renderer.flip',
+        result.label.includes('-pivot') ? 'renderer.pivot' : 'renderer.flip',
         error,
         'units',
         result.label + '/' + result.frame + '/' + i,
       );
-      expect(Number.isFinite(error)).toBe(true);
+      expect(error, result.label + '/' + result.frame).toBeLessThan(1e-5);
     }
   }
 });

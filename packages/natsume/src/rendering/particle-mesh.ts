@@ -179,6 +179,7 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
   }[];
   private readonly baseUV: readonly { readonly x: number; readonly y: number }[];
   private readonly baseIndices: readonly number[];
+  private readonly pivotSize: readonly number[];
   private readonly scratchColor = new Float32Array(4);
   private readonly rotationMatrix = mat4.create();
   private readonly binding;
@@ -440,6 +441,17 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
     this.basePositions = positions;
     this.baseUV = uv;
     this.baseIndices = meshIndices;
+    this.pivotSize = [1, 1, 1];
+    if (definition.mode === RenderMode.Mesh) {
+      const min = [Infinity, Infinity, Infinity],
+        max = [-Infinity, -Infinity, -Infinity];
+      for (const p of positions)
+        for (const [axis, key] of (['x', 'y', 'z'] as const).entries()) {
+          min[axis] = Math.min(min[axis]!, p[key]);
+          max[axis] = Math.max(max[axis]!, p[key]);
+        }
+      this.pivotSize = max.map((value, axis) => value - min[axis]!);
+    }
     this.binding = material.textures[0]!;
     const mask = state.colorWriteMask;
     this.colorWriteMask =
@@ -589,12 +601,13 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
         let x = p.x * sx,
           y = p.y * sy,
           z = p.z * sz;
-        if (this.definition.mode !== RenderMode.Mesh) {
-          if (this.definition.pivot) {
-            x -= this.definition.pivot.x * sx;
-            y -= this.definition.pivot.y * sy;
-            z -= this.definition.pivot.z * sz;
-          }
+        const pivot = this.definition.pivot;
+        if (pivot && !stretched) {
+          // Unity adds the offset before particle rotation. Billboard depth
+          // uses width; Mesh offsets use the mesh's unscaled bounds.
+          x += pivot.x * sx * this.pivotSize[0]!;
+          y += pivot.y * sy * this.pivotSize[1]!;
+          z += pivot.z * (this.definition.mode === RenderMode.Mesh ? sz : sx) * this.pivotSize[2]!;
         }
         let a = x * cz - y * snz;
         y = x * snz + y * cz;
@@ -619,8 +632,8 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
         if (stretched) {
           // Native stretch anchors UV.x=0 at the particle, ignores Euler rotation,
           // and flips the transverse edge when the combined length is negative.
-          const along = uv.x * stretchLength,
-            across = (uv.y - 0.5) * sx * localScale.x * Math.sign(stretchLength);
+          const along = uv.x * stretchLength - 2 * (pivot?.y ?? 0) * sy * localScale.y,
+            across = (uv.y - 0.5 + (pivot?.x ?? 0)) * sx * localScale.x * Math.sign(stretchLength);
           wx += -stretchX * along + stretchWidthX * across;
           wy += -stretchY * along + stretchWidthY * across;
           wz -= stretchZ * along;

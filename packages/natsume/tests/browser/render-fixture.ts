@@ -182,17 +182,26 @@ export async function measureParticleGeometry(labels?: string[]) {
         ? RenderMode.Billboard
         : RenderMode.Mesh;
     const source = particleSource(label.startsWith('appearance-') ? 'appearance-blend' : '');
-    if (label === 'stretch-zero-speed' || label === 'stretch-linear-velocity')
+    if (
+      label.includes('zero-speed') ||
+      label === 'stretch-linear-velocity' ||
+      label === 'stretch-pivot-fast'
+    )
       source.modules.push(
         new ParticleModuleT(
           M.VelocityModule,
           new VelocityModuleT(
-            vector(label === 'stretch-zero-speed' ? -2 : 0, label === 'stretch-zero-speed' ? 0 : 2),
+            vector(
+              label.includes('zero-speed') ? -2 : label === 'stretch-pivot-fast' ? 2 : 0,
+              label === 'stretch-linear-velocity' ? 2 : 0,
+            ),
           ),
         ),
       );
     const emitter = new Emitter(3, scene.nodes.get(1)!, source, true, 1, []);
     manualParticle(emitter);
+    if (label.endsWith('-unrotated')) emitter.rotations.fill(0);
+    if (label === 'stretch-pivot-unit-size') emitter.startSizes.fill(1);
     const definition = structuredClone(original.definition) as ParticleRendererT;
     definition.mode = mode;
     definition.alignment = label.includes('local-')
@@ -201,11 +210,19 @@ export async function measureParticleGeometry(labels?: string[]) {
         ? Alignment.View
         : Alignment.World;
     definition.cameraVelocityScale = definition.velocityScale = 0;
-    definition.lengthScale =
-      label === 'stretch-positive' ? 2 : label === 'stretch-negative-one' ? -1 : -4;
+    definition.lengthScale = label.endsWith('-positive')
+      ? 2
+      : label === 'stretch-negative-one'
+        ? -1
+        : -4;
     definition.freeformStretching = false;
     definition.rotateWithStretchDirection = true;
-    if (label === 'billboard-pivot') definition.pivot = new Vec3T(0.25, -0.5, 0.1);
+    if (label.includes('-pivot'))
+      definition.pivot = new Vec3T(
+        label.endsWith('-y') || label.endsWith('-z') ? 0 : 0.25,
+        label.endsWith('-x') || label.endsWith('-z') ? 0 : -0.5,
+        label.endsWith('-x') || label.endsWith('-y') ? 0 : 0.1,
+      );
     if (label === 'billboard-flip') definition.flip = new Vec3T(1, 1, 0);
     definition.meshAssetIds = [1];
     const fixturePack = {

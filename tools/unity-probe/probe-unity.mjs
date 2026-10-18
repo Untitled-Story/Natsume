@@ -344,19 +344,19 @@ if (boundaries) {
       label: sample.label,
       samples: sample.samples
         .filter((s) =>
-          /motion|appearance|stretch|mesh-(view|world|local)|billboard-/.test(sample.label)
+          /motion|appearance|stretch|mesh-|billboard-/.test(sample.label)
             ? [0, 1, 4, 30, 59].includes(s.frame)
             : true,
         )
         .map((s) =>
-          /motion|appearance|stretch|mesh-(view|world|local)|billboard-/.test(sample.label)
+          /motion|appearance|stretch|mesh-|billboard-/.test(sample.label)
             ? {
                 frame: s.frame,
                 positions: s.positions,
                 velocities: s.velocities,
                 sizes: s.sizes,
                 colors: s.colors,
-                ...(/appearance|stretch|mesh-(view|world|local)|billboard-/.test(sample.label)
+                ...(/appearance|stretch|mesh-|billboard-/.test(sample.label)
                   ? { vertices: s.vertices, uv: s.uv }
                   : {}),
               }

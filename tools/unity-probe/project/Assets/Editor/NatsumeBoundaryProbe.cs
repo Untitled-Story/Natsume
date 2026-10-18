@@ -83,7 +83,7 @@ public static class NatsumeBoundaryProbe
         }
         finally { UnityEngine.Object.DestroyImmediate(ps.gameObject); }
     }
-    static Result Manual(string label, Action<ParticleSystem> configure, Camera camera, bool bake = false, float dt = 1f/60f)
+    static Result Manual(string label, Action<ParticleSystem> configure, Camera camera, bool bake = false, float dt = 1f/60f, Vector3? particleRotation = null, Vector3? particleSize = null)
     {
         var ps = Create();
         try
@@ -92,8 +92,8 @@ public static class NatsumeBoundaryProbe
             ps.Simulate(0, false, true, false);
             ps.SetParticles(new [] { new ParticleSystem.Particle {
                 position = new Vector3(1, 0.5f, 0.2f), velocity = new Vector3(2, 0, 0),
-                startLifetime = 1, remainingLifetime = 1, startSize3D = new Vector3(2, 3, 4),
-                rotation3D = new Vector3(20, 35, 55), startColor = new Color(0.8f, 0.6f, 0.4f, 0.5f), randomSeed = 1000
+                startLifetime = 1, remainingLifetime = 1, startSize3D = particleSize ?? new Vector3(2, 3, 4),
+                rotation3D = particleRotation ?? new Vector3(20, 35, 55), startColor = new Color(0.8f, 0.6f, 0.4f, 0.5f), randomSeed = 1000
             } }, 1);
             var samples = new List<Sample> { Read(ps, 0, dt, camera, bake) };
             for (int frame = 1; frame <= 61; frame++)
@@ -192,6 +192,21 @@ public static class NatsumeBoundaryProbe
                 Manual("mesh-world-node-rotated", ps => { MeshRenderer(ps); ps.transform.rotation = Quaternion.Euler(0,0,90); }, camera, true),
                 Manual("mesh-local-node-rotated", ps => { MeshRenderer(ps); ps.GetComponent<ParticleSystemRenderer>().alignment = ParticleSystemRenderSpace.Local; ps.transform.rotation = Quaternion.Euler(0,0,90); }, camera, true),
                 Manual("billboard-pivot", ps => { ps.GetComponent<ParticleSystemRenderer>().pivot = new Vector3(0.25f,-0.5f,0.1f); }, camera, true),
+                Manual("billboard-pivot-x", ps => { ps.GetComponent<ParticleSystemRenderer>().pivot = new Vector3(0.25f,0,0); }, camera, true),
+                Manual("billboard-pivot-y", ps => { ps.GetComponent<ParticleSystemRenderer>().pivot = new Vector3(0,-0.5f,0); }, camera, true),
+                Manual("billboard-pivot-z", ps => { ps.GetComponent<ParticleSystemRenderer>().pivot = new Vector3(0,0,0.1f); }, camera, true),
+                Manual("billboard-pivot-unrotated", ps => { ps.GetComponent<ParticleSystemRenderer>().pivot = new Vector3(0.25f,-0.5f,0.1f); }, camera, true, particleRotation: Vector3.zero),
+                Manual("billboard-pivot-local-node-rotated", ps => { ps.transform.rotation=Quaternion.Euler(0,0,90); var r=ps.GetComponent<ParticleSystemRenderer>(); r.alignment=ParticleSystemRenderSpace.Local; r.pivot=new Vector3(0.25f,-0.5f,0.1f); }, camera, true),
+                Manual("mesh-pivot", ps => { MeshRenderer(ps); ps.GetComponent<ParticleSystemRenderer>().pivot = new Vector3(0.25f,-0.5f,0.1f); }, camera, true),
+                Manual("mesh-pivot-local-node-rotated", ps => { MeshRenderer(ps); ps.transform.rotation=Quaternion.Euler(0,0,90); var r=ps.GetComponent<ParticleSystemRenderer>(); r.alignment=ParticleSystemRenderSpace.Local; r.pivot=new Vector3(0.25f,-0.5f,0.1f); }, camera, true),
+                Manual("stretch-pivot", ps => { var r=ps.GetComponent<ParticleSystemRenderer>(); r.renderMode=ParticleSystemRenderMode.Stretch; r.lengthScale=-4; r.velocityScale=r.cameraVelocityScale=0; r.pivot=new Vector3(0.25f,-0.5f,0.1f); }, camera, true),
+                Manual("stretch-pivot-x", ps => { Stretch(ps,-4); ps.GetComponent<ParticleSystemRenderer>().pivot=new Vector3(0.25f,0,0); }, camera, true),
+                Manual("stretch-pivot-y", ps => { Stretch(ps,-4); ps.GetComponent<ParticleSystemRenderer>().pivot=new Vector3(0,-0.5f,0); }, camera, true),
+                Manual("stretch-pivot-z", ps => { Stretch(ps,-4); ps.GetComponent<ParticleSystemRenderer>().pivot=new Vector3(0,0,0.1f); }, camera, true),
+                Manual("stretch-pivot-positive", ps => { Stretch(ps,2); ps.GetComponent<ParticleSystemRenderer>().pivot=new Vector3(0.25f,-0.5f,0.1f); }, camera, true),
+                Manual("stretch-pivot-fast", ps => { Stretch(ps,-4); var v=ps.velocityOverLifetime;v.enabled=true;v.x=2; ps.GetComponent<ParticleSystemRenderer>().pivot=new Vector3(0.25f,-0.5f,0.1f); }, camera, true),
+                Manual("stretch-pivot-zero-speed", ps => { Stretch(ps,-4,true); ps.GetComponent<ParticleSystemRenderer>().pivot=new Vector3(0.25f,-0.5f,0.1f); }, camera, true),
+                Manual("stretch-pivot-unit-size", ps => { Stretch(ps,-4); ps.GetComponent<ParticleSystemRenderer>().pivot=new Vector3(0.25f,-0.5f,0.1f); }, camera, true, particleSize: Vector3.one),
                 Manual("billboard-flip", ps => { ps.GetComponent<ParticleSystemRenderer>().flip = new Vector3(1,1,0); }, camera, true),
                 Manual("billboard-local-node-rotated", ps => { ps.GetComponent<ParticleSystemRenderer>().alignment = ParticleSystemRenderSpace.Local; ps.transform.rotation = Quaternion.Euler(0,0,90); }, camera, true),
                 Manual("billboard-world-node-rotated", ps => { ps.transform.rotation = Quaternion.Euler(0,0,90); }, camera, true),
