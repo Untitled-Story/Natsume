@@ -783,8 +783,9 @@ export class Emitter {
       this.positions[o] = x + vx * dt;
       this.positions[o + 1] = y + vy * dt;
       this.positions[o + 2] = z + vz * dt;
+      // Custom Data, like integrated rotation, samples the start of this simulation step.
+      this.updateCustom(i, this.ages[i]! / this.lifetimes[i]!);
       this.ages[i] = age;
-      this.updateCustom(i, t);
       i++;
     }
     if (this.emitting && this.started) {

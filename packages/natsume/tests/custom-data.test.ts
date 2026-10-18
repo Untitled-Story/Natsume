@@ -11,6 +11,12 @@ import { CustomDataModuleT } from '../src/format/generated/noa/ir/custom-data-mo
 import { ParticleModuleT } from '../src/format/generated/noa/ir/particle-module.js';
 import { ParticleModuleData as M } from '../src/format/generated/noa/ir/particle-module-data.js';
 import { ColorParameterT } from '../src/format/generated/noa/ir/color-parameter.js';
+import { EmissionModuleT } from '../src/format/generated/noa/ir/emission-module.js';
+import { BurstT } from '../src/format/generated/noa/ir/burst.js';
+import { ColorMode } from '../src/format/generated/noa/ir/color-mode.js';
+import { GradientT } from '../src/format/generated/noa/ir/gradient.js';
+import { RgbKeyT } from '../src/format/generated/noa/ir/rgb-key.js';
+import { AlphaKeyT } from '../src/format/generated/noa/ir/alpha-key.js';
 import { ColorT } from '../src/format/generated/noa/ir/color.js';
 it('evaluates both custom streams with vector and authored HDR color values', () => {
   const doc = minimalDocument();
@@ -34,7 +40,7 @@ it('evaluates both custom streams with vector and authored HDR color values', ()
   const e = new Emitter(3, new Scene(pack, [1]).nodes.get(1)!, source, true, 1, []);
   manualParticle(e);
   e.step(0.25);
-  expect(e.customData![0]).toBeCloseTo(0.25, 6);
+  expect(e.customData![0]).toBe(0);
   expect([...e.customData!.slice(1, 5)]).toEqual([2, 3, 4, 2]);
   expect(e.customData![5]).toBeCloseTo(-0.2, 6);
   expect(e.customData![7]).toBe(0.5);
@@ -42,7 +48,12 @@ it('evaluates both custom streams with vector and authored HDR color values', ()
 
 const native = JSON.parse(readNativeFixture('unity-custom-data.json')) as {
   cases: {
+    label: string;
     components: number;
+    lifetime: number;
+    steps: number[];
+    emitted: boolean;
+    gradient: boolean;
     samples: {
       frame: number;
       custom1: { x: number; y: number; z: number; w: number };
@@ -51,7 +62,7 @@ const native = JSON.parse(readNativeFixture('unity-custom-data.json')) as {
   }[];
 };
 for (const sample of native.cases)
-  it('measures Unity custom Vector' + sample.components + ' and HDR Color', () => {
+  it('matches Unity custom streams ' + sample.label, () => {
     const doc = minimalDocument();
     const pack = {
       nodes: doc.nodes,
@@ -61,6 +72,22 @@ for (const sample of native.cases)
     const source = particleSource();
     const color = new ColorParameterT();
     color.colorMax = new ColorT(2, -0.2, 0.4, 0.5);
+    source.main!.lifetime = constant(sample.lifetime);
+    if (sample.gradient) {
+      color.mode = ColorMode.Gradient;
+      color.gradientMax = new GradientT(
+        0,
+        [new RgbKeyT(0, 1, 0, 0), new RgbKeyT(1, 0, 0, 1)],
+        [new AlphaKeyT(0, 0.2), new AlphaKeyT(1, 0.8)],
+      );
+    }
+    if (sample.emitted)
+      source.modules.push(
+        new ParticleModuleT(
+          M.EmissionModule,
+          new EmissionModuleT(null, null, [new BurstT(0, constant(1))]),
+        ),
+      );
     source.modules.push(
       new ParticleModuleT(
         M.CustomDataModule,
@@ -76,9 +103,16 @@ for (const sample of native.cases)
       ),
     );
     const e = new Emitter(3, new Scene(pack, [1]).nodes.get(1)!, source, true, 1, []);
-    manualParticle(e);
-    for (let frame = 1; frame <= 30; frame++) {
-      e.step(1 / 60);
+    if (sample.emitted) e.sync();
+    else {
+      manualParticle(e);
+      e.lifetimes[0] = sample.lifetime;
+    }
+    for (let frame = 1; frame <= sample.steps.length; frame++) {
+      const dt = sample.steps[frame - 1]!;
+      // Unity subdivides Simulate calls above 1/30 s, even with fixedTimeStep=false.
+      const substeps = Math.ceil(dt / (1 / 30));
+      for (let step = 0; step < substeps; step++) e.step(dt / substeps);
       const expected = sample.samples.find((s) => s.frame === frame);
       if (!expected) continue;
       for (const [i, key] of (['x', 'y', 'z', 'w'] as const).entries()) {
@@ -86,15 +120,15 @@ for (const sample of native.cases)
           'custom.vector',
           e.customData![i]! - expected.custom1[key],
           'value',
-          sample.components + '/' + frame + '/' + key,
+          sample.label + '/' + frame + '/' + key,
         );
         recordError(
           'custom.color',
           e.customData![4 + i]! - expected.custom2[key],
           'HDR channel',
-          sample.components + '/' + frame + '/' + key,
+          sample.label + '/' + frame + '/' + key,
         );
-        expect(Math.abs(e.customData![i]! - expected.custom1[key])).toBeLessThan(0.017);
+        expect(Math.abs(e.customData![i]! - expected.custom1[key])).toBeLessThan(1e-6);
         expect(Math.abs(e.customData![4 + i]! - expected.custom2[key])).toBeLessThan(1e-6);
       }
     }

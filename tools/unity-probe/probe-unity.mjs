@@ -225,7 +225,7 @@ if (compatibility) {
   process.exit(0);
 }
 if (noiseStatistics || customData) {
-  assert.equal(current.cases.length, noiseStatistics ? 86 : 4);
+  assert.equal(current.cases.length, noiseStatistics ? 86 : 8);
   if (process.argv.includes('--update-fixtures'))
     await saveJson(
       resolve(
