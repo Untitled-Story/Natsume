@@ -19,7 +19,13 @@ public static class NatsumeBoundaryProbe
         public Vector3[] vertices;
         public Vector2[] uv;
     }
-    [Serializable] public class Result { public string label; public Sample[] samples; }
+    [Serializable] public class Result {
+        public string label;
+        public float stepSeconds, duration, burstStart, burstInterval;
+        public int burstCycles;
+        public bool loop;
+        public Sample[] samples;
+    }
     [Serializable] public class Output { public string unityVersion, graphicsDevice; public Result[] cases; }
     static ParticleSystem Create()
     {
@@ -64,7 +70,7 @@ public static class NatsumeBoundaryProbe
         }
         return sample;
     }
-    static Result Emission(string label, Action<ParticleSystem> configure, Camera camera)
+    static Result Emission(string label, Action<ParticleSystem> configure, Camera camera, float dt = 1f/60f)
     {
         var ps = Create();
         try
@@ -72,14 +78,16 @@ public static class NatsumeBoundaryProbe
             configure(ps);
             ps.Simulate(0, false, true, false);
             ps.Play(false);
-            const float dt = 1f / 60f;
             var samples = new List<Sample> { Read(ps, 0, dt, camera, false) };
             for (int frame = 1; frame <= 18; frame++)
             {
                 ps.Simulate(dt, false, false, false);
                 samples.Add(Read(ps, frame, dt, camera, false));
             }
-            return new Result { label = label, samples = samples.ToArray() };
+            var burst = ps.emission.burstCount > 0 ? ps.emission.GetBurst(0) : new ParticleSystem.Burst();
+            return new Result { label = label, stepSeconds = dt, duration = ps.main.duration, loop = ps.main.loop,
+                burstStart = burst.time, burstInterval = burst.repeatInterval, burstCycles = burst.cycleCount,
+                samples = samples.ToArray() };
         }
         finally { UnityEngine.Object.DestroyImmediate(ps.gameObject); }
     }
@@ -222,6 +230,14 @@ public static class NatsumeBoundaryProbe
                 Manual("sheet-constant-quarter-twice", ps => { Sheet(ps, 0, 2); var s = ps.textureSheetAnimation; s.frameOverTime = 0.25f; }, camera, true),
                 Manual("sheet-nonlinear-twice", ps => { Sheet(ps, 0, 2); var s = ps.textureSheetAnimation; s.frameOverTime = new ParticleSystem.MinMaxCurve(1, new AnimationCurve(new Keyframe(0,0,0,0), new Keyframe(1,1,2,2))); }, camera, true)
             };
+            foreach (float dt in new [] {1f/100f, 1f/60f, 1f/40f, 1f/30f})
+                foreach (float duration in new [] {.1f,.2f}) foreach (float start in new [] {0f,.025f}) {
+                    string label = "repeat-grid-" + dt + "-" + duration + "-" + start;
+                    cases.Add(Emission(label, ps => {
+                        Rate(ps,0); var m=ps.main; m.duration=duration;
+                        var e=ps.emission; e.SetBursts(new [] {new ParticleSystem.Burst(start,(short)2,(short)2,4,.02f)});
+                    },camera,dt));
+                }
             string output = Path.GetFullPath(Path.Combine(Application.dataPath, "../../unity-baselines/boundaries"));
             Directory.CreateDirectory(output);
             File.WriteAllText(Path.Combine(output, "unity-2022.3.21f1.json"), JsonUtility.ToJson(new Output {

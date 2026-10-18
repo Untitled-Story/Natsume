@@ -23,6 +23,7 @@ import { FeatureRequirementT } from '../src/format/generated/noa/ir/feature-requ
 
 interface NativeSample {
   frame: number;
+  remaining: number[];
   count: number;
   positions: { x: number; y: number; z: number }[];
   velocities: { x: number; y: number; z: number }[];
@@ -171,7 +172,7 @@ it('bounds burst work and supports fixed-step infinite zero-interval bursts', ()
 });
 
 it.skipIf(!hasNativeFixture('unity-boundaries.json'))(
-  'keeps short repeated bursts bounded without copying native early cutoff',
+  'matches short repeated bursts at the duration boundary',
   () => {
     const source = particleSource();
     source.main!.durationSeconds = Math.fround(0.1);
@@ -189,18 +190,62 @@ it.skipIf(!hasNativeFixture('unity-boundaries.json'))(
     for (let frame = 1; frame <= 18; frame++) {
       emitter.step(1 / 60);
       const count = fixture.samples.find((s) => s.frame === frame)!.count;
-      // Measured native short-duration cutoff drops the last two-particle burst.
       recordError(
         'emission.shortBurst.count',
         emitter.count - count,
         'particles',
         'burst-repeat/' + frame,
       );
-      expect(Math.abs(emitter.count - count)).toBeLessThanOrEqual(2);
+      expect(emitter.count).toBe(count);
     }
-    expect(emitter.count).toBe(8);
+    expect(emitter.count).toBe(6);
   },
 );
+
+const repeatNative = JSON.parse(readNativeFixture('unity-boundaries.json')) as {
+  cases: {
+    label: string;
+    stepSeconds: number;
+    duration: number;
+    burstStart: number;
+    burstInterval: number;
+    burstCycles: number;
+    loop: boolean;
+    samples: NativeSample[];
+  }[];
+};
+for (const c of repeatNative.cases.filter((c) => c.label.startsWith('repeat-grid-')))
+  it('matches native repeated burst sampling ' + c.label, () => {
+    const source = particleSource();
+    source.main!.durationSeconds = c.duration;
+    source.main!.loop = c.loop;
+    source.modules.push(
+      new ParticleModuleT(
+        M.EmissionModule,
+        new EmissionModuleT(null, null, [
+          new BurstT(c.burstStart, constant(2), c.burstCycles, c.burstInterval),
+        ]),
+      ),
+    );
+    const e = new Emitter(3, scene.nodes.get(1)!, source, true, 1, []);
+    e.sync();
+    for (const s of c.samples.slice(1)) {
+      e.step(c.stepSeconds);
+      recordError(
+        'emission.repeatedBurst.count',
+        e.count - s.count,
+        'particles',
+        c.label + '/' + s.frame,
+      );
+      expect(e.count, c.label + '/' + s.frame).toBe(s.count);
+    }
+    e.reset();
+    e.sync();
+    for (const s of c.samples.slice(1)) {
+      e.step(c.stepSeconds);
+      expect(e.count).toBe(s.count);
+    }
+  });
 
 it('keeps burst boundaries single, includes duration-end and resets loop curve phase', () => {
   const source = particleSource();

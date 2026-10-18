@@ -80,6 +80,9 @@ export class Emitter {
   private readonly birth = new Float64Array(6);
   private nextSerial = 0;
   private time = 0;
+  private burstTime = 0;
+  private burstCycle = 0;
+  private readonly burstRepeats = new Map<number, number>();
   private carry = 0;
   private distanceCarry = 0;
   private distanceStarted = false;
@@ -316,6 +319,8 @@ export class Emitter {
     this.noiseEvaluator?.reset();
     this.nextSerial = 0;
     this.time = 0;
+    this.burstTime = this.burstCycle = 0;
+    this.burstRepeats.clear();
     this.carry = 0;
     this.distanceCarry = 0;
     this.distanceStarted = this.delaySeconds > 0;
@@ -345,6 +350,8 @@ export class Emitter {
       this.delayRemaining = this.delaySeconds;
       this.distanceStarted = this.delaySeconds > 0;
       this.time = 0;
+      this.burstTime = this.burstCycle = 0;
+      this.burstRepeats.clear();
       this.carry = 0;
       this.distanceCarry = 0;
       this.distanceStarted = this.delaySeconds > 0;
@@ -367,12 +374,66 @@ export class Emitter {
     const steps = Math.ceil(this.prewarmSeconds * 60);
     for (let i = 0; i < steps; i++) this.advance(Math.min(1 / 60, this.prewarmSeconds - i / 60));
   }
+  private repeatBursts(dt: number): void {
+    const bursts = this.emission?.bursts;
+    if (!bursts?.some((b) => b.intervalSeconds > 0 && b.cycles !== 1)) return;
+    const initial = this.burstTime === 0 && this.burstCycle === 0;
+    const duration = Math.fround(this.main.durationSeconds);
+    const steps = Math.ceil(dt / Math.fround(0.03)),
+      step = Math.fround(dt / steps);
+    for (let i = 0; i < steps; i++) {
+      this.burstTime = Math.fround(this.burstTime + step);
+      if (this.main.loop && this.burstTime >= duration - 1e-8) {
+        const cycles = Math.max(1, Math.floor((this.burstTime + 1e-8) / duration));
+        this.burstTime = Math.fround(this.burstTime - cycles * duration);
+        if (Math.abs(this.burstTime) < 1e-8) this.burstTime = 0;
+        this.burstCycle += cycles;
+        this.burstRepeats.clear();
+      }
+      for (const [index, b] of bursts.entries()) {
+        if (
+          b.intervalSeconds <= 0 ||
+          b.cycles === 1 ||
+          this.burstTime <= b.timeSeconds ||
+          this.burstTime >= duration
+        )
+          continue;
+        // Native samples one repetition index per substep; it does not replay
+        // every event crossed by a large step, or repeat at the duration end.
+        const repeat = Math.floor(
+          Math.fround(Math.fround(this.burstTime - b.timeSeconds) / b.intervalSeconds),
+        );
+        if (
+          repeat < 0 ||
+          (b.cycles && repeat >= b.cycles) ||
+          this.burstRepeats.get(index) === repeat
+        )
+          continue;
+        // The zero-time birth already exposed by play stands for this first sample.
+        const alreadyBorn =
+          initial && i === 0 && b.timeSeconds === 0 && this.burstRepeats.has(index);
+        this.burstRepeats.set(index, repeat);
+        if (alreadyBorn) continue;
+        if (random(this.seed, this.burstCycle, index + 100) < b.probability) {
+          const phase = (b.timeSeconds + repeat * b.intervalSeconds) / duration;
+          this.emit(
+            Math.round(scalar(b.count, phase, random(this.seed, this.burstCycle, index + 110))),
+            phase,
+            this.burstCycle * duration + b.timeSeconds + repeat * b.intervalSeconds,
+          );
+        }
+      }
+    }
+  }
   private bursts(from: number, to: number): void {
+    if (from >= 0) this.repeatBursts(to - from);
     const duration = this.main.durationSeconds;
     const firstCycle = this.main.loop ? Math.max(0, Math.floor(from / duration)) : 0;
     const lastCycle = this.main.loop ? Math.floor(to / duration) : 0;
     for (let cycle = firstCycle; cycle <= lastCycle; cycle++)
       for (const [index, b] of (this.emission?.bursts ?? []).entries()) {
+        const repeated = b.intervalSeconds > 0 && b.cycles !== 1;
+        if (repeated && from >= 0) continue;
         if (b.cycles === 0 && b.intervalSeconds === 0) {
           const localTo = to - cycle * duration;
           if (
@@ -421,6 +482,7 @@ export class Emitter {
               : when <= from + (from < 0 ? 0 : epsilon) || when > to + epsilon
           )
             continue;
+          if (repeated) this.burstRepeats.set(index, repeat);
           if (random(this.seed, cycle, index + 100) < b.probability)
             this.emit(
               Math.round(scalar(b.count, phase, random(this.seed, cycle, index + 110))),

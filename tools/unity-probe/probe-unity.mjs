@@ -383,6 +383,16 @@ if (boundaries) {
   if (process.argv.includes('--update-fixtures')) {
     const cases = current.cases.map((sample) => ({
       label: sample.label,
+      ...(sample.label.startsWith('repeat-grid-')
+        ? {
+            stepSeconds: sample.stepSeconds,
+            duration: sample.duration,
+            burstStart: sample.burstStart,
+            burstInterval: sample.burstInterval,
+            burstCycles: sample.burstCycles,
+            loop: sample.loop,
+          }
+        : {}),
       samples: sample.samples
         .filter((s) =>
           /motion|appearance|stretch|mesh-|billboard-/.test(sample.label)
@@ -402,7 +412,7 @@ if (boundaries) {
                   : {}),
               }
             : sample.label.startsWith('sheet-')
-              ? { frame: s.frame, uv: s.uv }
+              ? { frame: s.frame, remaining: s.remaining, uv: s.uv }
               : { frame: s.frame, count: s.count },
         ),
     }));
