@@ -1,4 +1,11 @@
-import { Application, Container, Graphics, Texture, RenderTexture } from 'pixi.js';
+import {
+  Application,
+  Container,
+  Graphics,
+  Texture,
+  RenderTexture,
+  BufferImageSource,
+} from 'pixi.js';
 import { ParticleMesh, ensureParticlePipe } from '../../src/rendering/particle-mesh.js';
 import type { ParticleEnvironment } from '../../src/rendering/particle-environment.js';
 import { Emitter } from '../../src/runtime/emitter.js';
@@ -16,7 +23,19 @@ import { RenderStateT } from '../../src/format/generated/noa/ir/render-state.js'
 import { FloatPropertyT } from '../../src/format/generated/noa/ir/float-property.js';
 import type { WebGLRenderer } from 'pixi.js';
 
-export async function measureLegacyMaterials() {
+export interface NativeLegacyCase {
+  label: string;
+  model: string;
+  fog: string;
+  backgroundDepth: number;
+  particleDepth: number;
+  density: number;
+  start: number;
+  end: number;
+  pixels: number[];
+}
+
+export async function measureLegacyMaterials(nativeCases: readonly NativeLegacyCase[] = []) {
   const app = new Application();
   await app.init({
     preference: 'webgl',
@@ -122,6 +141,38 @@ export async function measureLegacyMaterials() {
       depth: [0, 0, 1, 0.25],
       softParticles: { depthTexture: Texture.WHITE },
     });
+    for (const sample of nativeCases) {
+      const depth = new Texture({
+        source: new BufferImageSource({
+          resource: new Float32Array([sample.backgroundDepth, 0, 0, 1]),
+          width: 1,
+          height: 1,
+          format: 'rgba32float',
+          alphaMode: 'no-premultiply-alpha',
+          scaleMode: 'nearest',
+        }),
+      });
+      try {
+        const fog: ParticleEnvironment['fog'] =
+          sample.fog === 'linear'
+            ? { mode: 'linear', color: [0, 1, 0], start: sample.start, end: sample.end }
+            : sample.fog === 'exp' || sample.fog === 'exp2'
+              ? { mode: sample.fog, color: [0, 1, 0], density: sample.density }
+              : { mode: 'none' };
+        draw(
+          sample.label,
+          sample.model === 'alpha' ? M.LegacyParticleAlphaBlend : M.LegacyParticleAdditive,
+          {
+            fog,
+            depth: sample.particleDepth,
+            ...(sample.fog === 'none' ? { softParticles: { depthTexture: depth } } : {}),
+          },
+        );
+        if (depth.destroyed) throw new Error('Borrowed scene depth was destroyed');
+      } finally {
+        depth.destroy(true);
+      }
+    }
     const borrowedAlive = !Texture.WHITE.destroyed;
     return { results, borrowedAlive, glError: (app.renderer as WebGLRenderer).gl.getError() };
   } finally {

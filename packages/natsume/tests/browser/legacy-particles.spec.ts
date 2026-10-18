@@ -1,5 +1,6 @@
 import { recordError } from '../measurement.js';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import type { NativeLegacyCase } from './legacy-render-fixture.js';
 import { fileURLToPath } from 'node:url';
 import { test, expect } from '@playwright/test';
 
@@ -102,5 +103,36 @@ test('renders legacy blending, three fog modes, zIndex fallback and soft particl
     );
   }
   expect(result.borrowedAlive).toBe(true);
+  expect(result.glError).toBe(0);
+});
+
+test('matches native legacy fog and depth-writing scene pixels', async ({ page }) => {
+  const fixture = new URL(
+    '../../../../data/unity-baselines/fixtures/unity-meshes.json',
+    import.meta.url,
+  );
+  test.skip(!existsSync(fixture), 'Local native measurements are absent');
+  const cases = (JSON.parse(readFileSync(fixture, 'utf8')) as { legacyCases?: NativeLegacyCase[] })
+    .legacyCases;
+  test.skip(!cases, 'Native legacy pixels have not been measured');
+  await page.goto('/');
+  const result = await page.evaluate(
+    async ({ path, cases }) => (await import('/@fs' + path)).measureLegacyMaterials(cases),
+    {
+      path: new URL('./legacy-render-fixture.ts', import.meta.url).pathname,
+      cases,
+    },
+  );
+  for (const sample of cases!)
+    for (let channel = 0; channel < 3; channel++) {
+      const error = result.results[sample.label][channel] - sample.pixels[channel]!;
+      recordError(
+        'material.native.' + (sample.fog === 'none' ? 'soft' : 'fog'),
+        error,
+        '8-bit channel',
+        sample.label + '/' + channel,
+      );
+      expect(Math.abs(error), sample.label + '/' + channel).toBeLessThanOrEqual(2);
+    }
   expect(result.glError).toBe(0);
 });

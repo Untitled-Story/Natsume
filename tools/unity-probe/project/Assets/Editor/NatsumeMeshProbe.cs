@@ -12,7 +12,7 @@ public static class NatsumeMeshProbe
         public int particles; public int wrongRows; public int changedMeshes;
     }
     [Serializable] public class MaterialSample { public string label; public int[] pixels; }
-    [Serializable] public class Output { public string unityVersion; public Sample[] cases; public MaterialSample[] materialCases; public bool multipleSubmeshesRejected; }
+    [Serializable] public class Output { public string unityVersion; public Sample[] cases; public MaterialSample[] materialCases; public NatsumeLegacyMaterialProbe.Sample[] legacyCases; public bool multipleSubmeshesRejected; }
     static MaterialSample[] Materials(Camera camera) {
         var go = new GameObject("Material particles");var ps=go.AddComponent<ParticleSystem>();
         ps.Stop(false,ParticleSystemStopBehavior.StopEmittingAndClear);
@@ -158,7 +158,7 @@ public static class NatsumeMeshProbe
             string output = Path.GetFullPath(Path.Combine(Application.dataPath, "../../unity-baselines/meshes"));
             Directory.CreateDirectory(output);
             File.WriteAllText(Path.Combine(output, "unity-2022.3.21f1.json"), JsonUtility.ToJson(new Output {
-                unityVersion = Application.unityVersion, cases = cases.ToArray(), materialCases = Materials(camera), multipleSubmeshesRejected=RejectMultipleSubmeshes(camera)
+                unityVersion = Application.unityVersion, cases = cases.ToArray(), materialCases = Materials(camera), legacyCases = NatsumeLegacyMaterialProbe.Measure(), multipleSubmeshesRejected=RejectMultipleSubmeshes(camera)
             }, true));
         } finally {
             foreach (var mesh in meshes) UnityEngine.Object.DestroyImmediate(mesh);
