@@ -84,6 +84,8 @@ export class Emitter {
   private burstCycle = 0;
   private readonly burstRepeats = new Map<number, number>();
   private carry = 0;
+  private warming = false;
+  private warmEnd = false;
   private distanceCarry = 0;
   private distanceStarted = false;
   private readonly lastEmissionPosition = new Float64Array(3);
@@ -350,6 +352,7 @@ export class Emitter {
       this.delayRemaining = this.delaySeconds;
       this.distanceStarted = this.delaySeconds > 0;
       this.time = 0;
+      this.warming = this.warmEnd = false;
       this.burstTime = this.burstCycle = 0;
       this.burstRepeats.clear();
       this.carry = 0;
@@ -370,9 +373,18 @@ export class Emitter {
     this.prewarm();
   }
   private prewarm(): void {
-    if (!this.main.simulationSpeed) return;
-    const steps = Math.ceil(this.prewarmSeconds * 60);
-    for (let i = 0; i < steps; i++) this.advance(Math.min(1 / 60, this.prewarmSeconds - i / 60));
+    if (!this.main.simulationSpeed || !this.prewarmSeconds) return;
+    // Native prewarm uses a coarser birth phase and leaves the final rate birth pending.
+    this.warming = true;
+    try {
+      const steps = Math.ceil(this.prewarmSeconds / 0.02);
+      for (let i = 0; i < steps; i++) {
+        this.warmEnd = i === steps - 1;
+        this.advance(Math.min(0.02, this.prewarmSeconds - i * 0.02));
+      }
+    } finally {
+      this.warming = this.warmEnd = false;
+    }
   }
   private repeatBursts(dt: number): void {
     const bursts = this.emission?.bursts;
@@ -866,9 +878,12 @@ export class Emitter {
           (this.time % this.main.durationSeconds) / this.main.durationSeconds,
           random(this.seed, 0, 90),
         ) * activeDt;
-      const amount = Math.floor(this.carry + 1e-8);
+      const amount = this.warmEnd ? 0 : Math.floor(this.carry + 1e-8);
       this.carry -= amount;
-      this.emit(amount, undefined, end);
+      const phase = this.warming
+        ? ((end + dt) % this.main.durationSeconds) / this.main.durationSeconds
+        : undefined;
+      this.emit(amount, phase, end);
       const m = this.node.worldMatrix;
       const distance = Math.hypot(
         m[12]! - this.lastEmissionPosition[0]!,
