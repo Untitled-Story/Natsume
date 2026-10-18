@@ -514,6 +514,7 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
         stretchZ = 0,
         stretchWidthX = 0,
         stretchWidthY = 0,
+        stretchWidthZ = 0,
         stretchLength = 0,
         stretchSpeed = 0,
         freeformFactor = 1;
@@ -531,8 +532,7 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
           world[1]! * vx + world[5]! * vy + world[9]! * vz - (view?.[1] ?? 0) * cameraScale;
         stretchZ =
           world[2]! * vx + world[6]! * vy + world[10]! * vz - (view?.[2] ?? 0) * cameraScale;
-        const length = Math.hypot(stretchX, stretchY, stretchZ),
-          projected = Math.hypot(stretchX, stretchY);
+        const length = Math.hypot(stretchX, stretchY, stretchZ);
         stretchSpeed = length;
         stretchLength =
           sy * localScale.y * this.definition.lengthScale + length * this.definition.velocityScale;
@@ -540,12 +540,39 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
           stretchX /= length;
           stretchY /= length;
           stretchZ /= length;
-          if (projected > 1e-8) {
-            stretchWidthX = (stretchY * length) / projected;
-            stretchWidthY = (-stretchX * length) / projected;
+          const position = this.environment?.viewPosition;
+          if (position) {
+            const px = e.positions[o]!,
+              py = e.positions[o + 1]!,
+              pz = e.positions[o + 2]!;
+            const rx = world[0]! * px + world[4]! * py + world[8]! * pz + world[12]! - position[0];
+            const ry = world[1]! * px + world[5]! * py + world[9]! * pz + world[13]! - position[1];
+            const rz = world[2]! * px + world[6]! * py + world[10]! * pz + world[14]! - position[2];
+            stretchWidthX = stretchY * rz - stretchZ * ry;
+            stretchWidthY = stretchZ * rx - stretchX * rz;
+            stretchWidthZ = stretchX * ry - stretchY * rx;
+            // Unity projects the ray/velocity cross product before normalizing.
+            const dot =
+              stretchWidthX * this.viewForward[0]! +
+              stretchWidthY * this.viewForward[1]! +
+              stretchWidthZ * this.viewForward[2]!;
+            stretchWidthX -= dot * this.viewForward[0]!;
+            stretchWidthY -= dot * this.viewForward[1]!;
+            stretchWidthZ -= dot * this.viewForward[2]!;
+          }
+          let width = Math.hypot(stretchWidthX, stretchWidthY, stretchWidthZ);
+          if (width < 1e-8) {
+            stretchWidthX = stretchY * this.viewForward[2]! - stretchZ * this.viewForward[1]!;
+            stretchWidthY = stretchZ * this.viewForward[0]! - stretchX * this.viewForward[2]!;
+            stretchWidthZ = stretchX * this.viewForward[1]! - stretchY * this.viewForward[0]!;
+            width = Math.hypot(stretchWidthX, stretchWidthY, stretchWidthZ);
+          }
+          if (width > 1e-8) {
+            stretchWidthX /= width;
+            stretchWidthY /= width;
+            stretchWidthZ /= width;
           } else {
-            // An axial velocity still has width. Use the radial screen direction
-            // at the particle, with a stable basis at the view center.
+            // Axial velocity without a usable ray has no unique transverse edge.
             const px = e.positions[o]!,
               py = e.positions[o + 1]!,
               pz = e.positions[o + 2]!;
@@ -732,7 +759,7 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
             across = (uv.y - 0.5 + (pivot?.x ?? 0)) * sx * localScale.x * Math.sign(stretchLength);
           wx += -stretchX * along + stretchWidthX * across;
           wy += -stretchY * along + stretchWidthY * across;
-          wz -= stretchZ * along;
+          wz += -stretchZ * along + stretchWidthZ * across;
         } else {
           wx += rotation[0]! * x + rotation[4]! * y + rotation[8]! * z;
           wy += rotation[1]! * x + rotation[5]! * y + rotation[9]! * z;

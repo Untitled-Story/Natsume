@@ -155,6 +155,22 @@ it('scopes component checks to the entry and includes inactive renderers that ca
   expect(checkCompatibility(disabled.pack(), {}, context).compatible).toBe(true);
 });
 
+it('keeps ordinary stretch compatible and reports missing view rays', () => {
+  const f = fixture();
+  f.renderer.mode = RenderMode.StretchedBillboard;
+  const pack = f.pack();
+  const fallback = checkCompatibility(pack, {}, context);
+  expect(fallback.compatible).toBe(true);
+  expect(fallback.issues.some((i) => i.code === 'APPROXIMATE_STRETCH')).toBe(true);
+  const explicit = checkCompatibility(
+    pack,
+    { particleEnvironment: { fog: { mode: 'none' }, viewPosition: [0, 0, -10] } },
+    context,
+  );
+  expect(explicit.compatible).toBe(true);
+  expect(explicit.issues.some((i) => i.code === 'APPROXIMATE_STRETCH')).toBe(false);
+});
+
 it('collects both infinity codes on active branches and ignores inactive curves', () => {
   const f = fixture();
   const lifetime = linear(1, 2);

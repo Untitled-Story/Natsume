@@ -780,31 +780,12 @@ test('matches Unity stretch velocity and moving-view geometry', async ({ page })
         sample.label + '/' + i,
       );
     }
-    if (sample.label.endsWith('-xyz')) {
-      // Unity's transverse edge faces the particle-to-camera ray. The affine
-      // view uses a fixed +Z direction; compare the full 3D longitudinal edge.
-      const a = nativeVertex(result.uv[0]),
-        b = nativeVertex(result.uv[1]);
-      for (let axis = 0; axis < 3; axis++) {
-        recordError(
-          'renderer.stretch.xyzLongitudinal',
-          result.vertices[1][axis] - result.vertices[0][axis] - (b[axis]! - a[axis]!),
-          'units',
-          sample.label + '/' + axis,
-        );
-        expect(
-          Math.abs(result.vertices[1][axis] - result.vertices[0][axis] - (b[axis]! - a[axis]!)),
-          sample.label,
-        ).toBeLessThan(0.025);
-      }
-    } else {
-      for (const [i, vertex] of result.vertices.entries()) {
-        const p = nativeVertex(result.uv[i]);
-        expect(
-          Math.hypot(...vertex.map((v: number, a: number) => v - p[a]!)),
-          sample.label,
-        ).toBeLessThan(0.025);
-      }
+    for (const [i, vertex] of result.vertices.entries()) {
+      const p = nativeVertex(result.uv[i]);
+      expect(
+        Math.hypot(...vertex.map((v: number, a: number) => v - p[a]!)),
+        sample.label,
+      ).toBeLessThan(0.025);
     }
     expect(result.vertices.flat().every(Number.isFinite)).toBe(true);
   }

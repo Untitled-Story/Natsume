@@ -9,7 +9,8 @@ public static class NatsumeStretchProbe
 {
     [Serializable] public class Case {
         public string label;
-        public Vector3 velocity, viewVelocity;
+        public Vector3 velocity, viewVelocity, position, viewPosition;
+        public float[] viewMatrix;
         public float lengthScale, velocityScale, cameraVelocityScale;
         public bool freeform, rotate;
         public Vector3[] vertices;
@@ -41,17 +42,21 @@ public static class NatsumeStretchProbe
         r.renderMode = ParticleSystemRenderMode.Stretch; r.alignment = ParticleSystemRenderSpace.View;
         r.maxParticleSize = 100;
         var results = new List<Case>();
+        var particlePosition = new Vector3(1, 0.5f, 0.2f);
         Action<string, Vector3, float, float, bool, bool, float> measure = (label, velocity, length, speed, freeform, rotate, cameraScale) => {
             r.lengthScale = length; r.velocityScale = speed; r.cameraVelocityScale = cameraScale;
             r.freeformStretching = freeform; r.rotateWithStretchDirection = rotate;
             ps.Simulate(0, false, true, false);
             ps.SetParticles(new [] { new ParticleSystem.Particle {
-                position = new Vector3(1, 0.5f, 0.2f), velocity = velocity,
+                position = particlePosition, velocity = velocity,
                 startLifetime = 1, remainingLifetime = 1, startSize3D = new Vector3(2,3,4),
                 rotation3D = new Vector3(20,35,55), startColor = Color.white, randomSeed = 1000
             } }, 1);
             var mesh = new Mesh(); r.BakeMesh(mesh, camera, false);
+            var view = Matrix4x4.Rotate(Quaternion.Inverse(camera.transform.rotation));
             results.Add(new Case { label = label, velocity = velocity, viewVelocity = camera.velocity,
+                position = particlePosition, viewPosition = camera.transform.position,
+                viewMatrix = Enumerable.Range(0,16).Select(i => view[i]).ToArray(),
                 lengthScale = length, velocityScale = speed, cameraVelocityScale = cameraScale,
                 freeform = freeform, rotate = rotate, vertices = mesh.vertices, uv = mesh.uv });
             UnityEngine.Object.DestroyImmediate(mesh);
@@ -69,6 +74,13 @@ public static class NatsumeStretchProbe
             measure("speed-negative-length", new Vector3(2,0,0), -4, 1, false, true, 0);
             measure("speed-zero-length", new Vector3(2,0,0), 0, 1, false, true, 0);
             measure("speed-negative-scale", new Vector3(2,0,0), 2, -1, false, true, 0);
+            particlePosition = new Vector3(-3,2,1);
+            camera.transform.position = new Vector3(2,-1,-7);
+            measure("offset-xyz", new Vector3(-2,1,3), 1.5f, 0.7f, false, true, 0);
+            measure("offset-negative", new Vector3(1,-3,2), -2, -0.5f, false, false, 0);
+            camera.transform.rotation = Quaternion.Euler(20,35,10);
+            measure("tilted-xyz", new Vector3(2,3,4), 2, 1, false, true, 0);
+            measure("tilted-negative", new Vector3(-2,1,3), -2, 0.5f, false, false, 0);
             string output = Path.GetFullPath(Path.Combine(Application.dataPath, "../../unity-baselines/stretch"));
             Directory.CreateDirectory(output);
             File.WriteAllText(Path.Combine(output, "unity-2022.3.21f1.json"), JsonUtility.ToJson(new Output {

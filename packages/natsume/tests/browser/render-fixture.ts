@@ -523,6 +523,9 @@ export function measureStretchedParticles(
   cases: {
     label: string;
     velocity: { x: number; y: number; z: number };
+    position?: { x: number; y: number; z: number };
+    viewPosition?: { x: number; y: number; z: number };
+    viewMatrix?: number[];
     viewVelocity?: { x: number; y: number; z: number };
     lengthScale: number;
     velocityScale: number;
@@ -543,6 +546,7 @@ export function measureStretchedParticles(
   return cases.map((sample) => {
     const e = new Emitter(3, new Scene(pack, [1]).nodes.get(1)!, particleSource(), true, 1, []);
     manualParticle(e);
+    if (sample.position) e.positions.set([sample.position.x, sample.position.y, sample.position.z]);
     e.velocities.set([sample.velocity.x, sample.velocity.y, sample.velocity.z]);
     const definition = structuredClone(original.definition) as ParticleRendererT;
     definition.mode = RenderMode.StretchedBillboard;
@@ -555,14 +559,27 @@ export function measureStretchedParticles(
     const velocity = sample.viewVelocity;
     const mesh = new ParticleMesh(e, definition, original.materialDefinition, Texture.WHITE, pack, {
       fog: { mode: 'none' },
+      viewPosition: sample.viewPosition
+        ? [sample.viewPosition.x, sample.viewPosition.y, sample.viewPosition.z]
+        : [0, 0, -10],
       ...(velocity ? { viewVelocity: [velocity.x, velocity.y, velocity.z] as const } : {}),
     });
     try {
-      mesh.sync([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1], 'gamma');
+      const view = sample.viewMatrix ?? [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+      mesh.sync(view, 'gamma');
       const buffer = mesh.geometry.getBuffer('aPosition').data as Float32Array;
       return {
         label: sample.label,
-        vertices: [0, 1, 2, 3].map((i) => Array.from(buffer.slice(i * 16, i * 16 + 3))),
+        vertices: [0, 1, 2, 3].map((i) => {
+          const x = buffer[i * 16]!,
+            y = buffer[i * 16 + 1]!,
+            z = buffer[i * 16 + 2]!;
+          return [
+            view[0]! * x + view[1]! * y + view[2]! * z,
+            view[4]! * x + view[5]! * y + view[6]! * z,
+            view[8]! * x + view[9]! * y + view[10]! * z,
+          ];
+        }),
         uv: [0, 1, 2, 3].map((i) => [buffer[i * 16 + 3]!, 1 - buffer[i * 16 + 4]!]),
       };
     } finally {

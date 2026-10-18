@@ -100,7 +100,7 @@ effect.setParticleEnvironment({
 
 `viewVelocity` 为视图在 Unity 世界空间中的移动速度，单位为每秒；省略时视图静止。更新显示矩阵时，可同步用 `setParticleEnvironment` 更新它，让 Stretched Billboard 计入视图移动。该方法替换整个环境配置，需要一并保留重力等输入。
 
-`viewPosition` 为视点的 Unity 世界坐标；Facing 对齐和 Freeform Stretch 必须提供，例如 `viewPosition: [0, 0, -10]`。它用于构造粒子的朝向平面，不会自动修改显示矩阵。
+`viewPosition` 为视点的 Unity 世界坐标；Facing 对齐和 Freeform Stretch 必须提供，例如 `viewPosition: [0, 0, -10]`。它用于构造粒子的朝向平面与普通 Stretch 的横向，不会自动修改显示矩阵。普通 Stretch 省略该项时使用平行视线近似，并返回诊断。
 
 雾效支持 `none`、`linear`、`exp`、`exp2`。`depth` 也可传 `[a, b, c, d]`，以 Unity 世界坐标计算 `ax + by + cz + d`。当前采用固定 +Z 观察与仿射深度，不提供完整 Unity 相机。
 
@@ -163,7 +163,7 @@ runtime.registerScript(
 | Custom Data                  | Custom1 / Custom2 Vector（1–4 维）与 Color                                                                                                                                                                                                                                                                                                                                    | 已知材质只消费 Custom1.x，其余分量保留为求值数据                                 |
 | Renderer                     | Billboard、Horizontal / Vertical Billboard、普通 / Freeform Stretch；View / World / Local / Facing / Velocity 对齐；多 Mesh、均匀 / 加权选择；多材质叠加（第二槽保留给 Trails）；每个 Mesh 使用单 submesh；None / Distance / Oldest / Youngest / Depth 排序；Pivot、Flip、尺寸限制、allowRoll；ParticleAddAlpha、ParticleUnlit、Legacy Additive / Alpha Blended、雾效与软粒子 | 不同 Render Queue 的全局交错；其他材质模型；已知无光照材质不消费 normalDirection |
 
-普通 Stretched Billboard 的三维长度使用完整速度，宽度采用固定 +Z 视图；斜向三维速度的横边与 Unity 有近似差异。Freeform Stretch 面向 `viewPosition`，沿完整相对速度拉伸，支持 `rotateWithStretchDirection` 开关；速度与视线平行时采用稳定朝向，不复现 Unity 的浮点朝向抖动。
+普通 Stretched Billboard 的三维长度使用完整速度，横向使用速度与视点射线的叉积，投影视图平面后归一化；省略 `viewPosition` 时保留平行视线近似。Freeform Stretch 面向 `viewPosition`，沿完整相对速度拉伸，支持 `rotateWithStretchDirection` 开关；速度与视线平行时采用稳定朝向，不复现 Unity 的浮点朝向抖动。
 
 排序使用仿射显示矩阵，Distance 与 Depth 均按变换后的 Z 深度排序；Oldest / Youngest 将指定年龄的粒子绘制在前方。`sortingFudge` 仅调整相同 Sorting Layer / Order 的粒子系统顺序，负值靠前，不参与宿主其他 Pixi 对象的深度排序。
 

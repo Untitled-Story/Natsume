@@ -116,14 +116,15 @@ export function rendererSupport(
         definition[field],
         'Stretched Billboard scales must be finite',
       );
-    r.warn(
-      definition.freeformStretching ? 'FREEFORM_PARALLEL_BASIS' : 'APPROXIMATE_STRETCH',
-      'freeformStretching',
-      definition.freeformStretching,
-      definition.freeformStretching
-        ? 'Freeform uses a stable heading when velocity is parallel to the view ray; Unity may jitter.'
-        : 'Ordinary stretch uses a fixed +Z transverse basis; oblique XYZ velocities differ from Unity.',
-    );
+    if (definition.freeformStretching || !environment?.viewPosition)
+      r.warn(
+        definition.freeformStretching ? 'FREEFORM_PARALLEL_BASIS' : 'APPROXIMATE_STRETCH',
+        'freeformStretching',
+        definition.freeformStretching,
+        definition.freeformStretching
+          ? 'Freeform uses a stable heading when velocity is parallel to the view ray; Unity may jitter.'
+          : 'Ordinary stretch without viewPosition uses parallel view rays; oblique velocities may differ from Unity.',
+      );
   }
   r.require(
     definition.vertexStreams.every(
