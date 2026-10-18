@@ -879,7 +879,7 @@ export class Emitter {
         if (this.noiseSizes) {
           const size = scalar(n.sizeAmount, t, rnd(36)) * 0.5;
           for (let axis = 0; axis < 3; axis++)
-            this.noiseSizes[o + axis] = 1 + this.scratch[axis]! * size;
+            this.noiseSizes[o + axis] = Math.max(0, 1 + this.scratch[axis]! * size);
         }
       }
       this.positions[o] = x + vx * dt;

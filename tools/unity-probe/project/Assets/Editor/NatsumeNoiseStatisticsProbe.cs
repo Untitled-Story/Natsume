@@ -9,7 +9,7 @@ public static class NatsumeNoiseStatisticsProbe
 {
     static int Count = 512;
     [Serializable] public class Input { public int count = 512; public Case[] cases; }
-    [Serializable] public class Sample { public int frame; public double displacementRms, rotationRms, sizeDeltaRms; public Vector3[] positions; }
+    [Serializable] public class Sample { public int frame; public double displacementRms, rotationRms, sizeDeltaRms; public Vector3[] positions, sizes; }
     [Serializable] public class Case {
         public string label; public uint seed, pointSeed;
         public int quality = 2, octaves = 1;
@@ -64,6 +64,7 @@ public static class NatsumeNoiseStatisticsProbe
                 if (frame != 1 && frame != 15 && frame != 60) continue;
                 if (ps.GetParticles(particles) != Count) throw new Exception("Noise population changed");
                 double position = 0, rotation = 0, size = 0;
+                Vector3[] sizes = null;
                 for (int i = 0; i < Count; i++) {
                     position += (particles[i].position-origins[i]).sqrMagnitude;
                     rotation += particles[i].rotation3D.sqrMagnitude;
@@ -71,11 +72,13 @@ public static class NatsumeNoiseStatisticsProbe
                 if (label == "size") {
                     var mesh = new Mesh(); r.BakeMesh(mesh, camera, false);
                     var vertices = mesh.vertices;
+                    sizes = new Vector3[Count];
                     if (vertices.Length != Count*4) throw new Exception("Unexpected baked vertex count");
                     for (int i = 0; i < Count; i++) {
                         var min = vertices[i*4]; var max = min;
                         for (int j=1;j<4;j++) {min=Vector3.Min(min,vertices[i*4+j]);max=Vector3.Max(max,vertices[i*4+j]);}
-                        var delta = max-min-Vector3.one;
+                        sizes[i] = max-min;
+                        var delta = sizes[i]-Vector3.one;
                         size += delta.x*delta.x + delta.y*delta.y;
                     }
                     UnityEngine.Object.DestroyImmediate(mesh);
@@ -85,7 +88,7 @@ public static class NatsumeNoiseStatisticsProbe
                     fieldPositions = new Vector3[Math.Min(8, Count)];
                     for (int i = 0; i < fieldPositions.Length; i++) fieldPositions[i] = particles[i].position;
                 }
-                samples.Add(new Sample {frame=frame, displacementRms=Math.Sqrt(position/Count), rotationRms=Math.Sqrt(rotation/Count), sizeDeltaRms=Math.Sqrt(size/Count), positions=fieldPositions});
+                samples.Add(new Sample {frame=frame, displacementRms=Math.Sqrt(position/Count), rotationRms=Math.Sqrt(rotation/Count), sizeDeltaRms=Math.Sqrt(size/Count), positions=fieldPositions,sizes=sizes});
             }
             config.samples=samples.ToArray(); return config;
         } finally { UnityEngine.Object.DestroyImmediate(go); }

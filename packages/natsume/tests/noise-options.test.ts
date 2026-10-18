@@ -92,7 +92,7 @@ it.skipIf(!hasNativeFixture('unity-noise-options.json'))(
     const delta = Array.from(position.positions.subarray(0, 3), (v, i) => v - [1, 2, 3][i]!);
     expect(rotation.rotations[2]).toBeCloseTo((delta[2]! * Math.PI) / 360, 6);
     for (let axis = 0; axis < 3; axis++)
-      expect(size.noiseSizes![axis]).toBeCloseTo(1 + delta[axis]! * 30, 5);
+      expect(size.noiseSizes![axis]).toBeCloseTo(Math.max(0, 1 + delta[axis]! * 30), 5);
     const factors = Array.from(size.noiseSizes!.subarray(0, 3));
     size.step(1 / 60);
     expect(Array.from(size.noiseSizes!.subarray(0, 3))).toEqual(factors);
@@ -101,9 +101,9 @@ it.skipIf(!hasNativeFixture('unity-noise-options.json'))(
     const initial = native.cases.find((c) => c.label === 'position')!.samples[1]!.position;
     const baked = native.cases.find((c) => c.label === 'size')!.samples[1]!.bakedSize;
     for (const [i, k] of (['x', 'y'] as const).entries())
-      expect(Math.abs(baked[k] - [2, 3][i]! * (1 + (initial[k] - [1, 2][i]!) * 30))).toBeLessThan(
-        1e-5,
-      );
+      expect(
+        Math.abs(baked[k] - [2, 3][i]! * Math.max(0, 1 + (initial[k] - [1, 2][i]!) * 30)),
+      ).toBeLessThan(1e-5);
   },
 );
 for (const label of ['scroll', 'octaves', 'low', 'medium', 'frequency-zero'])

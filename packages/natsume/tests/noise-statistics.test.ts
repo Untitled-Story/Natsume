@@ -16,6 +16,7 @@ interface Sample {
   rotationRms: number;
   sizeDeltaRms: number;
   positions?: { x: number; y: number; z: number }[];
+  sizes?: { x: number; y: number; z: number }[];
 }
 const native = JSON.parse(readNativeFixture('unity-noise-statistics.json')) as {
   count: number;
@@ -91,6 +92,18 @@ for (const sample of native.cases)
           );
         }
       }
+      for (const [index, size] of (expected.sizes ?? []).entries()) {
+        for (const [axis, key] of (['x', 'y'] as const).entries()) {
+          const error = e.noiseSizes![index * 3 + axis]! - size[key];
+          expect(Math.abs(error)).toBeLessThan(3e-6);
+          recordError(
+            'noise.population.size.renderedWidth',
+            error,
+            'units',
+            `${sample.seed}/${frame}/${index}/${key}`,
+          );
+        }
+      }
       let displacement = 0,
         rotation = 0,
         size = 0;
@@ -125,8 +138,7 @@ for (const sample of native.cases)
         String(sample.seed),
       );
       if (target > 1e-8) {
-        const tolerance = mode === 'size' ? 0.03 : 0.001;
-        expect(Math.abs(actual / target - 1)).toBeLessThan(tolerance);
+        expect(Math.abs(actual / target - 1)).toBeLessThan(0.001);
         recordError(
           `noise.population.${sample.label}.frame${frame}.relative`,
           (actual - target) / target,
