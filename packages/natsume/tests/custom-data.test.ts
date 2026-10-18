@@ -110,8 +110,8 @@ for (const sample of native.cases)
     }
     for (let frame = 1; frame <= sample.steps.length; frame++) {
       const dt = sample.steps[frame - 1]!;
-      // Unity subdivides Simulate calls above 1/30 s, even with fixedTimeStep=false.
-      const substeps = Math.ceil(dt / (1 / 30));
+      // Unity subdivides Simulate calls above 0.03 s, even with fixedTimeStep=false.
+      const substeps = Math.ceil(dt / Math.fround(0.03));
       for (let step = 0; step < substeps; step++) e.step(dt / substeps);
       const expected = sample.samples.find((s) => s.frame === frame);
       if (!expected) continue;
