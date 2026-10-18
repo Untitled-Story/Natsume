@@ -68,3 +68,23 @@ it('holds random rows stable and maps mesh index rows independently of frames', 
   sheet.rowMode = SheetRow.MeshIndex;
   expect(Math.floor(sheetFrame(sheet, 0.7, 0, 0, 0, 0, 0, 4) / 4)).toBe(1);
 });
+
+const thresholds = JSON.parse(readNativeFixture('unity-boundaries.json')) as {
+  cases: { label: string; threshold: number }[];
+};
+it('matches native lifetime tile transition thresholds', () => {
+  const sheet = new TextureSheetModuleT(4, 2);
+  sheet.frameOverTime = linear(0, 1);
+  for (const c of thresholds.cases.filter((c) => c.label.startsWith('sheet-search-'))) {
+    const tile = Math.round(Number(c.label.slice('sheet-search-'.length)) * 8);
+    let lo = 0,
+      hi = 1;
+    for (let i = 0; i < 32; i++) {
+      const age = (lo + hi) / 2;
+      if (sheetFrame(sheet, age, 0, 0) >= tile) hi = age;
+      else lo = age;
+    }
+    recordError('textureSheet.transitionAge', hi - c.threshold, 's', c.label);
+    expect(Math.abs(hi - c.threshold)).toBeLessThan(1e-7);
+  }
+});

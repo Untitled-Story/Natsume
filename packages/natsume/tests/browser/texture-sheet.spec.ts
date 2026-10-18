@@ -18,10 +18,10 @@ test('applies grid animation only when UV0 is selected', async ({ page }) => {
     const base =
       row.mask & 1
         ? [
+            [0.25, 1 / 3],
             [0.5, 1 / 3],
-            [0.75, 1 / 3],
-            [0.75, 2 / 3],
             [0.5, 2 / 3],
+            [0.25, 2 / 3],
           ]
         : [
             [0, 0],
