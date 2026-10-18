@@ -18,7 +18,7 @@ export type ParticleFog =
 /** Host inputs for Unity legacy particle recipes. Texture ownership stays with the host. */
 export interface ParticleEnvironment {
   readonly fog: ParticleFog;
-  /** Acceleration in local particle units per second squared. */
+  /** Acceleration in Unity world units per second squared. */
   readonly gravity?: readonly [number, number, number] | undefined;
   /** View distance, or coefficients ax+by+cz+d in Unity world coordinates. Defaults to container.zIndex; negative distances clamp to zero. */
   readonly depth?: number | readonly [number, number, number, number] | undefined;

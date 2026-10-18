@@ -71,6 +71,10 @@ export class Emitter {
   readonly prewarmSeconds: number;
   readonly delaySeconds: number;
   readonly shapeMatrix = mat4.create();
+  readonly simulationMatrix = mat4.create();
+  readonly inverseSimulationMatrix = mat4.create();
+  private readonly vectorMatrix = mat4.create();
+  gravity: readonly [number, number, number] = [0, 0, 0];
   private readonly scratch = new Float64Array(3);
   private readonly direction = vec3.create();
   private readonly birth = new Float64Array(6);
@@ -89,23 +93,24 @@ export class Emitter {
     readonly enabled: boolean,
     instanceSeed: number,
     diagnostics: Diagnostic[],
-    public gravity: readonly [number, number, number] = [0, 0, 0],
+    gravity?: readonly [number, number, number],
+    readonly customSpaceNode?: SceneNode,
   ) {
     const main = source.main!;
     this.main = main;
-    this.gravity = gravity;
     validateParameters(source);
+    this.setGravity(gravity);
     check(
-      main.space === Space.Local && main.scaling === ScalingMode.Local,
+      main.scaling === ScalingMode.Local,
       'CAPABILITY',
-      `System ${id}: playback supports local simulation/scaling`,
+      `System ${id}: scaling ${ScalingMode[main.scaling]} is unsupported`,
     );
-    check(main.space === Space.Local, 'CAPABILITY', 'Gravity requires Local simulation');
     check(
-      constantZero(main.gravityMultiplier) || gravity.some((value) => value !== 0),
+      main.space !== Space.Custom || customSpaceNode,
       'HOST',
-      `System ${id}: nonzero gravityMultiplier requires particleEnvironment.gravity`,
+      `System ${id}: custom simulation node is unavailable`,
     );
+    this.updateSpace();
     check(
       main.flipRotationProbability === 0,
       'CAPABILITY',
@@ -201,11 +206,7 @@ export class Emitter {
         [scale.x, scale.y, scale.z],
       );
     }
-    check(
-      !this.velocityModule || this.velocityModule.space === Space.Local,
-      'CAPABILITY',
-      'World velocity module unsupported',
-    );
+
     if (this.limit)
       check(
         !this.limit.separateAxes &&
@@ -266,6 +267,45 @@ export class Emitter {
     this.lifetimes = new Float32Array(cap);
     this.serials = new Uint32Array(cap);
   }
+  setGravity(value: readonly [number, number, number] | undefined): void {
+    const authored = this.main.gravity;
+    check(
+      constantZero(this.main.gravityMultiplier) || value !== undefined || authored,
+      'HOST',
+      `System ${this.id}: nonzero gravityMultiplier requires particleEnvironment.gravity`,
+    );
+    this.gravity = value ?? (authored ? [authored.x, authored.y, authored.z] : [0, 0, 0]);
+    check(
+      this.gravity.length === 3 && this.gravity.every(Number.isFinite),
+      'HOST',
+      'Invalid particle gravity',
+    );
+  }
+  /** Refreshes the coordinate frame without moving particles already stored in that frame. */
+  updateSpace(): void {
+    const frame =
+      this.main.space === Space.Local
+        ? this.node
+        : this.main.space === Space.Custom
+          ? this.customSpaceNode
+          : undefined;
+    if (frame) mat4.copy(this.simulationMatrix, frame.worldMatrix);
+    else mat4.identity(this.simulationMatrix);
+    // Zero scale is valid. Rotation-only fallback preserves finite simulation in a collapsed frame.
+    if (!mat4.invert(this.inverseSimulationMatrix, this.simulationMatrix)) {
+      mat4.fromQuat(this.inverseSimulationMatrix, frame!.worldRotation);
+      mat4.transpose(this.inverseSimulationMatrix, this.inverseSimulationMatrix);
+    }
+    mat4.multiply(this.vectorMatrix, this.inverseSimulationMatrix, this.node.worldMatrix);
+  }
+  private vector(x: number, y: number, z: number, local: boolean): Float64Array {
+    const m = local ? this.vectorMatrix : this.inverseSimulationMatrix;
+    const out = this.scratch;
+    out[0] = m[0]! * x + m[4]! * y + m[8]! * z;
+    out[1] = m[1]! * x + m[5]! * y + m[9]! * z;
+    out[2] = m[2]! * x + m[6]! * y + m[10]! * z;
+    return out;
+  }
   reset(): void {
     this.count = 0;
     this.nextSerial = 0;
@@ -280,6 +320,7 @@ export class Emitter {
     this.count = 0;
   }
   sync(): void {
+    this.updateSpace();
     const active = this.enabled && this.node.activeInHierarchy;
     if (active === this.enabledLast) return;
     this.enabledLast = active;
@@ -381,6 +422,20 @@ export class Emitter {
         dy = this.direction[1]!;
         dz = this.direction[2]!;
       }
+      if (this.main.space !== Space.Local) {
+        const m = this.node.worldMatrix,
+          inv = this.inverseSimulationMatrix;
+        const wx = m[0]! * x + m[4]! * y + m[8]! * z + m[12]!;
+        const wy = m[1]! * x + m[5]! * y + m[9]! * z + m[13]!;
+        const wz = m[2]! * x + m[6]! * y + m[10]! * z + m[14]!;
+        x = inv[0]! * wx + inv[4]! * wy + inv[8]! * wz + inv[12]!;
+        y = inv[1]! * wx + inv[5]! * wy + inv[9]! * wz + inv[13]!;
+        z = inv[2]! * wx + inv[6]! * wy + inv[10]! * wz + inv[14]!;
+        const direction = this.vector(dx, dy, dz, true);
+        dx = direction[0]!;
+        dy = direction[1]!;
+        dz = direction[2]!;
+      }
       this.positions[o] = x;
       this.positions[o + 1] = y;
       this.positions[o + 2] = z;
@@ -451,18 +506,32 @@ export class Emitter {
         vy = this.velocities[o + 1]!,
         vz = this.velocities[o + 2]!;
       const gravityMultiplier = scalar(this.main.gravityMultiplier, t, rnd(69), 1);
-      vx += this.gravity[0]! * gravityMultiplier * dt;
-      vy += this.gravity[1]! * gravityMultiplier * dt;
-      vz += this.gravity[2]! * gravityMultiplier * dt;
+      const gravity = this.vector(...this.gravity, false);
+      const gx = gravity[0]! * gravityMultiplier * dt,
+        gy = gravity[1]! * gravityMultiplier * dt,
+        gz = gravity[2]! * gravityMultiplier * dt;
+      vx += gx;
+      vy += gy;
+      vz += gz;
+      this.velocities[o] = vx;
+      this.velocities[o + 1] = vy;
+      this.velocities[o + 2] = vz;
       let orbitalX = 0,
         orbitalY = 0,
         orbitalZ = 0,
         multiplier = 1;
       const v = this.velocityModule;
       if (v) {
-        vx += scalar(v.linear?.x, t, rnd(20));
-        vy += scalar(v.linear?.y, t, rnd(21));
-        vz += scalar(v.linear?.z, t, rnd(22));
+        const scale = this.node.source.transform!.scale!;
+        const linear = this.vector(
+          scalar(v.linear?.x, t, rnd(20)) * (v.space === Space.World ? scale.x : 1),
+          scalar(v.linear?.y, t, rnd(21)) * (v.space === Space.World ? scale.y : 1),
+          scalar(v.linear?.z, t, rnd(22)) * (v.space === Space.World ? scale.z : 1),
+          v.space === Space.Local,
+        );
+        vx += linear[0]!;
+        vy += linear[1]!;
+        vz += linear[2]!;
         multiplier = scalar(v.speedMultiplier, t, rnd(30), 1);
         const ox = scalar(v.orbitalOffset?.x, t, rnd(24)),
           oy = scalar(v.orbitalOffset?.y, t, rnd(25)),

@@ -67,8 +67,8 @@ it('applies host gravity through the authored multiplier', () => {
   expect(emitter.count).toBe(1);
   emitter.step(1 / 60);
   emitter.step(1 / 60);
-  expect(emitter.velocities[1]).toBe(0);
-  expect(emitter.positions[1]).toBeCloseTo((-10 / 60) * (1 / 60) * 2, 6);
+  expect(emitter.velocities[1]).toBeCloseTo(-20 / 60, 6);
+  expect(emitter.positions[1]).toBeCloseTo((-10 / 60) * (1 / 60) * 3, 6);
 });
 
 for (const label of ['burst-zero', 'burst-loop', 'burst-end']) {

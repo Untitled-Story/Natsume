@@ -40,6 +40,10 @@ Stretch 已测范围：`cameraVelocityScale=0`、`velocityScale=0`、`rotateWith
 
 Local 对齐补测覆盖 Mesh / Billboard 与节点绕 Z 旋转 90°，另覆盖 Stretched View；顶点距离回归容差 < 10⁻⁵。
 
+## 模拟空间与重力
+
+9 组数值案例覆盖 Local / World / Custom 的出生与节点移动，以及非均匀缩放、Z 旋转下的世界重力和 World 线性速度。位置、存储速度及世界位置各分量回归容差 < 10⁻⁵。重力持续累积到基础速度；显式零向量为有效宿主输入。未覆盖 World 轨道与径向速度组合。
+
 ## 粒子排序
 
 Unity 2022.3.21f1 正交相机下，3 个手动粒子的 BakeMesh 索引顺序对照：
@@ -113,6 +117,8 @@ Unity 2022.3.21f1 正交相机下，3 个手动粒子的 BakeMesh 索引顺序�
 近似范围：High、1 octave、scroll=0、remap 关闭、仅位置扰动。Natsume 使用纯 TypeScript Curl Noise；不复现 Unity 的原生噪声函数和同种子轨迹。
 
 ## 数据
+
+- [unity-spaces.json](../../packages/natsume/tests/fixtures/unity-spaces.json)：模拟空间、重力与世界线性速度。
 
 - [unity-sorting.json](../../packages/natsume/tests/fixtures/unity-sorting.json)：五种粒子排序的原生索引顺序。
 

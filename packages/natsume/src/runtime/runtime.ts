@@ -196,8 +196,7 @@ export class EffectInstance {
     this.assertAlive();
     const next = copyEnvironment(value);
     this.environment = next;
-    for (const emitter of this.simulation.emitters.values())
-      emitter.gravity = next?.gravity ?? [0, 0, 0];
+    for (const emitter of this.simulation.emitters.values()) emitter.setGravity(next?.gravity);
     for (const mesh of this.meshes) mesh.environment = next;
     this.render();
   }

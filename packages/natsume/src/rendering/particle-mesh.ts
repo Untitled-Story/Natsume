@@ -473,7 +473,8 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
     this.visible = e.node.activeInHierarchy && n > 0;
     if (!this.visible) return;
     this.shader!.resources.colorUniforms.uniforms.uLinear = colorSpace === 'linear' ? 1 : 0;
-    const world = e.node.worldMatrix,
+    e.updateSpace();
+    const world = e.simulationMatrix,
       v = this.vertices,
       stride = this.basePositions.length,
       material = this.materialDefinition,

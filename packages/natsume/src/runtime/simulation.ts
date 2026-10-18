@@ -100,7 +100,8 @@ export class Simulation {
           c.enabled,
           seed,
           this.diagnostics,
-          options.gravity ?? [0, 0, 0],
+          options.gravity,
+          this.scene.nodes.get((c.data as R<ParticleSystemT>).main!.customSpaceNodeId),
         ),
       );
     for (const a of pack.document.animations) {

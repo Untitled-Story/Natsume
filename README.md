@@ -73,7 +73,7 @@ effect.setParticleEnvironment({
 });
 ```
 
-`gravity` 是宿主提供的局部加速度，单位与粒子的位置和速度一致；当包中的 `gravityMultiplier` 非零时必须提供它。Natsume 不使用隐含的 Unity 默认重力。
+`gravity` 是宿主提供的 Unity 世界空间加速度，单位与粒子的位置和速度一致；当包中的 `gravityMultiplier` 非零时必须提供它。Natsume 不使用隐含的 Unity 默认重力。
 
 雾效支持 `none`、`linear`、`exp`、`exp2`。`depth` 也可传 `[a, b, c, d]`，以 Unity 世界坐标计算 `ax + by + cz + d`。当前采用固定 +Z 观察与仿射深度，不提供完整 Unity 相机。
 
@@ -125,11 +125,11 @@ runtime.registerScript(
 
 | 模块                         | 已支持                                                                                                                                                                                                                                                           | 未支持                                                                    |
 | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| Main                         | 循环、初始寿命 / 速度 / 尺寸 / 旋转 / 颜色、种子；环境重力、启动延迟、Simulation Speed；Local 模拟与缩放；有限预热                                                                                                                                               | 旋转翻转；World / Custom 模拟、Hierarchy / Shape 缩放                     |
+| Main                         | 循环、初始寿命 / 速度 / 尺寸 / 旋转 / 颜色、种子；环境重力、启动延迟、Simulation Speed；Local / World / Custom 模拟、Local 缩放；有限预热                                                                                                                        | 旋转翻转；Hierarchy / Shape 缩放                                          |
 | Emission                     | Rate over Time、Burst（含正间隔无限重复）                                                                                                                                                                                                                        | Rate over Distance；零间隔无限 Burst                                      |
 | Shape                        | Circle、Sphere / Hemisphere、Box 体积 / 壳 / 边、Cone 底面 / 体积、Edge；随机弧、Burst Spread、位置 / 方向扰动、Shape TRS                                                                                                                                        | 其他形状、Align to Direction、Loop / PingPong 扫描、Spread 量化           |
 | Rotation over Lifetime       | Z 或分轴角速度、生命周期曲线积分                                                                                                                                                                                                                                 | 已测范围以外的步长与原生积分差异                                          |
-| Velocity over Lifetime       | Local 线性 / 轨道 / 径向速度、Speed Multiplier                                                                                                                                                                                                                   | World 空间                                                                |
+| Velocity over Lifetime       | Local / World 线性速度、Local 轨道 / 径向速度、Speed Multiplier                                                                                                                                                                                                  | World 轨道 / 径向空间组合                                                 |
 | Limit Velocity over Lifetime | Local 标量限速、Dampen                                                                                                                                                                                                                                           | 分轴限速、World 空间、Drag                                                |
 | Noise                        | 内置 Curl Noise 近似：High、1 octave、仅位置扰动                                                                                                                                                                                                                 | 其他 Quality、多 octave、Scroll、Remap、旋转 / 尺寸扰动；Unity 同种子轨迹 |
 | Texture Sheet Animation      | Lifetime、Whole Sheet、UV0                                                                                                                                                                                                                                       | Single Row、Speed / FPS 时间模式、Sprites 模式、其他 UV 通道              |
