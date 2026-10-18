@@ -82,9 +82,9 @@ for (const sample of native.cases)
         for (let axis = 0; axis < 3; axis++) {
           const key = axis === 0 ? 'x' : axis === 1 ? 'y' : 'z';
           const error = e.positions[index * 3 + axis]! - position[key];
-          expect(Math.abs(error)).toBeLessThan(2e-5);
+          expect(Math.abs(error)).toBeLessThan(frame === 1 ? 2e-6 : 1e-5);
           recordError(
-            `noise.population.low.fieldPosition`,
+            `noise.population.${['low', 'medium', 'high'][sample.quality]}.${frame === 1 ? 'fieldPosition' : 'scrollPosition'}`,
             error,
             'units',
             `${sample.label}/${sample.seed}/${index}/${key}`,
@@ -125,7 +125,7 @@ for (const sample of native.cases)
         String(sample.seed),
       );
       if (target > 1e-8) {
-        const tolerance = sample.quality === 0 ? (sample.scroll === 0 ? 0.001 : 0.05) : 0.12;
+        const tolerance = mode === 'size' ? 0.03 : 0.001;
         expect(Math.abs(actual / target - 1)).toBeLessThan(tolerance);
         recordError(
           `noise.population.${sample.label}.frame${frame}.relative`,

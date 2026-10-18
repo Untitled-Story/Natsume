@@ -104,7 +104,7 @@ export function emitterSupport(
         'APPROXIMATE_NOISE',
         path,
         noise.algorithm,
-        'Noise uses calibrated TypeScript Curl Noise; seeded trajectories differ from Unity.',
+        'Noise uses measured Perlin curl fields; unmeasured parameter combinations may differ from Unity.',
       );
     }
   }

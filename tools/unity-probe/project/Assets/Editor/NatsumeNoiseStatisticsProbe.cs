@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 
-// Fixed spatial population; Low also exposes first-step positions for field checks.
+// Fixed spatial population, first-step fields and scrolling trajectories.
 public static class NatsumeNoiseStatisticsProbe
 {
     static int Count = 512;
@@ -81,7 +81,7 @@ public static class NatsumeNoiseStatisticsProbe
                     UnityEngine.Object.DestroyImmediate(mesh);
                 }
                 Vector3[] fieldPositions = null;
-                if (config.quality == 0 && config.scroll == 0 && frame == 1) {
+                if (frame == 1 || config.scroll != 0) {
                     fieldPositions = new Vector3[Math.Min(8, Count)];
                     for (int i = 0; i < fieldPositions.Length; i++) fieldPositions[i] = particles[i].position;
                 }

@@ -40,7 +40,7 @@ app.ticker.add(tick);
 
 `loadPack` 接受 URL、`Uint8Array` 或 `ArrayBuffer`。同一个资源包可以创建多个独立实例；实例提供 `play()`、`pause()`、`restart()` 和 `stop()` 控制播放，宿主以秒调用 `update()` 推进模拟。
 
-Noise 的 Low 档使用原生实测的一维 Perlin Curl 结构与种子偏移，Medium / High 使用校准后的三维 Curl 近似；实例保留近似诊断。
+Noise 的 Low / Medium / High 使用原生实测的一维 / 二维 / 三维 Perlin Curl 结构与种子偏移；实例保留近似诊断。
 
 创建前可调用 `runtime.checkCompatibility(pack, options)`，一次查看当前入口的阻塞项与近似说明：
 
@@ -158,7 +158,7 @@ runtime.registerScript(
 | Rotation over Lifetime       | Z 或分轴角速度、生命周期曲线积分                                                                                                                                                                                                                                                                                                                                              | 已测范围以外的步长与原生积分差异                                                 |
 | Velocity over Lifetime       | Local / World 线性、轨道 / 偏移 / 径向速度，Speed Multiplier                                                                                                                                                                                                                                                                                                                  | 复杂空间、非均匀缩放与旋转的所有交叉组合尚未验收                                 |
 | Limit Velocity over Lifetime | Local / World 标量与分轴限速、Dampen、Drag，含尺寸 / 速度乘算                                                                                                                                                                                                                                                                                                                 | 任意剪切与非均匀缩放组合尚未验收                                                 |
-| Noise                        | Low 实测的一维 Perlin Curl 场；Medium / High 三维 Curl 近似；多 octave、Scroll、Remap、位置 / 旋转 / 尺寸影响                                                                                                                                                                                                                                                                 | Medium / High 原生场及同种子轨迹；Low 滚动仍有近似；误差见测量文档               |
+| Noise                        | 三档实测 Perlin Curl 场与种子偏移；多 octave、Scroll、Remap、位置 / 旋转 / 尺寸影响                                                                                                                                                                                                                                                                                           | 尺寸及未穷举的参数组合；误差见测量文档                                           |
 | Texture Sheet Animation      | Grid；Lifetime / Speed / FPS；Whole Sheet / Single Row；Fixed / Random 行；MeshIndex 行；UV mask                                                                                                                                                                                                                                                                              | Sprites 模式；已知材质仅采样 UV0                                                 |
 | Custom Data                  | Custom1 / Custom2 Vector（1–4 维）与 Color                                                                                                                                                                                                                                                                                                                                    | 已知材质只消费 Custom1.x，其余分量保留为求值数据                                 |
 | Renderer                     | Billboard、Horizontal / Vertical Billboard、普通 / Freeform Stretch；View / World / Local / Facing / Velocity 对齐；多 Mesh、均匀 / 加权选择；多材质叠加（第二槽保留给 Trails）；每个 Mesh 使用单 submesh；None / Distance / Oldest / Youngest / Depth 排序；Pivot、Flip、尺寸限制、allowRoll；ParticleAddAlpha、ParticleUnlit、Legacy Additive / Alpha Blended、雾效与软粒子 | 不同 Render Queue 的全局交错；其他材质模型；已知无光照材质不消费 normalDirection |
@@ -171,7 +171,7 @@ runtime.registerScript(
 
 两种 Stretch 均使用 `粒子速度 - viewVelocity × cameraVelocityScale`；零相对速度时不产生可见面积。Freeform 的合成拉伸长度取绝对值，普通 Stretch 保留负长度方向。
 
-共享参数支持 Constant / Two Constants / Curve / Two Curves，以及 Step / Linear / Hermite / Weighted Bezier 曲线、Blend / Fixed / Perceptual Blend 渐变。Unity 内部循环码已核对 `0 / 1 / 2 / 3 / 4 / 5 / 8`，其他有效分支中的编码会报告不支持。随机分布与 Medium / High Noise 不复现 Unity 原生随机序列，误差见 [Unity 行为对照](tools/unity-probe/MEASUREMENTS.md)。
+共享参数支持 Constant / Two Constants / Curve / Two Curves，以及 Step / Linear / Hermite / Weighted Bezier 曲线、Blend / Fixed / Perceptual Blend 渐变。Unity 内部循环码已核对 `0 / 1 / 2 / 3 / 4 / 5 / 8`，其他有效分支中的编码会报告不支持。随机分布比较统计量；Noise 的同种子场与轨迹已按实测范围核对，误差见 [Unity 行为对照](tools/unity-probe/MEASUREMENTS.md)。
 
 ### Unsupported
 

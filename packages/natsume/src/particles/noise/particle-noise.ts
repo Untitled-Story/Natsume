@@ -1,12 +1,12 @@
 import type { DeepReadonly as R } from '../../pack.js';
 import type { NoiseModuleT } from '../../format/generated/noa/ir/noise-module.js';
 import { scalar } from '../../runtime/parameters.js';
-import { CurlNoiseField } from './curl-field.js';
+import { PerlinCurlNoiseField } from './perlin-curl-field.js';
 import { LowQualityNoiseField } from './low-quality-field.js';
 
-type NoiseField = CurlNoiseField | LowQualityNoiseField;
+type NoiseField = PerlinCurlNoiseField | LowQualityNoiseField;
 
-/** Evaluates Unity Noise parameters over a calibrated, seeded curl field. */
+/** Evaluates particle Noise parameters over seeded Perlin curl fields. */
 export class ParticleNoise {
   readonly field: NoiseField;
   private readonly fields: NoiseField[];
@@ -19,15 +19,11 @@ export class ParticleNoise {
     seed: number,
   ) {
     this.frequency = Math.max(1e-4, settings.frequency);
-    // Low uses a measured separable field; the other qualities retain their
-    // calibrated three-dimensional curl approximation.
-    const coordinateScale = settings.quality === 1 ? 0.96 : 1.02;
-    const amplitude = 0.9816303202717301 * (settings.quality === 1 ? 1.26 : 1);
     this.fields = Array.from({ length: settings.octaves }, (_, i) => {
       const frequency = this.frequency * settings.octaveScale ** i;
       return settings.quality === 0
         ? new LowQualityNoiseField(seed, frequency)
-        : new CurlNoiseField(seed, frequency, coordinateScale, amplitude);
+        : new PerlinCurlNoiseField(seed, frequency, settings.quality === 1 ? 1 : 2);
     });
     this.weights = Float64Array.from(this.fields, (_, i) => settings.octaveMultiplier ** i);
     const sum = this.weights.reduce((total, weight) => total + weight, 0);
@@ -51,7 +47,7 @@ export class ParticleNoise {
     const n = this.settings;
     out.fill(0);
     for (let octave = 0; octave < this.fields.length; octave++) {
-      this.fields[octave]!.sample(x, y, z + this.scroll, this.sampleValue);
+      this.fields[octave]!.sample(x, y, z, this.sampleValue, 0, this.scroll);
       // Normalize potential weights; each field already includes its spatial
       // derivative frequency, which must survive the octave sum.
       const weight = this.weights[octave]!;

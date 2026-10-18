@@ -191,7 +191,7 @@ export class Emitter {
         code: 'APPROXIMATE_NOISE',
         componentId: id,
         message:
-          'Noise uses calibrated TypeScript Curl Noise; seeded trajectories differ from Unity.',
+          'Noise uses measured Perlin curl fields; unmeasured parameter combinations may differ from Unity.',
       });
     }
     const cap = main.maxParticles;
