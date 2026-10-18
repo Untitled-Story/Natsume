@@ -92,14 +92,16 @@ for (const c of native.cases.filter((c) => c.label !== 'prewarm'))
     pack.dispose();
   });
 
-it('bounds prewarm work and rejects unmeasured lifetime curves', async () => {
+it('bounds prewarm work and includes bounded curve-lifetime peaks', async () => {
   const pack = await loadPack(await archive());
   const node = new Scene(pack, [1]).nodes.get(1)!;
   const s = particleSource();
   s.main!.loop = s.main!.prewarm = true;
-  s.main!.lifetime = constant(100);
+  s.main!.lifetime = constant(601);
   expect(() => new Emitter(3, node, s, true, 1, [])).toThrow('budget');
   s.main!.lifetime = linear(1, 2);
-  expect(() => new Emitter(3, node, s, true, 1, [])).toThrow('Prewarm requires');
+  expect(new Emitter(3, node, s, true, 1, []).prewarmSeconds).toBe(5);
+  s.main!.lifetime = constant(35);
+  expect(new Emitter(3, node, s, true, 1, []).prewarmSeconds).toBe(35);
   pack.dispose();
 });

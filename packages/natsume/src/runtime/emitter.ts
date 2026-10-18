@@ -35,12 +35,25 @@ export interface Diagnostic {
 export function prewarmDuration(main: NonNullable<R<ParticleSystemT>['main']>): number {
   if (!main.prewarm || !main.loop) return 0;
   const p = main.lifetime;
-  check(
-    p && (p.mode === 0 || p.mode === 2),
-    'CAPABILITY',
-    'Prewarm requires Constant/TwoConstants lifetime',
-  );
-  const lifetime = Math.max(1e-6, scalar(p, 0, 0), scalar(p, 0, 1));
+  let lifetime = Math.max(1e-6, scalar(p, 0, 0), scalar(p, 0, 1));
+  if (p && (p.mode === 1 || p.mode === 3)) {
+    for (const c of p.mode === 3 ? [p.curveMin, p.curveMax] : [p.curveMax]) {
+      for (let i = 0; i < (c?.keys.length ?? 0); i++) {
+        const k = c!.keys[i]!,
+          next = c!.keys[i + 1];
+        lifetime = Math.max(lifetime, k.value * p.multiplier);
+        if (next && k.interpolation >= 2) {
+          const dt = next.time - k.time;
+          // Hermite's Bezier control envelope bounds peaks between keys.
+          lifetime = Math.max(
+            lifetime,
+            (k.value + (k.outSlope * dt) / 3) * p.multiplier,
+            (next.value - (next.inSlope * dt) / 3) * p.multiplier,
+          );
+        }
+      }
+    }
+  }
   return Math.ceil(lifetime / main.durationSeconds) * main.durationSeconds;
 }
 
@@ -128,7 +141,7 @@ export class Emitter {
     );
     this.prewarmSeconds = prewarmDuration(main);
     check(
-      this.prewarmSeconds <= 30 &&
+      Math.ceil(this.prewarmSeconds * 60) <= 36_000 &&
         main.maxParticles * Math.ceil(this.prewarmSeconds * 60) <= 10_000_000,
       'LIMIT',
       'Prewarm work exceeds playback budget',

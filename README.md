@@ -138,7 +138,7 @@ runtime.registerScript(
 
 排序使用仿射显示矩阵，Distance 与 Depth 均按变换后的 Z 深度排序；Oldest / Youngest 将指定年龄的粒子绘制在前方。`sortingFudge` 仅调整相同 Sorting Layer / Order 的粒子系统顺序，负值靠前，不参与宿主其他 Pixi 对象的深度排序。
 
-预热限循环系统、Constant / Two Constants 寿命，按完整周期覆盖最大寿命；每发射器最多预模拟 30 秒，并限制总计算量。曲线寿命预热暂不支持。
+预热限循环系统，按完整周期覆盖寿命上界；曲线使用 Hermite 控制点包络估计上界。每发射器最多 36,000 步 / 1000 万容量步，实例总计最多 4000 万容量步。
 
 Stretched Billboard 仅支持非 Freeform、`rotateWithStretchDirection=true`、`cameraVelocityScale=velocityScale=0`；按 Unity +Z 观察及 XY 速度平面计算。
 
