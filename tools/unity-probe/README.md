@@ -30,7 +30,7 @@ pnpm probe:unity --noise-options # Noise 参数行为与渲染尺寸
 pnpm probe:unity --sweeps       # Shape 时间扫描、量化与方向对齐
 pnpm probe:unity --spaces       # 模拟空间、世界重力与线性速度
 pnpm probe:unity --stretch      # 拉伸长度、粒子速度与移动视图
-pnpm probe:unity --meshes       # 多 Mesh、权重、序列帧行、多材质顺序与 submesh 限制
+pnpm probe:unity --meshes       # 多 Mesh、材质顺序、原生雾效 / 场景深度像素与 submesh 限制
 pnpm probe:unity --sorting      # 透明粒子索引顺序
 pnpm probe:unity --compatibility # 加权曲线、渐变、限速与序列帧
 pnpm probe:unity --noise-fit    # 执行本地提供的 Noise 采样输入
@@ -95,3 +95,13 @@ node tools/unity-probe/measure.mjs --refresh-unity
 依次刷新全部数值探针（不包含原始 prefab 布局和外部拟合输入），运行单元与浏览器对比，将最大绝对差、误差 RMS、比较次数与输入哈希写入 `data/unity-baselines/measurements.json`。已测输入数值相同时保留夹具文件内容，避免纯格式变动。省略 `--refresh-unity` 可复用本地原生结果。
 
 完整浏览器测量需要本地 `data/kirakira.noap`；其他游戏样本存在时一并运行功能回归。原生完整输出和逐项误差记录位于 `data/unity-baselines/`。汇总区分 Unity 数值对照与解析像素对照；已知近似的测量不等于严格一致性验收。
+
+## 本地包生命周期
+
+```sh
+node tools/unity-probe/verify-pack-lifecycle.mjs path/to/packages
+```
+
+读取目录中的 `.noap`，逐入口检查至少一个非循环发射周期，或两个循环周期，再加寿命窗口；固定步长 1/60 s，每 10 步提交一次 WebGL 绘制。覆盖暂停、停止发射后排空、清空、同种子重播、粒子有限值与容量、WebGL 错误及销毁后的纹理引用释放。单入口检查时长上限 1,000 秒，超出时报错。
+
+宿主明确提供重力 `(0,-9.81,0)`、无雾、视点 `(0,0,-1000)` 和 640×360 外部布局，不绑定游戏脚本。结果写入 `data/unity-baselines/package-lifecycle.json`；通过表示运行与生命周期检查通过，不代表游戏画面或 Unity 最终像素相同。
