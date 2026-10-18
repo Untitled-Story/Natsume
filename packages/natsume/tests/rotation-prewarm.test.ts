@@ -17,6 +17,7 @@ interface NativeCase {
   duration: number;
   lifetime: number;
   rate: number;
+  dt?: number;
   lifetimeCurve: boolean;
   samples: {
     frame: number;
@@ -63,12 +64,16 @@ for (const c of native.cases.filter((c) => c.label !== 'prewarm'))
     }
     const initialCount = e.count;
     for (let frame = 0; frame <= 60; frame++) {
-      if (frame) e.step(1 / 60);
+      if (frame) e.step(c.dt ?? 1 / 60);
       const sample = c.samples.find((s) => s.frame === frame);
       if (!sample) continue;
       if (warm) {
         recordError(
-          c.lifetimeCurve ? 'prewarm.curve.count' : 'prewarm.count',
+          c.label.includes('window')
+            ? 'prewarm.window.count'
+            : c.lifetimeCurve
+              ? 'prewarm.curve.count'
+              : 'prewarm.count',
           e.count - sample.count,
           'particles',
           c.label + '/' + frame,
@@ -87,16 +92,25 @@ for (const c of native.cases.filter((c) => c.label !== 'prewarm'))
         const expected = [...sample.remaining].sort((a, b) => a - b);
         const median = (a: number[]) => a[Math.floor(a.length / 2)]!;
         recordError(
-          c.lifetimeCurve ? 'prewarm.curve.medianLifetime' : 'prewarm.medianLifetime',
+          c.label.includes('window')
+            ? 'prewarm.window.medianLifetime'
+            : c.lifetimeCurve
+              ? 'prewarm.curve.medianLifetime'
+              : 'prewarm.medianLifetime',
           median(remaining) - median(expected),
           's',
           c.label + '/' + frame,
         );
-        const tolerance = c.label.includes('grid')
-          ? c.lifetime * 0.1
-          : c.lifetimeCurve
-            ? 0.00002
-            : 0.09;
+        // A zero-lifetime boundary particle can shift the median by one birth spacing.
+        const tolerance = remaining.length === expected.length ? 5e-5 : c.lifetime * 0.1;
+        const alive = remaining.filter((v) => v > 2e-5);
+        const nativeAlive = expected.filter((v) => v > 2e-5);
+        expect(alive.length).toBe(nativeAlive.length);
+        for (let i = 0; i < alive.length; i++) {
+          const error = alive[i]! - nativeAlive[i]!;
+          recordError('prewarm.alive.remainingLifetime', error, 's', `${c.label}/${frame}/${i}`);
+          expect(Math.abs(error)).toBeLessThan(c.lifetimeCurve ? c.lifetime * 0.02 : 5e-5);
+        }
         expect(Math.abs(median(remaining) - median(expected))).toBeLessThan(tolerance);
       } else
         for (const [axis, key] of (['x', 'y', 'z'] as const).entries()) {

@@ -40,7 +40,8 @@ it('evaluates both custom streams with vector and authored HDR color values', ()
   const e = new Emitter(3, new Scene(pack, [1]).nodes.get(1)!, source, true, 1, []);
   manualParticle(e);
   e.step(0.25);
-  expect(e.customData![0]).toBe(0);
+  // A 0.25 s call uses nine substeps; Custom Data samples the final substep start.
+  expect(e.customData![0]).toBeCloseTo(2 / 9, 6);
   expect([...e.customData!.slice(1, 5)]).toEqual([2, 3, 4, 2]);
   expect(e.customData![5]).toBeCloseTo(-0.2, 6);
   expect(e.customData![7]).toBe(0.5);
@@ -110,9 +111,7 @@ for (const sample of native.cases)
     }
     for (let frame = 1; frame <= sample.steps.length; frame++) {
       const dt = sample.steps[frame - 1]!;
-      // Unity subdivides Simulate calls above 0.03 s, even with fixedTimeStep=false.
-      const substeps = Math.ceil(dt / Math.fround(0.03));
-      for (let step = 0; step < substeps; step++) e.step(dt / substeps);
+      e.step(dt);
       const expected = sample.samples.find((s) => s.frame === frame);
       if (!expected) continue;
       for (const [i, key] of (['x', 'y', 'z', 'w'] as const).entries()) {

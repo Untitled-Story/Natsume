@@ -88,7 +88,7 @@ export class Emitter {
   private warmStart = 0;
   private rateTime = 0;
   private rateSpacing = 0;
-  private pendingPrewarmStep = false;
+  private pendingPrewarmTime = 0;
   private distanceCarry = 0;
   private distanceStarted = false;
   private readonly lastEmissionPosition = new Float64Array(3);
@@ -327,7 +327,7 @@ export class Emitter {
     this.time = 0;
     this.rateTime = 0;
     this.rateSpacing = 0;
-    this.pendingPrewarmStep = false;
+    this.pendingPrewarmTime = 0;
     this.burstTime = this.burstCycle = 0;
     this.burstRepeats.clear();
     this.carry = 0;
@@ -361,7 +361,7 @@ export class Emitter {
       this.time = 0;
       this.rateTime = 0;
       this.rateSpacing = 0;
-      this.pendingPrewarmStep = false;
+      this.pendingPrewarmTime = 0;
       this.warming = false;
       this.burstTime = this.burstCycle = 0;
       this.burstRepeats.clear();
@@ -387,15 +387,22 @@ export class Emitter {
     // Native prewarm retains only the final maximum-lifetime window of rate births.
     this.warming = true;
     this.warmStart = Math.max(0, this.prewarmSeconds - this.maximumBirthLifetime);
+    const fixedStep = Math.fround(0.02);
     try {
-      const steps = Math.ceil(this.prewarmSeconds / 0.02);
-      for (let i = 0; i < steps; i++) {
-        this.advance(Math.min(0.02, this.prewarmSeconds - i * 0.02));
+      const skippedSteps = Math.ceil(this.warmStart / 0.02);
+      for (let i = 0; i < skippedSteps; i++)
+        this.advance(Math.min(0.02, this.warmStart - i * 0.02));
+      // Native prewarm drains complete 0.02 s steps from a Float32 lifetime window.
+      // The remainder is consumed in whole substeps on the next update.
+      let remaining = Math.fround(this.maximumBirthLifetime);
+      while (remaining >= fixedStep) {
+        this.advance(fixedStep);
+        remaining = Math.fround(remaining - fixedStep);
       }
+      this.pendingPrewarmTime = remaining > 1e-6 ? remaining : 0;
     } finally {
       this.warming = false;
     }
-    this.pendingPrewarmStep = true;
   }
   private repeatBursts(dt: number): void {
     const bursts = this.emission?.bursts;
@@ -655,13 +662,18 @@ export class Emitter {
       this.prewarm();
       if (dt <= 0) return;
     }
-    this.advance(dt);
-    if (this.pendingPrewarmStep) {
-      this.pendingPrewarmStep = false;
-      // Native consumes one queued internal step on the first post-prewarm update.
-      this.advance(dt);
+    const steps = Math.ceil(dt / Math.fround(0.03));
+    const substep = dt / steps;
+    for (let i = 0; i < steps; i++) this.advance(substep);
+    if (this.pendingPrewarmTime > 0) {
+      while (this.pendingPrewarmTime > 1e-6) {
+        this.pendingPrewarmTime -= substep;
+        this.advance(substep);
+      }
+      this.pendingPrewarmTime = 0;
     }
   }
+
   private advance(dt: number): void {
     this.noiseEvaluator?.advance(
       dt,
