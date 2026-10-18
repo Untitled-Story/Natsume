@@ -820,7 +820,13 @@ test('replaces gravity and view inputs atomically while paused', async ({ page }
     async (path) => (await import(`/@fs${path}`)).checkEnvironmentReplacement(),
     new URL('./render-fixture.ts', import.meta.url).pathname,
   );
-  expect(result).toEqual({ rejected: true, preserved: true, updated: true });
+  expect(result).toEqual({
+    rejected: true,
+    preserved: true,
+    updated: true,
+    facingRejected: true,
+    facingPreserved: true,
+  });
 });
 
 test('matches Unity renderer pivot and deterministic flip geometry', async ({ page }) => {

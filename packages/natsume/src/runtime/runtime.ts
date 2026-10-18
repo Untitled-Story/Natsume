@@ -1,3 +1,4 @@
+import { Alignment } from '../format/generated/noa/ir/alignment.js';
 import { Container, ImageSource, Rectangle, Texture, type WebGLRenderer } from 'pixi.js';
 import { mat4 } from 'gl-matrix';
 import { check } from '../errors.js';
@@ -200,6 +201,15 @@ export class EffectInstance {
     const gravity = [...this.simulation.emitters.values()].map(
       (emitter) => [emitter, emitter.resolveGravity(next?.gravity)] as const,
     );
+    for (const mesh of this.meshes)
+      check(
+        mesh.definition.alignment !== Alignment.Facing ||
+          mesh.definition.mode === RenderMode.HorizontalBillboard ||
+          mesh.definition.mode === RenderMode.VerticalBillboard ||
+          next?.viewPosition,
+        'HOST',
+        'Facing alignment requires particleEnvironment.viewPosition',
+      );
     this.environment = next;
     for (const [emitter, value] of gravity) emitter.gravity = value;
     for (const mesh of this.meshes) mesh.environment = next;

@@ -44,6 +44,10 @@ Custom Vector 曲线在本批测试中领先 Unity 一个 `1/60 s` 采样步。�
 
 Drag 使用速度长度的线性减量；尺寸乘算为 π×size.x²，速度乘算为 speed²。生命周期尺寸取当前步开始时的值。以上限速空间结果覆盖已测旋转与单位缩放；不代表任意剪切 / 非均匀缩放组合已经验收。加权曲线保留普通 Hermite 快速路径；感知渐变预缓存 Oklab 键值，不引入外部运行依赖。
 
+## 对齐与视点
+
+Horizontal / Vertical Billboard、World / View / Local / Facing / Velocity 已补齐。Facing 使用宿主世界坐标视点；Velocity 以完整速度构造法线，零速度回退视图方向。View / Facing 的相机 Z 滚转 30°、allowRoll 开关经过 Unity 世界顶点对照；View 的 X/Y 倾斜符号与 World 不同，关闭滚转时在倾斜之前抵消 Z 角。已知无光照材质不消费法线，normalDirection 不改变其输出。
+
 ## 距离发射与零间隔 Burst
 
 Rate over Distance 补测 Local / World、1.5 / 2 粒/单位、启动延迟与 10 单位位置跳变。普通步进计数差 **0**；位置跳变案例最大差 **1 粒**，保留整数阈值的浮点差异。World 粒子在当前发射点出生，不沿移动线段补点。零间隔无限 Burst 按固定模拟步重复，并在持续时间末步停止；0.1 s 案例的 18 帧计数差 **0**。有限零间隔 Burst 仍只触发一次；正间隔重复保留原行为。短周期重复 Burst 仍有上文所述 **2 粒**的末步差异。

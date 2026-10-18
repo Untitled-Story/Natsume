@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { test, expect } from '@playwright/test';
 import { recordError } from '../measurement.js';
 
-test('matches native scaled particle geometry', async ({ page }) => {
+test('matches native scaling and alignment geometry', async ({ page }) => {
   const sample = fileURLToPath(new URL('../../../../data/kirakira.noap', import.meta.url));
   const fixture = new URL(
     '../../../../data/unity-baselines/fixtures/unity-compatibility.json',
@@ -11,7 +11,12 @@ test('matches native scaled particle geometry', async ({ page }) => {
   );
   test.skip(!existsSync(sample) || !existsSync(fixture), 'Local native inputs are absent');
   const cases = JSON.parse(readFileSync(fixture, 'utf8')).cases.filter(
-    (c: { label: string }) => c.label.startsWith('scaling-') && !c.label.includes('birth'),
+    (c: { label: string }) =>
+      (c.label.startsWith('scaling-') && !c.label.includes('birth')) ||
+      c.label.startsWith('render-') ||
+      c.label.startsWith('align-zero-') ||
+      c.label.startsWith('plane-zero-') ||
+      c.label.startsWith('roll-'),
   );
   await page.goto('/');
   await page.locator('#file').setInputFiles(sample);

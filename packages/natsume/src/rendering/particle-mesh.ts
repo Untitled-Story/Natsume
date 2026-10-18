@@ -23,7 +23,7 @@ import { BlendFactor as B } from '../format/generated/noa/ir/blend-factor.js';
 import { CompareOp } from '../format/generated/noa/ir/compare-op.js';
 import { ColorSpace } from '../format/generated/noa/ir/color-space.js';
 import { VertexSemantic } from '../format/generated/noa/ir/vertex-semantic.js';
-import { mat4 } from 'gl-matrix';
+import { mat4, vec3 } from 'gl-matrix';
 import { color, random, scalar, sheetFrame } from '../runtime/parameters.js';
 import type { Emitter } from '../runtime/emitter.js';
 import type { ParticleEnvironment } from './particle-environment.js';
@@ -182,6 +182,11 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
   private readonly pivotSize: readonly number[];
   private readonly scratchColor = new Float32Array(4);
   private readonly rotationMatrix = mat4.create();
+  private readonly viewForward = vec3.create();
+  private readonly viewUp = vec3.create();
+  private readonly basisRight = vec3.create();
+  private readonly basisUp = vec3.create();
+  private readonly basisForward = vec3.create();
   private readonly binding;
   constructor(
     readonly emitter: Emitter,
@@ -210,21 +215,22 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
     check(
       definition.mode === RenderMode.Billboard ||
         definition.mode === RenderMode.Mesh ||
-        definition.mode === RenderMode.StretchedBillboard,
+        definition.mode === RenderMode.StretchedBillboard ||
+        definition.mode === RenderMode.HorizontalBillboard ||
+        definition.mode === RenderMode.VerticalBillboard,
       'CAPABILITY',
       'Unsupported particle render mode',
     );
     check(
-      definition.alignment === Alignment.World ||
-        definition.alignment === Alignment.Local ||
-        definition.alignment === Alignment.View,
-      'CAPABILITY',
-      'System ' +
-        emitter.id +
-        ': renderer alignment ' +
-        Alignment[definition.alignment] +
-        ' is unsupported',
+      definition.alignment !== Alignment.Facing ||
+        definition.mode === RenderMode.HorizontalBillboard ||
+        definition.mode === RenderMode.VerticalBillboard ||
+        environment?.viewPosition,
+      'HOST',
+      'System ' + emitter.id + ': Facing alignment requires particleEnvironment.viewPosition',
     );
+    if (definition.alignment === Alignment.Velocity)
+      emitter.renderVelocities ??= emitter.velocities.slice();
     check(definition.sort >= 0 && definition.sort <= 4, 'SEMANTIC', 'Invalid particle sort');
     check(Number.isFinite(definition.sortingFudge), 'SEMANTIC', 'Invalid sortingFudge');
     check(
@@ -502,14 +508,80 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
     if (this.definition.alignment === Alignment.Local)
       mat4.fromQuat(this.rotationMatrix, e.node.worldRotation);
     else mat4.identity(this.rotationMatrix);
+    vec3.set(this.viewForward, matrix[2]!, matrix[6]!, matrix[10]!);
+    if (vec3.length(this.viewForward) < 1e-8) vec3.set(this.viewForward, 0, 0, 1);
+    vec3.normalize(this.viewForward, this.viewForward);
+    vec3.set(this.basisRight, matrix[0]!, matrix[4]!, matrix[8]!);
+    vec3.cross(this.viewUp, this.viewForward, this.basisRight);
+    if (vec3.length(this.viewUp) < 1e-8) vec3.set(this.viewUp, 0, 1, 0);
+    vec3.normalize(this.viewUp, this.viewUp);
     const rotation = this.rotationMatrix,
       localScale = { x: e.particleScale[0]!, y: e.particleScale[1]!, z: e.particleScale[2]! },
       rotationSign = this.definition.mode === RenderMode.Billboard ? -1 : 1;
+    if (this.definition.alignment === Alignment.View) {
+      vec3.cross(this.basisRight, this.viewUp, this.viewForward);
+      if (vec3.length(this.basisRight) < 1e-8) vec3.set(this.basisRight, 1, 0, 0);
+      vec3.normalize(this.basisRight, this.basisRight);
+      vec3.cross(this.basisUp, this.viewForward, this.basisRight);
+      for (let axis = 0; axis < 3; axis++) {
+        rotation[axis] = this.basisRight[axis]!;
+        rotation[axis + 4] = this.basisUp[axis]!;
+        rotation[axis + 8] = this.viewForward[axis]!;
+      }
+    }
     for (let i = 0; i < n; i++) {
       const serial = e.serials[i]!,
         rnd = (c: number) => random(e.seed, serial, c),
         o = i * 3,
         t = e.ages[i]! / e.lifetimes[i]!;
+      const plane =
+        this.definition.mode === RenderMode.HorizontalBillboard ||
+        this.definition.mode === RenderMode.VerticalBillboard;
+      if (
+        !plane &&
+        (this.definition.alignment === Alignment.Facing ||
+          this.definition.alignment === Alignment.Velocity)
+      ) {
+        const position = this.environment?.viewPosition;
+        const px = e.positions[o]!,
+          py = e.positions[o + 1]!,
+          pz = e.positions[o + 2]!;
+        if (this.definition.alignment === Alignment.Facing) {
+          vec3.set(
+            this.basisForward,
+            world[0]! * px + world[4]! * py + world[8]! * pz + world[12]! - position![0],
+            world[1]! * px + world[5]! * py + world[9]! * pz + world[13]! - position![1],
+            world[2]! * px + world[6]! * py + world[10]! * pz + world[14]! - position![2],
+          );
+        } else if (this.definition.alignment === Alignment.Velocity) {
+          const velocity = e.renderVelocities ?? e.velocities;
+          vec3.set(
+            this.basisForward,
+            world[0]! * velocity[o]! + world[4]! * velocity[o + 1]! + world[8]! * velocity[o + 2]!,
+            world[1]! * velocity[o]! + world[5]! * velocity[o + 1]! + world[9]! * velocity[o + 2]!,
+            world[2]! * velocity[o]! + world[6]! * velocity[o + 1]! + world[10]! * velocity[o + 2]!,
+          );
+        } else vec3.copy(this.basisForward, this.viewForward);
+        if (vec3.length(this.basisForward) < 1e-8) vec3.copy(this.basisForward, this.viewForward);
+        vec3.normalize(this.basisForward, this.basisForward);
+        if (this.definition.alignment === Alignment.Velocity)
+          vec3.cross(this.basisRight, this.viewForward, this.basisForward);
+        else vec3.cross(this.basisRight, this.viewUp, this.basisForward);
+        if (vec3.length(this.basisRight) < 1e-8) {
+          vec3.cross(
+            this.basisRight,
+            Math.abs(this.basisForward[1]!) > 0.99 ? [1, 0, 0] : [0, 1, 0],
+            this.basisForward,
+          );
+        }
+        vec3.normalize(this.basisRight, this.basisRight);
+        vec3.cross(this.basisUp, this.basisForward, this.basisRight);
+        for (let axis = 0; axis < 3; axis++) {
+          rotation[axis] = this.basisRight[axis]!;
+          rotation[4 + axis] = this.basisUp[axis]!;
+          rotation[8 + axis] = this.basisForward[axis]!;
+        }
+      }
       const size = e.sizeModule;
       let sx = e.startSizes[o]!,
         sy = e.startSizes[o + 1]!,
@@ -576,12 +648,23 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
       }
       // Native BakeMesh: World Billboard reverses particle Euler angles;
       // Mesh uses their original sign. Both use ZXY order.
+      const tiltSign =
+        this.definition.mode === RenderMode.Billboard &&
+        this.definition.alignment === Alignment.View
+          ? 1
+          : rotationSign;
+      const roll =
+        !this.definition.allowRoll &&
+        (this.definition.alignment === Alignment.View ||
+          this.definition.alignment === Alignment.Facing)
+          ? Math.atan2(-this.viewUp[0]!, this.viewUp[1]!)
+          : 0;
       const cx = Math.cos(e.rotations[o]!),
-        snx = Math.sin(e.rotations[o]!) * rotationSign,
+        snx = Math.sin(e.rotations[o]!) * tiltSign,
         cy = Math.cos(e.rotations[o + 1]!),
-        sny = Math.sin(e.rotations[o + 1]!) * rotationSign,
-        cz = Math.cos(e.rotations[o + 2]!),
-        snz = Math.sin(e.rotations[o + 2]!) * rotationSign;
+        sny = Math.sin(e.rotations[o + 1]!) * tiltSign,
+        cz = Math.cos(e.rotations[o + 2]! + roll),
+        snz = Math.sin(e.rotations[o + 2]! + roll) * rotationSign;
       color(e.colorModule?.color ?? null, t, rnd(53), this.scratchColor);
       const sheet = e.sheet && e.sheet.uvChannelMask & 1 ? e.sheet : undefined,
         cols = sheet?.columns ?? 1,
@@ -643,7 +726,28 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
         x *= localScale.x;
         y *= localScale.y;
         z *= localScale.z;
-        if (stretched) {
+        if (plane) {
+          // Native axis-locked quads normalize their corners, rotate Z, then scale.
+          const angle = -e.rotations[o + 2]!,
+            c = Math.cos(angle),
+            s = Math.sin(angle);
+          const px = p.x + (pivot?.x ?? 0),
+            py = p.y + (pivot?.y ?? 0);
+          const ax = (px * c - py * s) * sx * localScale.x * Math.SQRT1_2;
+          const ay = (px * s + py * c) * sy * localScale.y * Math.SQRT1_2;
+          if (this.definition.mode === RenderMode.HorizontalBillboard) {
+            wx += ax;
+            wy += (pivot?.z ?? 0) * sx * localScale.x;
+            wz += ay;
+          } else {
+            vec3.cross(this.basisRight, [0, 1, 0], this.viewForward);
+            if (vec3.length(this.basisRight) < 1e-8) vec3.set(this.basisRight, 1, 0, 0);
+            vec3.normalize(this.basisRight, this.basisRight);
+            wx += ax * this.basisRight[0]!;
+            wy += ay;
+            wz += ax * this.basisRight[2]! + (pivot?.z ?? 0) * sx * localScale.x;
+          }
+        } else if (stretched) {
           // Native stretch anchors UV.x=0 at the particle, ignores Euler rotation,
           // and flips the transverse edge when the combined length is negative.
           const along = uv.x * stretchLength - 2 * (pivot?.y ?? 0) * sy * localScale.y,

@@ -509,10 +509,30 @@ export function checkEnvironmentReplacement() {
     meshes.every((mesh) => mesh.environment === before) &&
     first.gravity[1] === -10 &&
     second.gravity[1] === -10;
+  const definition = structuredClone(meshes[0]!.definition) as ParticleRendererT;
+  definition.alignment = Alignment.Facing;
+  effect.addMesh(
+    new ParticleMesh(
+      meshes[0]!.emitter,
+      definition,
+      meshes[0]!.materialDefinition,
+      Texture.WHITE,
+      effect.simulation.pack,
+      before,
+    ),
+  );
+  let facingRejected = false;
+  try {
+    effect.setParticleEnvironment({ fog: { mode: 'none' }, gravity: [0, 0, 0] });
+  } catch {
+    facingRejected = true;
+  }
+  const facingPreserved = meshes[0]!.environment === before && second.gravity[1] === -10;
   effect.setParticleEnvironment({
     fog: { mode: 'none' },
     gravity: [0, 0, 0],
     viewVelocity: [0, 3, 0],
+    viewPosition: [0, 0, -10],
   });
   const updated =
     meshes.every((mesh) => mesh.environment?.viewVelocity?.[1] === 3) &&
@@ -521,7 +541,7 @@ export function checkEnvironmentReplacement() {
     effect.state === 'paused';
   effect.simulation.emitters.delete(first.id);
   effect.simulation.emitters.delete(second.id);
-  return { rejected, preserved, updated };
+  return { rejected, preserved, updated, facingRejected, facingPreserved };
 }
 
 export async function measureSheetUV() {
@@ -624,24 +644,64 @@ export async function measureCompatibilityGeometry(labels: string[]) {
     emitter.velocities.set([2, 1, 0.5]);
     emitter.lifetimes[0] = 2;
     const definition = structuredClone(original.definition) as ParticleRendererT;
-    definition.mode = RenderMode.Billboard;
-    definition.alignment = Alignment.World;
+    definition.mode = label.includes('HorizontalBillboard')
+      ? RenderMode.HorizontalBillboard
+      : label.includes('VerticalBillboard')
+        ? RenderMode.VerticalBillboard
+        : RenderMode.Billboard;
+    definition.alignment = label.startsWith('roll-View')
+      ? Alignment.View
+      : label.includes('Facing')
+        ? Alignment.Facing
+        : label.includes('Velocity')
+          ? Alignment.Velocity
+          : Alignment.World;
+    definition.allowRoll = !label.endsWith('False');
+    if (label.includes('zero-')) emitter.rotations.fill(0);
     const mesh = new ParticleMesh(
       emitter,
       definition,
       original.materialDefinition,
       Texture.WHITE,
       pack,
+      { fog: { mode: 'none' }, viewPosition: [0, 0, -10] },
     );
     for (let frame = 0; frame <= 60; frame++) {
       if (frame) emitter.step(1 / 60);
       if (![0, 1, 2, 3, 15, 30, 60].includes(frame)) continue;
-      mesh.sync([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1], 'gamma');
+      const angle = label.startsWith('roll-') ? Math.PI / 6 : 0;
+      const matrix = [
+        Math.cos(angle),
+        -Math.sin(angle),
+        0,
+        0,
+        Math.sin(angle),
+        Math.cos(angle),
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        1,
+      ];
+      mesh.sync(matrix, 'gamma');
       const buffer = mesh.geometry.getBuffer('aPosition').data as Float32Array;
       result.push({
         label,
         frame,
-        vertices: [0, 1, 2, 3].map((i) => Array.from(buffer.slice(i * 16, i * 16 + 3))),
+        vertices: [0, 1, 2, 3].map((i) => {
+          const x = buffer[i * 16]!,
+            y = buffer[i * 16 + 1]!;
+          return [
+            Math.cos(angle) * x - Math.sin(angle) * y,
+            Math.sin(angle) * x + Math.cos(angle) * y,
+            buffer[i * 16 + 2]!,
+          ];
+        }),
       });
     }
     mesh.destroy();
