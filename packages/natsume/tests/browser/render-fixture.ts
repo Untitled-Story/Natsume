@@ -565,3 +565,86 @@ export async function measureSheetUV() {
   mesh.destroy();
   return result;
 }
+
+export async function measureCompatibilityGeometry(labels: string[]) {
+  const { effect } = getPreview();
+  if (!effect) throw new Error('Missing preview');
+  const { ScalingMode } = await import('../../src/format/generated/noa/ir/scaling-mode.js');
+  effect.pause();
+  const original = effect.container.children[0] as ParticleMesh;
+  const result = [];
+  for (const label of labels) {
+    const doc = minimalDocument();
+    const node = doc.nodes[0]!;
+    if (label.startsWith('scaling-')) {
+      const parent = structuredClone(node);
+      parent.id = 9;
+      parent.transform!.scale!.x = 2;
+      parent.transform!.scale!.y = 3;
+      parent.transform!.scale!.z = 4;
+      node.parentId = 9;
+      node.transform!.scale!.x = 0.5;
+      node.transform!.scale!.y = 2;
+      if (label.endsWith('rotated')) {
+        parent.transform!.rotation = new QuaternionT(
+          0,
+          0,
+          Math.sin(Math.PI / 12),
+          Math.cos(Math.PI / 12),
+        );
+        node.transform!.rotation = new QuaternionT(
+          0,
+          0,
+          Math.sin(Math.PI / 8),
+          Math.cos(Math.PI / 8),
+        );
+      }
+      doc.nodes.push(parent);
+    }
+    const pack = {
+      nodes: doc.nodes,
+      components: [],
+      getNode: (id: number) => doc.nodes.find((n) => n.id === id),
+    } as unknown as EffectPack;
+    const source = particleSource();
+    source.main!.scaling = label.includes('hierarchy')
+      ? ScalingMode.Hierarchy
+      : label.includes('shape')
+        ? ScalingMode.Shape
+        : ScalingMode.Local;
+    const emitter = new Emitter(
+      3,
+      new Scene(pack, [node.parentId || 1]).nodes.get(1)!,
+      source,
+      true,
+      1,
+      [],
+    );
+    manualParticle(emitter);
+    emitter.velocities.set([2, 1, 0.5]);
+    emitter.lifetimes[0] = 2;
+    const definition = structuredClone(original.definition) as ParticleRendererT;
+    definition.mode = RenderMode.Billboard;
+    definition.alignment = Alignment.World;
+    const mesh = new ParticleMesh(
+      emitter,
+      definition,
+      original.materialDefinition,
+      Texture.WHITE,
+      pack,
+    );
+    for (let frame = 0; frame <= 60; frame++) {
+      if (frame) emitter.step(1 / 60);
+      if (![0, 1, 2, 3, 15, 30, 60].includes(frame)) continue;
+      mesh.sync([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1], 'gamma');
+      const buffer = mesh.geometry.getBuffer('aPosition').data as Float32Array;
+      result.push({
+        label,
+        frame,
+        vertices: [0, 1, 2, 3].map((i) => Array.from(buffer.slice(i * 16, i * 16 + 3))),
+      });
+    }
+    mesh.destroy();
+  }
+  return result;
+}

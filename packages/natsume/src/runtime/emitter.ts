@@ -89,6 +89,8 @@ export class Emitter {
   readonly shapeMatrix = mat4.create();
   readonly simulationMatrix = mat4.create();
   readonly inverseSimulationMatrix = mat4.create();
+  readonly emitterMatrix = mat4.create();
+  readonly particleScale = vec3.fromValues(1, 1, 1);
   private readonly vectorMatrix = mat4.create();
   private readonly limitRotation = quat.create();
   private readonly inverseLimitRotation = quat.create();
@@ -118,11 +120,6 @@ export class Emitter {
     this.main = main;
     validateParameters(source);
     this.setGravity(gravity);
-    check(
-      main.scaling === ScalingMode.Local,
-      'CAPABILITY',
-      `System ${id}: scaling ${ScalingMode[main.scaling]} is unsupported`,
-    );
     check(
       main.space !== Space.Custom || customSpaceNode,
       'HOST',
@@ -308,14 +305,38 @@ export class Emitter {
         : this.main.space === Space.Custom
           ? this.customSpaceNode
           : undefined;
-    if (frame) mat4.copy(this.simulationMatrix, frame.worldMatrix);
+    const scale = this.node.source.transform!.scale!;
+    if (this.main.scaling === ScalingMode.Hierarchy) {
+      mat4.copy(this.emitterMatrix, this.node.worldMatrix);
+      const r = mat4.fromQuat(this.vectorMatrix, this.node.worldRotation),
+        w = this.node.worldMatrix;
+      for (let axis = 0; axis < 3; axis++) {
+        const o = axis * 4;
+        this.particleScale[axis] = r[o]! * w[o]! + r[o + 1]! * w[o + 1]! + r[o + 2]! * w[o + 2]!;
+      }
+    } else {
+      vec3.set(
+        this.particleScale,
+        this.main.scaling === ScalingMode.Shape ? 1 : scale.x,
+        this.main.scaling === ScalingMode.Shape ? 1 : scale.y,
+        this.main.scaling === ScalingMode.Shape ? 1 : scale.z,
+      );
+      mat4.fromRotationTranslationScale(
+        this.emitterMatrix,
+        this.node.worldRotation,
+        [this.node.worldMatrix[12]!, this.node.worldMatrix[13]!, this.node.worldMatrix[14]!],
+        this.particleScale,
+      );
+    }
+    if (frame === this.node) mat4.copy(this.simulationMatrix, this.emitterMatrix);
+    else if (frame) mat4.copy(this.simulationMatrix, frame.worldMatrix);
     else mat4.identity(this.simulationMatrix);
     // Zero scale is valid. Rotation-only fallback preserves finite simulation in a collapsed frame.
     if (!mat4.invert(this.inverseSimulationMatrix, this.simulationMatrix)) {
       mat4.fromQuat(this.inverseSimulationMatrix, frame!.worldRotation);
       mat4.transpose(this.inverseSimulationMatrix, this.inverseSimulationMatrix);
     }
-    mat4.multiply(this.vectorMatrix, this.inverseSimulationMatrix, this.node.worldMatrix);
+    mat4.multiply(this.vectorMatrix, this.inverseSimulationMatrix, this.emitterMatrix);
     // Native limit axes use inverse module rotation relative to the simulation frame.
     // Scale does not scale their thresholds.
     if (this.limit?.space === Space.Local) {
@@ -464,8 +485,9 @@ export class Emitter {
         dy = this.direction[1]!;
         dz = this.direction[2]!;
       }
-      if (this.main.space !== Space.Local) {
-        const m = this.node.worldMatrix,
+      if (this.main.space !== Space.Local || this.main.scaling === ScalingMode.Shape) {
+        const m =
+            this.main.scaling === ScalingMode.Shape ? this.node.worldMatrix : this.emitterMatrix,
           inv = this.inverseSimulationMatrix;
         const wx = m[0]! * x + m[4]! * y + m[8]! * z + m[12]!;
         const wy = m[1]! * x + m[5]! * y + m[9]! * z + m[13]!;
@@ -473,10 +495,29 @@ export class Emitter {
         x = inv[0]! * wx + inv[4]! * wy + inv[8]! * wz + inv[12]!;
         y = inv[1]! * wx + inv[5]! * wy + inv[9]! * wz + inv[13]!;
         z = inv[2]! * wx + inv[6]! * wy + inv[10]! * wz + inv[14]!;
-        const direction = this.vector(dx, dy, dz, true);
-        dx = direction[0]!;
-        dy = direction[1]!;
-        dz = direction[2]!;
+        if (this.main.scaling === ScalingMode.Shape) {
+          vec3.set(
+            this.direction,
+            m[0]! * dx + m[4]! * dy + m[8]! * dz,
+            m[1]! * dx + m[5]! * dy + m[9]! * dz,
+            m[2]! * dx + m[6]! * dy + m[10]! * dz,
+          );
+          vec3.normalize(this.direction, this.direction);
+          const direction = this.vector(
+            this.direction[0]!,
+            this.direction[1]!,
+            this.direction[2]!,
+            false,
+          );
+          dx = direction[0]!;
+          dy = direction[1]!;
+          dz = direction[2]!;
+        } else {
+          const direction = this.vector(dx, dy, dz, true);
+          dx = direction[0]!;
+          dy = direction[1]!;
+          dz = direction[2]!;
+        }
       }
       this.positions[o] = x;
       this.positions[o + 1] = y;

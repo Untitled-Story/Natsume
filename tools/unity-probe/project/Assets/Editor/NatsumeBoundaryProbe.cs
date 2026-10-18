@@ -58,7 +58,7 @@ public static class NatsumeBoundaryProbe
         if (bake && particles.Length > 0)
         {
             var mesh = new Mesh();
-            ps.GetComponent<ParticleSystemRenderer>().BakeMesh(mesh, camera, false);
+            ps.GetComponent<ParticleSystemRenderer>().BakeMesh(mesh, camera, true);
             sample.vertices = mesh.vertices; sample.uv = mesh.uv;
             UnityEngine.Object.DestroyImmediate(mesh);
         }
@@ -102,8 +102,6 @@ public static class NatsumeBoundaryProbe
                 if (frame <= 4 || frame == 15 || frame == 30 || frame == 45 || frame >= 59)
                     samples.Add(Read(ps, frame, dt, camera, bake));
             }
-            if (label.EndsWith("-node-rotated"))
-                foreach (var sample in samples.Where(s => s.vertices != null)) sample.vertices = sample.vertices.Select(p => ps.transform.TransformPoint(p)).ToArray();
             return new Result { label = label, samples = samples.ToArray() };
         }
         finally { UnityEngine.Object.DestroyImmediate(ps.gameObject); }

@@ -499,9 +499,11 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
       stride = this.basePositions.length,
       material = this.materialDefinition,
       tint = this.straightAlpha ? null : material.tint;
-    mat4.fromQuat(this.rotationMatrix, e.node.worldRotation);
+    if (this.definition.alignment === Alignment.Local)
+      mat4.fromQuat(this.rotationMatrix, e.node.worldRotation);
+    else mat4.identity(this.rotationMatrix);
     const rotation = this.rotationMatrix,
-      localScale = e.node.source.transform!.scale!,
+      localScale = { x: e.particleScale[0]!, y: e.particleScale[1]!, z: e.particleScale[2]! },
       rotationSign = this.definition.mode === RenderMode.Billboard ? -1 : 1;
     for (let i = 0; i < n; i++) {
       const serial = e.serials[i]!,
@@ -650,13 +652,6 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
           wy += -stretchY * along + stretchWidthY * across;
           wz -= stretchZ * along;
         } else {
-          if (this.definition.alignment === Alignment.Local) {
-            const lx = rotation[0]! * x + rotation[4]! * y + rotation[8]! * z;
-            const ly = rotation[1]! * x + rotation[5]! * y + rotation[9]! * z;
-            z = rotation[2]! * x + rotation[6]! * y + rotation[10]! * z;
-            x = lx;
-            y = ly;
-          }
           wx += rotation[0]! * x + rotation[4]! * y + rotation[8]! * z;
           wy += rotation[1]! * x + rotation[5]! * y + rotation[9]! * z;
           wz += rotation[2]! * x + rotation[6]! * y + rotation[10]! * z;
