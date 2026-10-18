@@ -22,7 +22,7 @@ import { SheetAnimation } from '../format/generated/noa/ir/sheet-animation.js';
 import { CustomDataMode } from '../format/generated/noa/ir/custom-data-mode.js';
 import { scalar, color, random, validateParameters, constantZero } from './parameters.js';
 import { CurlNoiseField } from '../particles/noise/curl-field.js';
-import { NoiseQuality } from '../format/generated/noa/ir/noise-quality.js';
+import { ParticleNoise } from '../particles/noise/particle-noise.js';
 import type { SceneNode } from './scene.js';
 
 export interface Diagnostic {
@@ -68,6 +68,8 @@ export class Emitter {
   readonly serials: Uint32Array;
   readonly seed: number;
   readonly field: CurlNoiseField | undefined;
+  readonly noiseSizes: Float32Array | undefined;
+  private readonly noiseEvaluator: ParticleNoise | undefined;
   readonly prewarmSeconds: number;
   readonly delaySeconds: number;
   readonly shapeMatrix = mat4.create();
@@ -237,19 +239,14 @@ export class Emitter {
     if (this.noise) {
       const n = this.noise;
       check(
-        n.algorithm === 'unity-particle-noise' &&
-          n.algorithmRevision === 1 &&
-          n.quality === NoiseQuality.High &&
-          n.octaves === 1 &&
-          !n.remapEnabled &&
-          constantZero(n.scrollSpeed) &&
-          constantZero(n.rotationAmount) &&
-          constantZero(n.sizeAmount) &&
-          n.frequency > 0,
+        n.algorithm === 'unity-particle-noise' && n.algorithmRevision === 1,
         'CAPABILITY',
-        'Noise approximation supports High/one octave, no scroll/remap, position only',
+        'Unsupported particle noise algorithm or revision',
       );
-      this.field = new CurlNoiseField(this.seed, n.frequency);
+      this.noiseEvaluator = new ParticleNoise(n, this.seed);
+      this.field = this.noiseEvaluator.field;
+      if (!constantZero(n.sizeAmount))
+        this.noiseSizes = new Float32Array(main.maxParticles * 3).fill(1);
       diagnostics.push({
         code: 'APPROXIMATE_NOISE',
         componentId: id,
@@ -308,6 +305,7 @@ export class Emitter {
   }
   reset(): void {
     this.count = 0;
+    this.noiseEvaluator?.reset();
     this.nextSerial = 0;
     this.time = 0;
     this.carry = 0;
@@ -326,6 +324,7 @@ export class Emitter {
     this.enabledLast = active;
     if (!active) {
       this.clear();
+      this.noiseEvaluator?.reset();
       this.started = false;
       this.delayRemaining = this.delaySeconds;
       this.time = 0;
@@ -404,6 +403,7 @@ export class Emitter {
       const rnd = (ch: number) => random(this.seed, serial, ch),
         t = phase;
       this.ages[i] = 0;
+      this.noiseSizes?.fill(1, o, o + 3);
       this.lifetimes[i] = Math.max(1e-6, scalar(this.main.lifetime, t, rnd(0)));
       let x = 0,
         y = 0,
@@ -493,6 +493,10 @@ export class Emitter {
     this.advance(dt);
   }
   private advance(dt: number): void {
+    this.noiseEvaluator?.advance(
+      dt,
+      (this.time % this.main.durationSeconds) / this.main.durationSeconds,
+    );
     const limitDecay = this.limit ? Math.pow(1 - this.limit.dampen, dt * 30) : 1;
     for (let i = 0; i < this.count; ) {
       const age = this.ages[i]! + dt;
@@ -626,21 +630,24 @@ export class Emitter {
       vx = vx * multiplier - orbitalX;
       vy = vy * multiplier - orbitalY;
       vz = vz * multiplier - orbitalZ;
-      if (this.noise && this.field) {
+      if (this.noise && this.noiseEvaluator) {
         const n = this.noise;
-        this.field.sample(x, y, z, this.scratch);
-        const amount =
-          scalar(n.positionAmount, t, rnd(31), 1) * (n.damping ? 1 / n.frequency : 1) * dt;
-        const strength = scalar(n.strength?.x, t, rnd(32));
-        x += this.scratch[0]! * strength * amount;
-        y +=
-          this.scratch[1]! *
-          (n.separateAxes ? scalar(n.strength?.y, t, rnd(33)) : strength) *
-          amount;
-        z +=
-          this.scratch[2]! *
-          (n.separateAxes ? scalar(n.strength?.z, t, rnd(34)) : strength) *
-          amount;
+        this.noiseEvaluator.sample(x, y, z, t, rnd, this.scratch);
+        const amount = scalar(n.positionAmount, t, rnd(31), 1) * dt;
+        x += this.scratch[0]! * amount;
+        y += this.scratch[1]! * amount;
+        z += this.scratch[2]! * amount;
+        const rotation = scalar(n.rotationAmount, t, rnd(35)) * (Math.PI / 360) * dt;
+        if (this.main.rotation3d) {
+          this.rotations[o] = this.rotations[o]! + this.scratch[0]! * rotation;
+          this.rotations[o + 1] = this.rotations[o + 1]! + this.scratch[1]! * rotation;
+        }
+        this.rotations[o + 2] = this.rotations[o + 2]! + this.scratch[2]! * rotation;
+        if (this.noiseSizes) {
+          const size = scalar(n.sizeAmount, t, rnd(36)) * 0.5;
+          for (let axis = 0; axis < 3; axis++)
+            this.noiseSizes[o + axis] = 1 + this.scratch[axis]! * size;
+        }
       }
       this.positions[o] = x + vx * dt;
       this.positions[o + 1] = y + vy * dt;
@@ -676,6 +683,7 @@ export class Emitter {
     for (const a of [this.ages, this.lifetimes, this.serials]) a[i] = a[last]!;
     for (const a of [this.positions, this.velocities, this.startSizes, this.rotations])
       a.copyWithin(i * 3, last * 3, last * 3 + 3);
+    this.noiseSizes?.copyWithin(i * 3, last * 3, last * 3 + 3);
     this.renderVelocities?.copyWithin(i * 3, last * 3, last * 3 + 3);
     this.startColors.copyWithin(i * 4, last * 4, last * 4 + 4);
   }

@@ -500,6 +500,11 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
         sy *= size.separateAxes ? scalar(size.size?.y, t, factor, 1) : uniform;
         sz *= size.separateAxes ? scalar(size.size?.z, t, factor, 1) : uniform;
       }
+      if (e.noiseSizes) {
+        sx *= e.noiseSizes[o]!;
+        sy *= e.noiseSizes[o + 1]!;
+        sz *= e.noiseSizes[o + 2]!;
+      }
       let stretchX = 0,
         stretchY = 0;
       const stretched = this.definition.mode === RenderMode.StretchedBillboard;

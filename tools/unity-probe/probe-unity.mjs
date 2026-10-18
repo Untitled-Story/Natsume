@@ -19,6 +19,7 @@ const rotationPrewarm = process.argv.includes('--rotation-prewarm');
 const sorting = process.argv.includes('--sorting');
 const spaces = process.argv.includes('--spaces');
 const sweeps = process.argv.includes('--sweeps');
+const noiseOptions = process.argv.includes('--noise-options');
 assert(
   Number(fitting) +
     Number(layout) +
@@ -29,7 +30,8 @@ assert(
     Number(rotationPrewarm) +
     Number(sorting) +
     Number(spaces) +
-    Number(sweeps) <=
+    Number(sweeps) +
+    Number(noiseOptions) <=
     1,
   'Choose one probe mode',
 );
@@ -39,25 +41,27 @@ const project = resolve(root, 'data/unity-probe');
 const output = resolve(
   root,
   'data/unity-baselines',
-  sweeps
-    ? 'sweeps'
-    : spaces
-      ? 'spaces'
-      : sorting
-        ? 'sorting'
-        : basicShapes
-          ? 'basic-shapes'
-          : rotationPrewarm
-            ? 'rotation-prewarm'
-            : layout
-              ? 'prefab-layout'
-              : boundaries
-                ? 'boundaries'
-                : distributions
-                  ? 'random'
-                  : shape
-                    ? 'shape'
-                    : '.',
+  noiseOptions
+    ? 'noise-options'
+    : sweeps
+      ? 'sweeps'
+      : spaces
+        ? 'spaces'
+        : sorting
+          ? 'sorting'
+          : basicShapes
+            ? 'basic-shapes'
+            : rotationPrewarm
+              ? 'rotation-prewarm'
+              : layout
+                ? 'prefab-layout'
+                : boundaries
+                  ? 'boundaries'
+                  : distributions
+                    ? 'random'
+                    : shape
+                      ? 'shape'
+                      : '.',
 );
 const baseline = resolve(output, fitting ? 'noise-fit-output.json' : `unity-${version}.json`);
 await mkdir(output, { recursive: true });
@@ -82,32 +86,34 @@ const child = spawn(
   editor,
   [
     '-batchmode',
-    ...(layout || boundaries || distributions || sorting ? [] : ['-nographics']),
+    ...(layout || boundaries || distributions || sorting || noiseOptions ? [] : ['-nographics']),
     '-noUpm',
     '-projectPath',
     project,
     '-executeMethod',
-    sweeps
-      ? 'NatsumeSweepProbe.Run'
-      : spaces
-        ? 'NatsumeSpaceProbe.Run'
-        : sorting
-          ? 'NatsumeSortingProbe.Run'
-          : basicShapes
-            ? 'NatsumeBasicShapeProbe.Run'
-            : rotationPrewarm
-              ? 'NatsumeRotationPrewarmProbe.Run'
-              : shape
-                ? 'NatsumeShapeProbe.Run'
-                : distributions
-                  ? 'NatsumeRandomProbe.Run'
-                  : layout
-                    ? 'NatsumePrefabLayoutProbe.Run'
-                    : boundaries
-                      ? 'NatsumeBoundaryProbe.Run'
-                      : fitting
-                        ? 'NatsumeNoiseFitProbe.Run'
-                        : 'NatsumeProbe.Run',
+    noiseOptions
+      ? 'NatsumeNoiseOptionsProbe.Run'
+      : sweeps
+        ? 'NatsumeSweepProbe.Run'
+        : spaces
+          ? 'NatsumeSpaceProbe.Run'
+          : sorting
+            ? 'NatsumeSortingProbe.Run'
+            : basicShapes
+              ? 'NatsumeBasicShapeProbe.Run'
+              : rotationPrewarm
+                ? 'NatsumeRotationPrewarmProbe.Run'
+                : shape
+                  ? 'NatsumeShapeProbe.Run'
+                  : distributions
+                    ? 'NatsumeRandomProbe.Run'
+                    : layout
+                      ? 'NatsumePrefabLayoutProbe.Run'
+                      : boundaries
+                        ? 'NatsumeBoundaryProbe.Run'
+                        : fitting
+                          ? 'NatsumeNoiseFitProbe.Run'
+                          : 'NatsumeProbe.Run',
     '-quit',
     '-logFile',
     log,
@@ -124,6 +130,16 @@ await new Promise((accept, reject) => {
 });
 const current = JSON.parse(await readFile(baseline, 'utf8'));
 assert.equal(current.unityVersion, version);
+if (noiseOptions) {
+  assert.equal(current.cases.length, 11);
+  if (process.argv.includes('--update-fixtures'))
+    await writeFile(
+      resolve(root, 'packages/natsume/tests/fixtures/unity-noise-options.json'),
+      JSON.stringify(current, null, 2) + '\n',
+    );
+  console.log(`Noise parameter measurements: ${current.cases.length} cases, ${baseline}`);
+  process.exit(0);
+}
 if (sweeps) {
   assert.equal(current.cases.length, 9);
   if (process.argv.includes('--update-fixtures'))

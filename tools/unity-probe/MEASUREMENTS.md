@@ -120,9 +120,13 @@ Unity Circle PingPong 在实测整周期 2 秒处出现反射端点跳变；Nats
 | Damping         | 已测非零频率组合中，幅度除以 frequency                                                          | 行为核对                             |
 | Curl Noise 幅度 | frequency 0.28，两个留出种子                                                                    | 向量 RMS 幅度差约 5.1%，不是轨迹误差 |
 
-近似范围：High、1 octave、scroll=0、remap 关闭、仅位置扰动。Natsume 使用纯 TypeScript Curl Noise；不复现 Unity 的原生噪声函数和同种子轨迹。
+5.1% 幅度误差的测量范围仅为 High、1 octave、scroll=0、remap 关闭、仅位置扰动。Natsume 使用纯 TypeScript Curl Noise，不复现 Unity 原生噪声函数和同种子轨迹。
+
+扩展探针包含 11 组配置。Constant Remap ±0.25 与零 Strength 的位置各分量回归容差 < 10⁻⁵；原生旋转增量为对应位置噪声速率 × 0.5 × dt（角度制）。Size Amount 按当前噪声对各轴初始尺寸乘 `1 + noise × 0.5 × amount`，不累积；该变化只出现在 BakeMesh，GetCurrentSize 不包含它。上述参数关系已核对；Low / Medium 的降维、多 octave、Scroll 与零 Frequency 使用连续场近似，未量化它们的原生轨迹误差。
 
 ## 数据
+
+- [unity-noise-options.json](../../packages/natsume/tests/fixtures/unity-noise-options.json)：Noise 参数、旋转和 BakeMesh 尺寸。
 
 - [unity-sweeps.json](../../packages/natsume/tests/fixtures/unity-sweeps.json)：形状时间扫描、量化与出生对齐旋转。
 
