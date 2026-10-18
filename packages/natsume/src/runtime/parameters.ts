@@ -1,4 +1,4 @@
-import { check } from '../errors.js';
+import { SupportChecks, assertSupport, type SupportIssue } from './support-checks.js';
 import type { DeepReadonly as R } from '../pack.js';
 import type { ScalarCurveT } from '../format/generated/noa/ir/scalar-curve.js';
 import type { ScalarParameterT } from '../format/generated/noa/ir/scalar-parameter.js';
@@ -62,36 +62,48 @@ export function sheetFrame(
   return Math.max(0, Math.min(count - 1, Math.floor(value * count))) + row * sheet.columns;
 }
 
-export function validateParameters(value: unknown): void {
-  if (!value || typeof value !== 'object') return;
-  if ('constantMax' in value) {
-    const p = value as R<ScalarParameterT>;
-    if (p.mode === ScalarMode.TwoCurves) validateParameters(p.curveMin);
-    if (p.mode === ScalarMode.Curve || p.mode === ScalarMode.TwoCurves)
-      validateParameters(p.curveMax);
-    return;
-  }
-  if ('gradientMax' in value) {
-    const p = value as R<ColorParameterT>;
-    if (p.mode === ColorMode.TwoGradients) validateParameters(p.gradientMin);
-    if (p.mode !== ColorMode.Constant && p.mode !== ColorMode.TwoColors)
-      validateParameters(p.gradientMax);
-    return;
-  }
-  if ('preWrap' in value && 'keys' in value) {
-    const c = value as R<ScalarCurveT>;
-    for (const [mode, source] of [
-      [c.preWrap, c.sourcePreInfinity],
-      [c.postWrap, c.sourcePostInfinity],
-    ] as const) {
-      check(
-        mode !== WrapMode.UnitySerialized || [0, 1, 2, 3, 4, 5, 8].includes(source),
-        'CAPABILITY',
-        'Unverified Unity serialized infinity code',
-      );
+/** Checks only parameter branches consumed by the selected mode. */
+export function parameterSupport(value: unknown, path = ''): readonly SupportIssue[] {
+  const rules = new SupportChecks();
+  const visit = (value: unknown, path: string): void => {
+    if (!value || typeof value !== 'object') return;
+    const child = (key: string) => (path ? `${path}.${key}` : key);
+    if ('constantMax' in value) {
+      const p = value as R<ScalarParameterT>;
+      if (p.mode === ScalarMode.TwoCurves) visit(p.curveMin, child('curveMin'));
+      if (p.mode === ScalarMode.Curve || p.mode === ScalarMode.TwoCurves)
+        visit(p.curveMax, child('curveMax'));
+      return;
     }
-  }
-  for (const child of Object.values(value)) validateParameters(child);
+    if ('gradientMax' in value) {
+      const p = value as R<ColorParameterT>;
+      if (p.mode === ColorMode.TwoGradients) visit(p.gradientMin, child('gradientMin'));
+      if (p.mode !== ColorMode.Constant && p.mode !== ColorMode.TwoColors)
+        visit(p.gradientMax, child('gradientMax'));
+      return;
+    }
+    if ('preWrap' in value && 'keys' in value) {
+      const c = value as R<ScalarCurveT>;
+      for (const [mode, source, field] of [
+        [c.preWrap, c.sourcePreInfinity, 'sourcePreInfinity'],
+        [c.postWrap, c.sourcePostInfinity, 'sourcePostInfinity'],
+      ] as const)
+        rules.require(
+          mode !== WrapMode.UnitySerialized || [0, 1, 2, 3, 4, 5, 8].includes(source),
+          'CAPABILITY',
+          child(field),
+          source,
+          'Unverified Unity serialized infinity code',
+        );
+    }
+    for (const [key, nested] of Object.entries(value)) visit(nested, child(key));
+  };
+  visit(value, path);
+  return rules.issues;
+}
+
+export function validateParameters(value: unknown): void {
+  assertSupport(parameterSupport(value));
 }
 
 export function curve(c: R<ScalarCurveT> | null | undefined, time: number): number {

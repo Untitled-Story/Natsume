@@ -19,3 +19,8 @@ export { type PlaybackState } from './runtime/simulation.js';
 export { type Diagnostic } from './runtime/emitter.js';
 export { NatsumePlugin } from './application-plugin.js';
 export { type ParticleEnvironment, type ParticleFog } from './rendering/particle-environment.js';
+export {
+  NatsumeCompatibilityError,
+  type CompatibilityIssue,
+  type CompatibilityReport,
+} from './runtime/compatibility.js';

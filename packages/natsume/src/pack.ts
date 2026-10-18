@@ -72,6 +72,15 @@ export class EffectPack {
     const bytes = file ? this.#files.get(file.path) : undefined;
     return bytes?.slice();
   }
+  /** @internal Reads validated PNG dimensions without copying or decoding the asset. */
+  getImageSize(id: number): { readonly width: number; readonly height: number } | undefined {
+    this.#assertAlive();
+    const file = this.manifest.files.find((file) => file.asset_id === id && file.kind === 'image');
+    const bytes = file ? this.#files.get(file.path) : undefined;
+    if (!bytes || bytes.length < 24) return;
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    return { width: view.getUint32(16), height: view.getUint32(20) };
+  }
   describe() {
     const counts: Record<string, number> = {};
     const scripts = new Map<

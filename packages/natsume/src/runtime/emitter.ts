@@ -16,45 +16,22 @@ import { ParticleModuleData as M } from '../format/generated/noa/ir/particle-mod
 import { Space } from '../format/generated/noa/ir/space.js';
 import { ScalingMode } from '../format/generated/noa/ir/scaling-mode.js';
 import { SeedMode } from '../format/generated/noa/ir/seed-mode.js';
-import { sampleShape, validateShape } from './shapes.js';
+import { sampleShape } from './shapes.js';
 import { SheetTime } from '../format/generated/noa/ir/sheet-time.js';
 import { CustomDataMode } from '../format/generated/noa/ir/custom-data-mode.js';
-import { scalar, color, random, validateParameters, constantZero } from './parameters.js';
+import { scalar, color, random, constantZero } from './parameters.js';
 import { CurlNoiseField } from '../particles/noise/curl-field.js';
 import { ParticleNoise } from '../particles/noise/particle-noise.js';
 import type { SceneNode } from './scene.js';
+import { prewarmDuration } from './prewarm.js';
+export { prewarmDuration } from './prewarm.js';
+import { emitterSupport } from './emitter-support.js';
+import { assertSupport } from './support-checks.js';
 
 export interface Diagnostic {
   readonly code: string;
   readonly message: string;
   readonly componentId?: number;
-}
-
-/** Warm complete cycles until constant/ranged birth lifetimes can reach steady state. */
-export function prewarmDuration(main: NonNullable<R<ParticleSystemT>['main']>): number {
-  if (!main.prewarm || !main.loop) return 0;
-  const p = main.lifetime;
-  let lifetime = Math.max(1e-6, scalar(p, 0, 0), scalar(p, 0, 1));
-  if (p && (p.mode === 1 || p.mode === 3)) {
-    for (const c of p.mode === 3 ? [p.curveMin, p.curveMax] : [p.curveMax]) {
-      for (let i = 0; i < (c?.keys.length ?? 0); i++) {
-        const k = c!.keys[i]!,
-          next = c!.keys[i + 1];
-        lifetime = Math.max(lifetime, k.value * p.multiplier);
-        if (next && k.interpolation >= 2) {
-          const dt = next.time - k.time;
-          // Bezier control values bound weighted and Hermite segment peaks.
-          lifetime = Math.max(
-            lifetime,
-            (k.value + k.outSlope * dt * (k.weightedOut ? k.outWeight : 1 / 3)) * p.multiplier,
-            (next.value - next.inSlope * dt * (next.weightedIn ? next.inWeight : 1 / 3)) *
-              p.multiplier,
-          );
-        }
-      }
-    }
-  }
-  return Math.ceil(lifetime / main.durationSeconds) * main.durationSeconds;
 }
 
 /** Dense SoA particle storage. Random channels persist through compaction via serial IDs. */
@@ -124,7 +101,7 @@ export class Emitter {
   ) {
     const main = source.main!;
     this.main = main;
-    validateParameters(source);
+    assertSupport(emitterSupport(source, gravity, !!customSpaceNode));
     this.setGravity(gravity);
     check(
       main.space !== Space.Custom || customSpaceNode,
@@ -140,19 +117,7 @@ export class Emitter {
     this.delaySeconds = Math.max(0, scalar(main.startDelay, 0, random(instanceSeed, id, 70)));
     this.delayRemaining = this.delaySeconds;
     this.distanceStarted = this.delaySeconds > 0;
-    check(main.maxParticles <= 100_000, 'LIMIT', 'Emitter capacity exceeds playback limit');
-    check(
-      main.durationSeconds >= 1 / 60,
-      'CAPABILITY',
-      'Playback requires duration >= 1/60 second',
-    );
     this.prewarmSeconds = prewarmDuration(main);
-    check(
-      Math.ceil(this.prewarmSeconds * 60) <= 36_000 &&
-        main.maxParticles * Math.ceil(this.prewarmSeconds * 60) <= 10_000_000,
-      'LIMIT',
-      'Prewarm work exceeds playback budget',
-    );
     for (const m of source.modules) {
       switch (m.dataType) {
         case M.EmissionModule:
@@ -189,25 +154,8 @@ export class Emitter {
           check(false, 'CAPABILITY', `System ${id}: unsupported particle module ${M[m.dataType]}`);
       }
     }
-    check(
-      (this.emission?.bursts ?? []).reduce(
-        (n, b) =>
-          n +
-          (b.intervalSeconds === 0
-            ? 1
-            : b.cycles ||
-              Math.max(
-                0,
-                Math.ceil((this.main.durationSeconds - b.timeSeconds) / b.intervalSeconds),
-              )),
-        0,
-      ) <= 4096,
-      'LIMIT',
-      'Too many burst repetitions',
-    );
     if (this.shape) {
       const s = this.shape;
-      validateShape(s);
       const t = s.transform!,
         q = t.rotation!,
         p = t.position!,
@@ -226,11 +174,6 @@ export class Emitter {
         : Math.floor(random(instanceSeed, id, 0) * 4294967296);
     if (this.noise) {
       const n = this.noise;
-      check(
-        n.algorithm === 'unity-particle-noise' && n.algorithmRevision === 1,
-        'CAPABILITY',
-        'Unsupported particle noise algorithm or revision',
-      );
       this.noiseEvaluator = new ParticleNoise(n, this.seed);
       this.field = this.noiseEvaluator.field;
       if (!constantZero(n.sizeAmount))

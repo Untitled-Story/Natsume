@@ -1,3 +1,5 @@
+import { rendererSupport } from './renderer-support.js';
+import { assertSupport } from '../runtime/support-checks.js';
 import {
   Buffer,
   BufferUsage,
@@ -19,8 +21,6 @@ import { MaterialModel } from '../format/generated/noa/ir/material-model.js';
 import { RenderMode } from '../format/generated/noa/ir/render-mode.js';
 import { Alignment } from '../format/generated/noa/ir/alignment.js';
 import { ParticleSort } from '../format/generated/noa/ir/particle-sort.js';
-import { BlendFactor as B } from '../format/generated/noa/ir/blend-factor.js';
-import { CompareOp } from '../format/generated/noa/ir/compare-op.js';
 import { ColorSpace } from '../format/generated/noa/ir/color-space.js';
 import { VertexSemantic } from '../format/generated/noa/ir/vertex-semantic.js';
 import { mat4, vec3 } from 'gl-matrix';
@@ -202,126 +202,15 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
       material.model === MaterialModel.LegacyParticleAlphaBlend;
     const straight = legacy || material.model === MaterialModel.ParticleUnlit;
     const additive = material.model === MaterialModel.LegacyParticleAdditive;
-    check(
-      material.model === MaterialModel.ParticleAddAlpha || straight,
-      'CAPABILITY',
-      'Unsupported particle material model',
-    );
-    check(
-      !legacy || environment,
-      'HOST',
-      'Legacy particles require an explicit particleEnvironment',
-    );
-    check(
-      definition.mode === RenderMode.Billboard ||
-        definition.mode === RenderMode.Mesh ||
-        definition.mode === RenderMode.StretchedBillboard ||
-        definition.mode === RenderMode.HorizontalBillboard ||
-        definition.mode === RenderMode.VerticalBillboard,
-      'CAPABILITY',
-      'Unsupported particle render mode',
-    );
-    check(
-      definition.alignment !== Alignment.Facing ||
-        definition.mode === RenderMode.HorizontalBillboard ||
-        definition.mode === RenderMode.VerticalBillboard ||
-        environment?.viewPosition,
-      'HOST',
-      'System ' + emitter.id + ': Facing alignment requires particleEnvironment.viewPosition',
-    );
-    if (definition.alignment === Alignment.Velocity)
-      emitter.renderVelocities ??= emitter.velocities.slice();
-    check(definition.sort >= 0 && definition.sort <= 4, 'SEMANTIC', 'Invalid particle sort');
-    check(Number.isFinite(definition.sortingFudge), 'SEMANTIC', 'Invalid sortingFudge');
-    check(
-      !definition.pivot ||
-        [definition.pivot.x, definition.pivot.y, definition.pivot.z].every(Number.isFinite),
-      'SEMANTIC',
-      'Invalid renderer pivot',
-    );
-    check(
-      !definition.flip ||
-        [definition.flip.x, definition.flip.y, definition.flip.z].every(
-          (value) => value >= 0 && value <= 1,
-        ),
-      'CAPABILITY',
-      'Renderer flip values must be in [0,1]',
-    );
-    check(
-      Number.isFinite(definition.minSize) &&
-        Number.isFinite(definition.maxSize) &&
-        definition.minSize >= 0 &&
-        definition.maxSize >= definition.minSize,
-      'SEMANTIC',
-      'Renderer minSize/maxSize are invalid',
-    );
-    if (definition.mode === RenderMode.StretchedBillboard) {
-      check(
-        !definition.freeformStretching || environment?.viewPosition,
-        'HOST',
-        'System ' + emitter.id + ': Freeform stretch requires particleEnvironment.viewPosition',
-      );
-      check(
-        [definition.lengthScale, definition.velocityScale, definition.cameraVelocityScale].every(
-          Number.isFinite,
-        ),
-        'SEMANTIC',
-        'Stretched Billboard scales must be finite',
-      );
-      emitter.renderVelocities ??= emitter.velocities.slice();
-    }
-    check(
-      definition.materials.filter((id) => id !== 0).length === 1,
-      'CAPABILITY',
-      'Multiple materials unsupported',
-    );
-    check(
-      definition.vertexStreams.every(
-        (s) =>
-          s.semantic >= 0 &&
-          s.semantic <= VertexSemantic.VertexId &&
-          s.components >= 1 &&
-          s.components <= 4,
-      ) &&
-        [VertexSemantic.Position, VertexSemantic.Color, VertexSemantic.UV0].every((semantic) =>
-          definition.vertexStreams.some(
-            (s) =>
-              s.semantic === semantic &&
-              s.components ===
-                (semantic === VertexSemantic.Position
-                  ? 3
-                  : semantic === VertexSemantic.Color
-                    ? 4
-                    : 2),
-          ),
-        ),
-      'CAPABILITY',
-      'Unsupported particle vertex stream',
-    );
-    check(
-      material.textures.length === 1 && material.textures[0]!.uvSet === 0,
-      'CAPABILITY',
-      'Only one UV0 texture is supported',
-    );
-    check(
-      material.textures[0]!.colorSpace !== ColorSpace.Unspecified,
-      'CAPABILITY',
-      'Texture encoding must be explicit',
-    );
     const state = material.renderState!;
-    check(
-      state.srcRgb === (straight ? B.SrcAlpha : B.One) &&
-        state.dstRgb === (additive ? B.One : B.OneMinusSrcAlpha) &&
-        state.srcAlpha === (straight ? B.SrcAlpha : B.One) &&
-        state.dstAlpha === (additive ? B.One : B.OneMinusSrcAlpha) &&
-        state.rgbOp === 0 &&
-        state.alphaOp === 0 &&
-        state.depthTest === CompareOp.LessEqual &&
-        !state.depthWrite &&
-        (state.cull === 0 || (material.model === MaterialModel.ParticleUnlit && state.cull === 2)),
-      'CAPABILITY',
-      'Unsupported material render state',
+    assertSupport(
+      rendererSupport(definition, material, pack, emitter.main.maxParticles, environment),
     );
+    if (
+      definition.alignment === Alignment.Velocity ||
+      definition.mode === RenderMode.StretchedBillboard
+    )
+      emitter.renderVelocities ??= emitter.velocities.slice();
     let positions: typeof ParticleMesh.prototype.basePositions = [
       { x: -0.5, y: -0.5, z: 0 },
       { x: 0.5, y: -0.5, z: 0 },
@@ -343,26 +232,12 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
         { x: 0, y: 0 },
       ];
     if (definition.mode === RenderMode.Mesh) {
-      check(
-        definition.meshAssetIds.length === 1,
-        'CAPABILITY',
-        'Initial mesh renderer supports one mesh',
-      );
       const mesh = pack.getMesh(definition.meshAssetIds[0]!);
-      check(
-        mesh && mesh.uv0.length === mesh.positions.length && mesh.submeshes.length === 1,
-        'CAPABILITY',
-        'Mesh requires UV0 and one submesh',
-      );
+      check(mesh, 'SEMANTIC', 'Missing mesh');
       positions = mesh.positions;
       uv = mesh.uv0;
       meshIndices = mesh.indices;
     }
-    check(
-      positions.length * emitter.ages.length <= 1_000_000,
-      'LIMIT',
-      'Expanded mesh vertex budget exceeded',
-    );
     const vertices = new Float32Array(positions.length * emitter.ages.length * 16);
     const indices = new Uint32Array(meshIndices.length * emitter.ages.length);
     for (let i = 0; i < emitter.ages.length; i++)

@@ -42,6 +42,27 @@ app.ticker.add(tick);
 
 Noise 默认使用内置 Curl Noise 近似；实例诊断会说明与 Unity 原生噪声的差异。
 
+创建前可调用 `runtime.checkCompatibility(pack, options)`，一次查看当前入口的阻塞项与近似说明：
+
+```ts
+const options = {
+  particleEnvironment: {
+    fog: { mode: 'none' as const },
+    gravity: [0, -9.81, 0] as const,
+    viewPosition: [0, 0, -10] as const,
+  },
+};
+const report = runtime.checkCompatibility(pack, options);
+console.table(report.issues);
+if (report.compatible) {
+  const effect = await runtime.instantiate(pack, options);
+  app.stage.addChild(effect.container);
+  effect.play();
+}
+```
+
+每项包含 `severity`、`code`、`packageName`、`componentId`（适用时）、`field`、`value` 和 `message`。预检不分配粒子缓冲区、不解码纹理，也不执行 Bridge 工厂。`instantiate` 复用同一检查，有阻塞项时抛出 `NatsumeCompatibilityError`，可从 `error.issues` 读取完整结果。预检通过仍可能遇到纹理解码、脚本执行或图形设备错误。
+
 不再使用时，解除更新回调并释放资源：
 
 ```ts
@@ -131,14 +152,14 @@ runtime.registerScript(
 
 | 模块                         | 已支持                                                                                                                                                                                                                                                                                                   | 未支持                                                                    |
 | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| Main                         | 循环、初始寿命 / 速度 / 尺寸 / 旋转 / 颜色、种子；环境重力、启动延迟、Simulation Speed；Local / World / Custom 模拟、Local 缩放；有限预热                                                                                                                                                                | 旋转翻转；Hierarchy / Shape 缩放                                          |
-| Emission                     | Rate over Time、Burst（含正间隔无限重复）                                                                                                                                                                                                                                                                | Rate over Distance；零间隔无限 Burst                                      |
+| Main                         | 循环、初始寿命 / 速度 / 尺寸 / 旋转 / 颜色、旋转翻转、种子；环境重力、启动延迟、Simulation Speed；Local / World / Custom 模拟，Hierarchy / Local / Shape 缩放；有限预热                                                                                                                                  | duration 需至少 1/60 s；容量与预热预算有限                                |
+| Emission                     | Rate over Time / Distance、Burst，含正间隔与零间隔无限重复                                                                                                                                                                                                                                               | 短周期重复 Burst 保留已量化的末步计数差异                                 |
 | Shape                        | Circle、Sphere / Hemisphere、Box 体积 / 壳 / 边、Cone 底面 / 体积、Edge；Random / Loop / PingPong / Burst Spread、Spread 量化、位置 / 方向扰动、Align to Direction、Shape TRS                                                                                                                            | 其他形状                                                                  |
 | Rotation over Lifetime       | Z 或分轴角速度、生命周期曲线积分                                                                                                                                                                                                                                                                         | 已测范围以外的步长与原生积分差异                                          |
-| Velocity over Lifetime       | Local / World 线性速度、Local 轨道 / 径向速度、Speed Multiplier                                                                                                                                                                                                                                          | World 轨道 / 径向空间组合                                                 |
-| Limit Velocity over Lifetime | Local 标量限速、Dampen                                                                                                                                                                                                                                                                                   | 分轴限速、World 空间、Drag                                                |
-| Noise                        | 内置 Curl Noise 近似：质量维度、多 octave、Scroll、Remap、位置 / 旋转 / 尺寸影响                                                                                                                                                                                                                         | Unity 原生噪声函数及同种子轨迹；扩展参数尚无整体误差拟合                  |
-| Texture Sheet Animation      | Lifetime、Whole Sheet、UV0                                                                                                                                                                                                                                                                               | Single Row、Speed / FPS 时间模式、Sprites 模式、其他 UV 通道              |
+| Velocity over Lifetime       | Local / World 线性、轨道 / 偏移 / 径向速度，Speed Multiplier                                                                                                                                                                                                                                             | 复杂空间、非均匀缩放与旋转的所有交叉组合尚未验收                          |
+| Limit Velocity over Lifetime | Local / World 标量与分轴限速、Dampen、Drag，含尺寸 / 速度乘算                                                                                                                                                                                                                                            | 任意剪切与非均匀缩放组合尚未验收                                          |
+| Noise                        | 内置 Curl Noise 近似：质量维度、多 octave、Scroll、Remap、位置 / 旋转 / 尺寸影响                                                                                                                                                                                                                         | Unity 原生噪声函数及同种子轨迹；留出组最大统计差见测量文档                |
+| Texture Sheet Animation      | Grid；Lifetime / Speed / FPS；Whole Sheet / Single Row；Fixed / Random 行；单 Mesh 的 MeshIndex 行；UV mask                                                                                                                                                                                              | Sprites 模式；多 Mesh 的 MeshIndex 选择；已知材质仅采样 UV0               |
 | Custom Data                  | Custom1 / Custom2 Vector（1–4 维）与 Color                                                                                                                                                                                                                                                               | 已知材质只消费 Custom1.x，其余分量保留为求值数据                          |
 | Renderer                     | Billboard、Horizontal / Vertical Billboard、普通 / Freeform Stretch；View / World / Local / Facing / Velocity 对齐；单 Mesh 与单材质；None / Distance / Oldest / Youngest / Depth 排序；Pivot、Flip、尺寸限制、allowRoll；ParticleAddAlpha、ParticleUnlit、Legacy Additive / Alpha Blended、雾效与软粒子 | 多 Mesh / 权重 / 材质、其他材质模型；已知无光照材质不消费 normalDirection |
 
@@ -150,7 +171,7 @@ runtime.registerScript(
 
 两种 Stretch 均使用 `粒子速度 - viewVelocity × cameraVelocityScale`；零相对速度时不产生可见面积。Freeform 的合成拉伸长度取绝对值，普通 Stretch 保留负长度方向。
 
-共享参数支持 Constant / Two Constants / Curve / Two Curves，以及归一化时间下的 Step / Linear / 非加权 Hermite 曲线；不支持加权曲线、Perceptual Blend 渐变。Unity 原始内部循环码仅支持已核对的 `2`（钳制）。随机分布与 Noise 不复现 Unity 原生随机序列，误差见 [Unity 行为对照](tools/unity-probe/MEASUREMENTS.md)。
+共享参数支持 Constant / Two Constants / Curve / Two Curves，以及 Step / Linear / Hermite / Weighted Bezier 曲线、Blend / Fixed / Perceptual Blend 渐变。Unity 内部循环码已核对 `0 / 1 / 2 / 3 / 4 / 5 / 8`，其他有效分支中的编码会报告不支持。随机分布与 Noise 不复现 Unity 原生随机序列，误差见 [Unity 行为对照](tools/unity-probe/MEASUREMENTS.md)。
 
 ### Unsupported
 

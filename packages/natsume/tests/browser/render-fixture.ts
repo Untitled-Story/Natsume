@@ -11,13 +11,96 @@ import { RenderMode } from '../../src/format/generated/noa/ir/render-mode.js';
 import { Alignment } from '../../src/format/generated/noa/ir/alignment.js';
 import { ParticleSort } from '../../src/format/generated/noa/ir/particle-sort.js';
 import type { ParticleRendererT } from '../../src/format/generated/noa/ir/particle-renderer.js';
-import type { EffectPack } from '../../src/pack.js';
+import { EffectPack } from '../../src/pack.js';
 import { randomSource } from '../random-fixtures.js';
 import { vector } from '../particle-fixtures.js';
 import { ParticleModuleT } from '../../src/format/generated/noa/ir/particle-module.js';
 import { ParticleModuleData as M } from '../../src/format/generated/noa/ir/particle-module-data.js';
 import { VelocityModuleT } from '../../src/format/generated/noa/ir/velocity-module.js';
 import { QuaternionT } from '../../src/format/generated/noa/ir/quaternion.js';
+
+export async function checkRuntimeCompatibility() {
+  const { app, effect } = getPreview();
+  if (!app || !effect) throw new Error('Missing preview');
+  effect.pause();
+  const { ComponentData } = await import('../../src/format/generated/noa/ir/component-data.js');
+  const { NatsumeCompatibilityError } = await import('../../src/index.js');
+  const { constant } = await import('../particle-fixtures.js');
+  const source = effect.simulation.pack;
+  const document = structuredClone(
+    source.document,
+  ) as import('../../src/format/generated/noa/ir/document.js').DocumentT;
+  const renderer = document.components.find((c) => c.dataType === ComponentData.ParticleRenderer)!
+    .data as ParticleRendererT;
+  const system = document.components.find((c) => c.id === renderer.systemComponentId)!
+    .data as import('../../src/format/generated/noa/ir/particle-system.js').ParticleSystemT;
+  renderer.mode = RenderMode.StretchedBillboard;
+  renderer.alignment = Alignment.View;
+  renderer.freeformStretching = true;
+  system.main!.durationSeconds = 0.001;
+  system.main!.gravityMultiplier = constant(1);
+  system.main!.gravity = null;
+  const files = new Map(
+    source.manifest.files.flatMap((file) => {
+      const bytes = file.asset_id ? source.getAssetBytes(file.asset_id) : undefined;
+      return bytes ? [[file.path, bytes] as const] : [];
+    }),
+  );
+  const meshes = new Map(
+    document.assets.flatMap((asset) => {
+      const mesh = asset.kind === 2 ? source.getMesh(asset.id) : undefined;
+      return mesh
+        ? [
+            [
+              asset.id,
+              structuredClone(mesh) as import('../../src/format/generated/noa/mesh/mesh.js').MeshT,
+            ] as const,
+          ]
+        : [];
+    }),
+  );
+  const pack = new EffectPack(document, source.manifest, files, meshes);
+  let decodes = 0;
+  const decode = globalThis.createImageBitmap;
+  const before = [effect.particleCount, effect.time, app.stage.children.length];
+  globalThis.createImageBitmap = () => {
+    decodes++;
+    throw new Error('Unexpected preflight image decode');
+  };
+  try {
+    const valid = app.natsume.checkCompatibility(source, {
+      particleEnvironment: {
+        fog: { mode: 'none' },
+        gravity: [0, -9.81, 0],
+        viewPosition: [0, 0, -10],
+      },
+    });
+    const report = app.natsume.checkCompatibility(pack);
+    let sameIssues = false;
+    try {
+      await app.natsume.instantiate(pack);
+    } catch (error) {
+      sameIssues =
+        error instanceof NatsumeCompatibilityError &&
+        JSON.stringify(error.issues) === JSON.stringify(report.issues);
+    }
+    return {
+      valid: valid.compatible,
+      blocked: !report.compatible,
+      fields: report.issues
+        .filter((issue) => issue.severity === 'error')
+        .map((issue) => issue.field),
+      sameIssues,
+      decodes,
+      unchanged:
+        JSON.stringify(before) ===
+        JSON.stringify([effect.particleCount, effect.time, app.stage.children.length]),
+    };
+  } finally {
+    globalThis.createImageBitmap = decode;
+    pack.dispose();
+  }
+}
 
 export async function checkApplicationPlugin() {
   const { app, effect } = getPreview();

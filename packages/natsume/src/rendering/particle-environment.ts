@@ -15,7 +15,7 @@ export type ParticleFog =
       readonly density: number;
     };
 
-/** Host inputs for Unity legacy particle recipes. Texture ownership stays with the host. */
+/** Host gravity, view, fog and depth inputs. Texture ownership stays with the host. */
 export interface ParticleEnvironment {
   readonly fog: ParticleFog;
   /** Acceleration in Unity world units per second squared. */
@@ -49,7 +49,9 @@ export function copyEnvironment(
   );
   if (f.mode !== 'none') {
     check(
-      f.color?.length === 3 && f.color.every((v) => Number.isFinite(v) && v >= 0),
+      Array.isArray(f.color) &&
+        f.color.length === 3 &&
+        f.color.every((v) => Number.isFinite(v) && v >= 0),
       'HOST',
       'Fog color requires three nonnegative values in source working color space',
     );
@@ -63,7 +65,7 @@ export function copyEnvironment(
   }
   const g = value.gravity;
   check(
-    g === undefined || (g.length === 3 && g.every(Number.isFinite)),
+    g === undefined || (Array.isArray(g) && g.length === 3 && g.every(Number.isFinite)),
     'HOST',
     'Invalid particle gravity',
   );
@@ -71,18 +73,22 @@ export function copyEnvironment(
   const velocity = value.viewVelocity;
   const position = value.viewPosition;
   check(
-    position === undefined || (position.length === 3 && position.every(Number.isFinite)),
+    position === undefined ||
+      (Array.isArray(position) && position.length === 3 && position.every(Number.isFinite)),
     'HOST',
     'View position requires three finite world-space components',
   );
   check(
-    velocity === undefined || (velocity.length === 3 && velocity.every(Number.isFinite)),
+    velocity === undefined ||
+      (Array.isArray(velocity) && velocity.length === 3 && velocity.every(Number.isFinite)),
     'HOST',
     'View velocity requires three finite world-space components',
   );
   check(
     d === undefined ||
-      (typeof d === 'number' ? Number.isFinite(d) : d.length === 4 && d.every(Number.isFinite)),
+      (typeof d === 'number'
+        ? Number.isFinite(d)
+        : Array.isArray(d) && d.length === 4 && d.every(Number.isFinite)),
     'HOST',
     'Invalid particle depth',
   );
@@ -97,16 +103,18 @@ export function copyEnvironment(
     );
     check(
       !soft.uvTransform ||
-        (soft.uvTransform.length === 4 && soft.uvTransform.every(Number.isFinite)),
+        (Array.isArray(soft.uvTransform) &&
+          soft.uvTransform.length === 4 &&
+          soft.uvTransform.every(Number.isFinite)),
       'HOST',
       'Invalid depth UV transform',
     );
   }
   return {
     fog: f.mode === 'none' ? { mode: 'none' } : { ...f, color: [...f.color] },
-    gravity: g ? [...g] : undefined,
-    viewVelocity: velocity ? [...velocity] : undefined,
-    viewPosition: position ? [...position] : undefined,
+    gravity: g ? [g[0], g[1], g[2]] : undefined,
+    viewVelocity: velocity ? [velocity[0], velocity[1], velocity[2]] : undefined,
+    viewPosition: position ? [position[0], position[1], position[2]] : undefined,
     depth: typeof d === 'number' || d === undefined ? d : [...d],
     softParticles: soft
       ? {

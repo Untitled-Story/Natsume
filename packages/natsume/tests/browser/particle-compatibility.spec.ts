@@ -3,6 +3,34 @@ import { fileURLToPath } from 'node:url';
 import { test, expect } from '@playwright/test';
 import { recordError } from '../measurement.js';
 
+test('shares compatibility issues with instantiation before allocating textures', async ({
+  page,
+}) => {
+  const sample = fileURLToPath(new URL('../../../../data/kirakira.noap', import.meta.url));
+  test.skip(!existsSync(sample), 'Local sample is absent');
+  await page.goto('/');
+  await page.locator('#file').setInputFiles(sample);
+  await expect(page.locator('#status')).toHaveText('预览就绪');
+  const result = await page.evaluate(
+    async (path) => (await import('/@fs' + path)).checkRuntimeCompatibility(),
+    new URL('./render-fixture.ts', import.meta.url).pathname,
+  );
+  expect(result).toMatchObject({
+    valid: true,
+    blocked: true,
+    sameIssues: true,
+    decodes: 0,
+    unchanged: true,
+  });
+  expect(result.fields).toEqual(
+    expect.arrayContaining([
+      'main.gravityMultiplier',
+      'main.durationSeconds',
+      'particleEnvironment.viewPosition',
+    ]),
+  );
+});
+
 test('matches native scaling and alignment geometry', async ({ page }) => {
   const sample = fileURLToPath(new URL('../../../../data/kirakira.noap', import.meta.url));
   const fixture = new URL(

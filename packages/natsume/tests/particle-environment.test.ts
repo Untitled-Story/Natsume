@@ -29,16 +29,11 @@ it('copies the view origin and rejects invalid coordinates', () => {
   const environment = copyEnvironment({ fog: { mode: 'none' }, viewPosition: position })!;
   position[2] = 99;
   expect(environment.viewPosition).toEqual([1, 2, -10]);
-  for (const viewPosition of [
-    [NaN, 0, 0],
-    [0, Infinity, 0],
-    [0, 0],
-    [1, 2, 3, 4],
-  ])
+  for (const viewPosition of [[NaN, 0, 0], [0, Infinity, 0], [0, 0], [1, 2, 3, 4], null, 'abc'])
     expect(() =>
       copyEnvironment({
         fog: { mode: 'none' },
-        viewPosition: viewPosition as [number, number, number],
+        viewPosition: viewPosition as unknown as [number, number, number],
       }),
     ).toThrow('View position requires three finite world-space components');
 });

@@ -20,9 +20,14 @@ import {
 import { Simulation, type SimulationOptions } from './simulation.js';
 import type { SceneNode } from './scene.js';
 import { copyEnvironment, type ParticleEnvironment } from '../rendering/particle-environment.js';
+import {
+  checkCompatibility,
+  NatsumeCompatibilityError,
+  type CompatibilityReport,
+} from './compatibility.js';
 
 export interface InstanceOptions extends SimulationOptions {
-  /** Host fog and soft-particle inputs; required for Unity legacy particle materials. */
+  /** Host gravity, view, fog and depth inputs; required for Unity legacy particle materials. */
   readonly particleEnvironment?: ParticleEnvironment;
   readonly sourceColorSpace?: SourceColorSpace;
   /** Column-major affine transform into Pixi local coordinates, including clip-depth Z. */
@@ -432,8 +437,29 @@ export class NatsumeRuntime {
   /** @internal */ forget(instance: EffectInstance): void {
     this.instances.delete(instance);
   }
+  /**
+   * Checks the selected entry and host inputs without creating an instance or decoding textures.
+   * Includes blocking issues and approximation warnings; does not run script factories.
+   */
+  checkCompatibility(pack: EffectPack, options: InstanceOptions = {}): CompatibilityReport {
+    return checkCompatibility(pack, options, {
+      disposed: this.disposed,
+      maxTextureSize: this.disposed
+        ? 0
+        : (this.renderer.gl.getParameter(this.renderer.gl.MAX_TEXTURE_SIZE) as number),
+      availableTexturePixels: 64 * 1024 * 1024 - this.retainedPixels,
+      cachedMaterialIds: new Set(this.textures.get(pack)?.keys()),
+      imageBitmapAvailable: typeof createImageBitmap === 'function',
+      hasScript: (identity) => !!this.getScriptFactory(identity),
+    });
+  }
+  /**
+   * Creates an independent effect after compatibility checks pass.
+   * @throws NatsumeCompatibilityError with all preflight issues when configuration is blocked.
+   */
   async instantiate(pack: EffectPack, options: InstanceOptions = {}): Promise<EffectInstance> {
-    check(!this.disposed, 'DISPOSED', 'Runtime has been destroyed');
+    const compatibility = this.checkCompatibility(pack, options);
+    if (!compatibility.compatible) throw new NatsumeCompatibilityError(compatibility);
     const environment = copyEnvironment(options.particleEnvironment);
     options = { ...options, ...(environment ? { particleEnvironment: environment } : {}) };
     const simulation = new Simulation(pack, {
@@ -490,6 +516,19 @@ export class NatsumeRuntime {
         );
       }
       instance.initializeScripts();
+      for (const issue of compatibility.issues)
+        if (
+          issue.severity === 'warning' &&
+          !simulation.diagnostics.some(
+            (diagnostic) =>
+              diagnostic.code === issue.code && diagnostic.componentId === issue.componentId,
+          )
+        )
+          simulation.diagnostics.push({
+            code: issue.code,
+            message: issue.message,
+            ...(issue.componentId === undefined ? {} : { componentId: issue.componentId }),
+          });
       this.instances.add(instance);
       return instance;
     } catch (error) {
