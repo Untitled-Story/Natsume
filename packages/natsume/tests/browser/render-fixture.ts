@@ -463,3 +463,43 @@ export function measureStretchedParticles(
     }
   });
 }
+
+/** Checks that a rejected environment does not partially change gravity or rendering. */
+export function checkEnvironmentReplacement() {
+  const { effect } = getPreview();
+  if (!effect) throw new Error('Missing preview');
+  effect.pause();
+  const node = effect.simulation.scene.ordered[0]!;
+  const a = particleSource(),
+    b = particleSource();
+  b.main!.gravityMultiplier = vector(1).x;
+  const first = new Emitter(100001, node, a, true, 1, [], [0, -10, 0]);
+  const second = new Emitter(100002, node, b, true, 1, [], [0, -10, 0]);
+  effect.simulation.emitters.set(first.id, first);
+  effect.simulation.emitters.set(second.id, second);
+  const meshes = effect.container.children as ParticleMesh[];
+  const before = meshes[0]!.environment;
+  let rejected = false;
+  try {
+    effect.setParticleEnvironment({ fog: { mode: 'none' }, viewVelocity: [0, 3, 0] });
+  } catch {
+    rejected = true;
+  }
+  const preserved =
+    meshes.every((mesh) => mesh.environment === before) &&
+    first.gravity[1] === -10 &&
+    second.gravity[1] === -10;
+  effect.setParticleEnvironment({
+    fog: { mode: 'none' },
+    gravity: [0, 0, 0],
+    viewVelocity: [0, 3, 0],
+  });
+  const updated =
+    meshes.every((mesh) => mesh.environment?.viewVelocity?.[1] === 3) &&
+    first.gravity[1] === 0 &&
+    second.gravity[1] === 0 &&
+    effect.state === 'paused';
+  effect.simulation.emitters.delete(first.id);
+  effect.simulation.emitters.delete(second.id);
+  return { rejected, preserved, updated };
+}

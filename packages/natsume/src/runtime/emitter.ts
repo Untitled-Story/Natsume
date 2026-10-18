@@ -301,18 +301,22 @@ export class Emitter {
     }
   }
   setGravity(value: readonly [number, number, number] | undefined): void {
+    this.gravity = this.resolveGravity(value);
+  }
+  /** @internal Validates gravity before committing an environment replacement. */
+  resolveGravity(
+    value: readonly [number, number, number] | undefined,
+  ): readonly [number, number, number] {
     const authored = this.main.gravity;
     check(
       constantZero(this.main.gravityMultiplier) || value !== undefined || authored,
       'HOST',
       `System ${this.id}: nonzero gravityMultiplier requires particleEnvironment.gravity`,
     );
-    this.gravity = value ?? (authored ? [authored.x, authored.y, authored.z] : [0, 0, 0]);
-    check(
-      this.gravity.length === 3 && this.gravity.every(Number.isFinite),
-      'HOST',
-      'Invalid particle gravity',
-    );
+    const next =
+      value ?? (authored ? ([authored.x, authored.y, authored.z] as const) : ([0, 0, 0] as const));
+    check(next.length === 3 && next.every(Number.isFinite), 'HOST', 'Invalid particle gravity');
+    return next;
   }
   /** Refreshes the coordinate frame without moving particles already stored in that frame. */
   updateSpace(): void {

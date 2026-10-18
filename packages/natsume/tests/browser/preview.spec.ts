@@ -699,3 +699,16 @@ test('matches Unity stretch velocity and moving-view geometry', async ({ page })
     expect(result.vertices.flat().every(Number.isFinite)).toBe(true);
   }
 });
+
+test('replaces gravity and view inputs atomically while paused', async ({ page }) => {
+  await page.goto('/');
+  await page
+    .locator('#file')
+    .setInputFiles(fileURLToPath(new URL('../../../../data/kirakira.noap', import.meta.url)));
+  await expect(page.locator('#status')).toHaveText('预览就绪');
+  const result = await page.evaluate(
+    async (path) => (await import(`/@fs${path}`)).checkEnvironmentReplacement(),
+    new URL('./render-fixture.ts', import.meta.url).pathname,
+  );
+  expect(result).toEqual({ rejected: true, preserved: true, updated: true });
+});
