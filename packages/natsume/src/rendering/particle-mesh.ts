@@ -1,3 +1,4 @@
+import { selectMesh, rendererVertexStride } from './mesh-selection.js';
 import { rendererSupport } from './renderer-support.js';
 import { assertSupport } from '../runtime/support-checks.js';
 import {
@@ -180,6 +181,9 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
   private readonly baseUV: readonly { readonly x: number; readonly y: number }[];
   private readonly baseIndices: readonly number[];
   private readonly pivotSize: readonly number[];
+  private readonly meshChoices;
+  private readonly meshSelections: Uint32Array;
+  private readonly vertexStride: number;
   private readonly scratchColor = new Float32Array(4);
   private readonly rotationMatrix = mat4.create();
   private readonly viewForward = vec3.create();
@@ -238,11 +242,33 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
       uv = mesh.uv0;
       meshIndices = mesh.indices;
     }
-    const vertices = new Float32Array(positions.length * emitter.ages.length * 16);
-    const indices = new Uint32Array(meshIndices.length * emitter.ages.length);
+    const choices =
+      definition.mode === RenderMode.Mesh
+        ? definition.meshAssetIds.map((id) => {
+            const mesh = pack.getMesh(id)!;
+            const min = [Infinity, Infinity, Infinity],
+              max = [-Infinity, -Infinity, -Infinity];
+            for (const p of mesh.positions)
+              for (const [axis, key] of (['x', 'y', 'z'] as const).entries()) {
+                min[axis] = Math.min(min[axis]!, p[key]);
+                max[axis] = Math.max(max[axis]!, p[key]);
+              }
+            return {
+              positions: mesh.positions,
+              uv: mesh.uv0,
+              indices: mesh.indices,
+              pivotSize: max.map((value, axis) => value - min[axis]!),
+            };
+          })
+        : [];
+    const stride = rendererVertexStride(definition, pack);
+    const vertices = new Float32Array(stride * emitter.ages.length * 16);
+    const indices = new Uint32Array(
+      Math.max(meshIndices.length, ...choices.map((m) => m.indices.length)) * emitter.ages.length,
+    );
     for (let i = 0; i < emitter.ages.length; i++)
       for (let k = 0; k < meshIndices.length; k++)
-        indices[i * meshIndices.length + k] = i * positions.length + meshIndices[k]!;
+        indices[i * meshIndices.length + k] = i * stride + meshIndices[k]!;
     const vertexBuffer = new Buffer({
       data: vertices,
       usage: BufferUsage.VERTEX | BufferUsage.COPY_DST,
@@ -319,6 +345,9 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
     this.indexBuffer = indexBuffer;
     this.indexData = indices;
     this.sortKeys = new Float64Array(emitter.ages.length);
+    this.meshChoices = choices;
+    this.meshSelections = new Uint32Array(emitter.ages.length);
+    this.vertexStride = stride;
     this.basePositions = positions;
     this.baseUV = uv;
     this.baseIndices = meshIndices;
@@ -377,7 +406,7 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
     e.updateSpace();
     const world = e.simulationMatrix,
       v = this.vertices,
-      stride = this.basePositions.length,
+      stride = this.vertexStride,
       material = this.materialDefinition,
       tint = this.straightAlpha ? null : material.tint;
     if (this.definition.alignment === Alignment.Local)
@@ -409,6 +438,12 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
         rnd = (c: number) => random(e.seed, serial, c),
         o = i * 3,
         t = e.ages[i]! / e.lifetimes[i]!;
+      const meshIndex = selectMesh(this.definition, rnd(70), rnd(71));
+      this.meshSelections[i] = meshIndex;
+      const choice = this.meshChoices[meshIndex];
+      const positions = choice?.positions ?? this.basePositions;
+      const uvs = choice?.uv ?? this.baseUV;
+      const pivotSize = choice?.pivotSize ?? this.pivotSize;
       const plane =
         this.definition.mode === RenderMode.HorizontalBillboard ||
         this.definition.mode === RenderMode.VerticalBillboard;
@@ -602,6 +637,13 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
             (e.renderVelocities ?? e.velocities)[o + 2]!,
           ),
           rnd(59),
+          // Native MeshIndex rows use the uniform choice, even for weighted geometry.
+          this.definition.mode === RenderMode.Mesh
+            ? Math.min(
+                this.definition.meshAssetIds.length - 1,
+                Math.floor(rnd(70) * this.definition.meshAssetIds.length),
+              )
+            : 0,
         ),
         col = frame % cols,
         row = Math.floor(frame / cols);
@@ -613,9 +655,9 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
       )
         ? (e.customData?.[i * 8] ?? 0)
         : 0;
-      for (let j = 0; j < stride; j++) {
-        const p = this.basePositions[j]!,
-          uv = this.baseUV[j]!;
+      for (let j = 0; j < positions.length; j++) {
+        const p = positions[j]!,
+          uv = uvs[j]!;
         let x = p.x * sx,
           y = p.y * sy,
           z = p.z * sz;
@@ -623,9 +665,9 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
         if (pivot && !stretched) {
           // Unity adds the offset before particle rotation. Billboard depth
           // uses width; Mesh offsets use the mesh's unscaled bounds.
-          x += pivot.x * sx * this.pivotSize[0]!;
-          y += pivot.y * sy * this.pivotSize[1]!;
-          z += pivot.z * (this.definition.mode === RenderMode.Mesh ? sz : sx) * this.pivotSize[2]!;
+          x += pivot.x * sx * pivotSize[0]!;
+          y += pivot.y * sy * pivotSize[1]!;
+          z += pivot.z * (this.definition.mode === RenderMode.Mesh ? sz : sx) * pivotSize[2]!;
         }
         let a = x * cz - y * snz;
         y = x * snz + y * cz;
@@ -761,14 +803,17 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
         keys[index] = matrix[2]! * wx + matrix[6]! * wy + matrix[10]! * wz + matrix[14]!;
       }
       order.sort((a, b) => keys[b]! - keys[a]! || a - b);
-      for (let i = 0; i < n; i++) {
-        const source = order[i]!;
-        for (let k = 0; k < this.baseIndices.length; k++)
-          this.indexData[i * this.baseIndices.length + k] = source * stride + this.baseIndices[k]!;
-      }
-      this.indexBuffer.update(n * this.baseIndices.length * 4);
     }
-    this.geometry.indexCount = n * this.baseIndices.length;
+    if (sort !== ParticleSort.None || this.meshChoices.length > 0) {
+      let offset = 0;
+      for (let i = 0; i < n; i++) {
+        const source = sort === ParticleSort.None ? i : this.particleOrder[i]!;
+        const indices = this.meshChoices[this.meshSelections[source]!]?.indices ?? this.baseIndices;
+        for (const index of indices) this.indexData[offset++] = source * stride + index;
+      }
+      this.indexBuffer.update(offset * 4);
+      this.geometry.indexCount = offset;
+    } else this.geometry.indexCount = n * this.baseIndices.length;
     this.vertexBuffer.update(n * stride * 64);
     // Invalidate local bounds after vertex changes (needed for masks/culling).
     this.onViewUpdate();

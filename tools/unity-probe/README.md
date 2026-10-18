@@ -30,6 +30,7 @@ pnpm probe:unity --noise-options # Noise 参数行为与渲染尺寸
 pnpm probe:unity --sweeps       # Shape 时间扫描、量化与方向对齐
 pnpm probe:unity --spaces       # 模拟空间、世界重力与线性速度
 pnpm probe:unity --stretch      # 拉伸长度、粒子速度与移动视图
+pnpm probe:unity --meshes       # 多 Mesh 分布、权重、序列帧行与选择稳定性
 pnpm probe:unity --sorting      # 透明粒子索引顺序
 pnpm probe:unity --compatibility # 加权曲线、渐变、限速与序列帧
 pnpm probe:unity --noise-fit    # 执行本地提供的 Noise 采样输入
@@ -57,6 +58,7 @@ pnpm probe:unity --noise-statistics --update-fixtures
 pnpm probe:unity --custom-data --update-fixtures
 pnpm probe:unity --sweeps --update-fixtures
 pnpm probe:unity --spaces --update-fixtures
+pnpm probe:unity --meshes --update-fixtures
 pnpm probe:unity --sorting --update-fixtures
 pnpm probe:unity --stretch --update-fixtures
 pnpm probe:unity --compatibility --update-fixtures

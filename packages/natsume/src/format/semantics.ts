@@ -59,6 +59,7 @@ export const KNOWN_FEATURES: Readonly<Record<string, number>> = Object.freeze(
       'animation.node-active',
       'particle.main',
       'particle.renderer',
+      'particle.mesh-distribution',
       'particle.emission',
       'particle.shape.circle',
       'particle.shape.sphere',
@@ -292,6 +293,19 @@ export function validateDocument(document: DocumentT): void {
       case 'ColorContext':
         if (o.projectColorSpace === 2)
           check(o.hostProjectColorSpaceSlot, 'SEMANTIC', 'Missing source-project color-space slot');
+        break;
+      case 'ParticleRenderer':
+        if (o.mode === 4 && o.meshDistribution === 1) {
+          const weights = o.meshWeights as number[];
+          check(
+            weights.length === (o.meshAssetIds as number[]).length &&
+              weights.every((w) => Number.isFinite(w) && w >= 0) &&
+              Number.isFinite(weights.reduce((sum, w) => sum + w, 0)),
+            'SEMANTIC',
+            'Invalid mesh weights',
+          );
+          requireFeature('particle.mesh-distribution');
+        }
         break;
       case 'MainModule':
         check(

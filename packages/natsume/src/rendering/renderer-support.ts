@@ -1,3 +1,5 @@
+import { MeshDistribution } from '../format/generated/noa/ir/mesh-distribution.js';
+import { rendererVertexStride } from './mesh-selection.js';
 import type { DeepReadonly as R, EffectPack } from '../pack.js';
 import type { ParticleRendererT } from '../format/generated/noa/ir/particle-renderer.js';
 import type { MaterialT } from '../format/generated/noa/ir/material.js';
@@ -199,21 +201,41 @@ export function rendererSupport(
   let count = 4;
   if (definition.mode === RenderMode.Mesh) {
     r.require(
-      definition.meshAssetIds.length === 1,
+      definition.meshAssetIds.length > 0,
       'CAPABILITY',
       'meshAssetIds',
       definition.meshAssetIds,
-      'Mesh renderer supports one mesh',
+      'Mesh renderer requires geometry',
     );
-    const mesh = pack.getMesh(definition.meshAssetIds[0]!);
     r.require(
-      mesh && mesh.uv0.length === mesh.positions.length && mesh.submeshes.length === 1,
+      definition.meshDistribution === MeshDistribution.UniformRandom ||
+        definition.meshDistribution === MeshDistribution.NonUniformRandom,
       'CAPABILITY',
-      'meshAssetIds',
-      definition.meshAssetIds,
-      'Mesh requires UV0 and one submesh',
+      'meshDistribution',
+      definition.meshDistribution,
+      'Unknown mesh distribution',
     );
-    count = mesh?.positions.length ?? 0;
+    if (definition.meshDistribution === MeshDistribution.NonUniformRandom)
+      r.require(
+        definition.meshWeights.length === definition.meshAssetIds.length &&
+          definition.meshWeights.every((w) => Number.isFinite(w) && w >= 0) &&
+          Number.isFinite(definition.meshWeights.reduce((a, b) => a + b, 0)),
+        'SEMANTIC',
+        'meshWeights',
+        definition.meshWeights,
+        'Mesh weights must be finite, nonnegative and match mesh slots',
+      );
+    for (const [index, id] of definition.meshAssetIds.entries()) {
+      const mesh = pack.getMesh(id);
+      r.require(
+        mesh && mesh.uv0.length === mesh.positions.length && mesh.submeshes.length === 1,
+        'CAPABILITY',
+        `meshAssetIds.${index}`,
+        id,
+        'Mesh requires UV0 and one submesh',
+      );
+    }
+    count = rendererVertexStride(definition, pack);
   }
   r.require(
     count * capacity <= 1_000_000,

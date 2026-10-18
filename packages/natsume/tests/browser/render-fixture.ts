@@ -865,3 +865,107 @@ export async function measureCompatibilityGeometry(labels: string[]) {
   }
   return result;
 }
+
+export async function measureMeshChoices() {
+  const { effect, app } = getPreview();
+  if (!effect || !app) throw new Error('Missing preview');
+  effect.pause();
+  const original = effect.container.children[0] as ParticleMesh;
+  const { ParticleRendererT } =
+    await import('../../src/format/generated/noa/ir/particle-renderer.js');
+  const { MeshDistribution } =
+    await import('../../src/format/generated/noa/ir/mesh-distribution.js');
+  const { TextureSheetModuleT } =
+    await import('../../src/format/generated/noa/ir/texture-sheet-module.js');
+  const { SheetRow } = await import('../../src/format/generated/noa/ir/sheet-row.js');
+  const { SheetAnimation } = await import('../../src/format/generated/noa/ir/sheet-animation.js');
+  const { constant } = await import('../particle-fixtures.js');
+  const doc = minimalDocument();
+  const pack = {
+    nodes: doc.nodes,
+    components: [],
+    getNode: (id: number) => doc.nodes.find((n) => n.id === id),
+    getMesh: (id: number) => {
+      const positions =
+        id === 2
+          ? [
+              { x: -1, y: -0.5, z: 0 },
+              { x: 1, y: -0.5, z: 0 },
+              { x: 1, y: 0.5, z: 0 },
+              { x: -1, y: 0.5, z: 0 },
+            ]
+          : [
+              { x: -id / 2, y: -0.5, z: 0 },
+              { x: id / 2, y: -0.5, z: 0 },
+              { x: 0, y: 0.5, z: 0 },
+            ];
+      return {
+        positions,
+        uv0: positions.map((p) => ({ x: p.x / id + 0.5, y: p.y + 0.5 })),
+        indices: id === 2 ? [0, 1, 2, 0, 2, 3] : [0, 1, 2],
+        submeshes: [{}],
+      };
+    },
+  } as unknown as EffectPack;
+  const scene = new Scene(pack, [1]);
+  const source = particleSource();
+  const sheet = new TextureSheetModuleT();
+  sheet.columns = 1;
+  sheet.rows = 3;
+  sheet.rowMode = SheetRow.MeshIndex;
+  sheet.animation = SheetAnimation.SingleRow;
+  sheet.frameOverTime = constant(0);
+  source.modules.push(new ParticleModuleT(M.TextureSheetModule, sheet));
+  const e = new Emitter(3, scene.nodes.get(1)!, source, true, 12345, []);
+  e.count = 12;
+  e.startSizes.fill(1);
+  e.startColors.fill(1);
+  e.lifetimes.fill(10);
+  for (let i = 0; i < e.count; i++) {
+    e.serials[i] = i;
+    e.positions[i * 3] = i * 10;
+    e.ages[i] = i / 100;
+  }
+  const definition = new ParticleRendererT();
+  Object.assign(definition, structuredClone(original.definition), {
+    mode: RenderMode.Mesh,
+    alignment: Alignment.World,
+    meshAssetIds: [1, 2, 3],
+    meshWeights: [0, 1, 0],
+    pivot: new Vec3T(0.25, 0, 0),
+    sort: ParticleSort.OldestFirst,
+  });
+  const results = [];
+  const matrix = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+  for (const distribution of [MeshDistribution.UniformRandom, MeshDistribution.NonUniformRandom]) {
+    definition.meshDistribution = distribution;
+    const mesh = new ParticleMesh(e, definition, original.materialDefinition, Texture.WHITE, pack);
+    const stage = new Container();
+    stage.addChild(mesh);
+    try {
+      const frames = [];
+      for (const frame of [0, 1]) {
+        if (frame) {
+          e.count = 7;
+          e.serials[2] = 100;
+        }
+        mesh.sync(matrix, 'gamma');
+        const vertices = mesh.geometry.getBuffer('aPosition').data as Float32Array;
+        const indices = Array.from(mesh.geometry.indexBuffer.data as Uint32Array).slice(
+          0,
+          mesh.geometry.indexCount,
+        );
+        frames.push({ indices, vertices: Array.from(vertices), count: e.count });
+        app.renderer.render({ container: stage });
+      }
+      results.push({ distribution, frames });
+    } finally {
+      stage.removeChild(mesh);
+      mesh.destroy();
+      stage.destroy();
+      e.count = 12;
+      e.serials[2] = 2;
+    }
+  }
+  return results;
+}

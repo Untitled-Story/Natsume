@@ -164,6 +164,18 @@ Constant Remap ±0.25 与零 Strength 的位置分量差为 **0**。上述范围
 
 原测试的允许容差为 2/255；本次采样实际为 0。尚未量化 Unity 原生材质的最终像素误差。
 
+## 多 Mesh 与选择分布
+
+Unity 2022.3.21f1；均匀 / 加权两种模式 × 权重 `1:1:1`、`1:3:6`、`0:1:0`、全零，共 8 组，每组 8,192 粒子。比较每个槽位的频率，误差为 `|Natsume 数量 − Unity 数量| / Unity 数量`；原生为零时要求 Natsume 也为零，不比较同种子逐粒子选择。
+
+| 项目                       | 最大实测差     |
+| -------------------------- | -------------- |
+| 几何选择频率               | **2.924%**     |
+| MeshIndex 行选择频率       | **2.281%**     |
+| 原生存活期 Mesh / 行号改变 | **0 / 0 粒子** |
+
+按本轮 10% 统计误差门槛通过，后续统一拟合。均匀模式忽略权重；加权模式全零退回均匀。MeshIndex 行沿用均匀选择，独立于加权几何。混合三角形 / 四边形另通过 WebGL2 几何、Pivot、索引重排、粒子减少与序列号替换回归；不将这些解析检查记为 Unity 最终像素误差。尚未测量极小非零权重、更多 Mesh 数量与任意缩放交叉组合。
+
 ## 尚未量化
 
 - 任意 Shape / 模拟空间 / Renderer 参数交叉组合，透视视图、跨系统 sortingFudge 最终像素、min/max size 的 Unity 像素差。
@@ -172,7 +184,7 @@ Constant Remap ±0.25 与零 Strength 的位置分量差为 **0**。上述范围
 
 ## 数据与复测
 
-原生夹具位于 `data/unity-baselines/fixtures/`：`unity-curves`、`unity-boundaries`、`unity-random`、`unity-shape`、`unity-basic-shapes`、`unity-sweeps`、`unity-spaces`、`unity-rotation-prewarm`、`unity-noise-options`、`unity-noise-statistics`、`unity-custom-data`、`unity-sorting`、`unity-stretch`、`unity-layout`、`unity-compatibility`。完整数值范围与对应输入摘要见 `data/unity-baselines/measurements.json`。
+原生夹具位于 `data/unity-baselines/fixtures/`：`unity-curves`、`unity-boundaries`、`unity-random`、`unity-shape`、`unity-basic-shapes`、`unity-sweeps`、`unity-spaces`、`unity-rotation-prewarm`、`unity-noise-options`、`unity-noise-statistics`、`unity-custom-data`、`unity-sorting`、`unity-stretch`、`unity-layout`、`unity-compatibility`、`unity-meshes`。完整数值范围与对应输入摘要见 `data/unity-baselines/measurements.json`。
 
 ```sh
 # 刷新全部原生测量后，运行单元 / 浏览器对比并汇总误差

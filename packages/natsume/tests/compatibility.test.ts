@@ -242,3 +242,28 @@ it('requires a host layout only for roots with external stretched anchors', () =
     checkCompatibility(pack, { parentLayout: { width: 0, height: 0 } }, context).compatible,
   ).toBe(true);
 });
+
+it('checks every mesh slot, weighted inputs and the largest vertex reservation', () => {
+  const f = fixture();
+  f.renderer.mode = RenderMode.Mesh;
+  f.renderer.meshAssetIds = [7, 8];
+  f.renderer.meshDistribution = 1;
+  f.renderer.meshWeights = [1, -1];
+  f.source.main!.maxParticles = 20000;
+  const pack = f.pack();
+  vi.spyOn(pack, 'getMesh').mockImplementation((id) =>
+    id === 7
+      ? undefined
+      : ({
+          positions: new Array(100).fill({ x: 0, y: 0, z: 0 }),
+          uv0: new Array(100).fill({ x: 0, y: 0 }),
+          indices: [0, 1, 2],
+          submeshes: [{}],
+        } as never),
+  );
+  const report = checkCompatibility(pack, {}, context);
+  expect(report.compatible).toBe(false);
+  expect(report.issues.filter((i) => i.severity === 'error').map((i) => i.field)).toEqual(
+    expect.arrayContaining(['meshWeights', 'meshAssetIds.0', 'maxParticles*vertices']),
+  );
+});

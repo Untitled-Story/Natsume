@@ -1,3 +1,4 @@
+import { rendererVertexStride } from '../rendering/mesh-selection.js';
 import { Alignment } from '../format/generated/noa/ir/alignment.js';
 import { Container, ImageSource, Rectangle, Texture, type WebGLRenderer } from 'pixi.js';
 import { mat4 } from 'gl-matrix';
@@ -496,8 +497,7 @@ export class NatsumeRuntime {
       const totalVertices = renderers.reduce((sum, { data }) => {
         const emitter = simulation.emitters.get(data.systemComponentId);
         check(emitter, 'SEMANTIC', 'Renderer system is outside entry');
-        const count =
-          data.mode === RenderMode.Mesh ? pack.getMesh(data.meshAssetIds[0]!)?.positions.length : 4;
+        const count = rendererVertexStride(data, pack);
         check(count !== undefined, 'SEMANTIC', 'Missing mesh');
         return sum + emitter.main.maxParticles * count;
       }, 0);

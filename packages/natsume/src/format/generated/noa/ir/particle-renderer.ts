@@ -5,6 +5,7 @@
 import * as flatbuffers from 'flatbuffers';
 
 import { Alignment } from '../../noa/ir/alignment.js';
+import { MeshDistribution } from '../../noa/ir/mesh-distribution.js';
 import { ParticleSort } from '../../noa/ir/particle-sort.js';
 import { RenderMode } from '../../noa/ir/render-mode.js';
 import { Vec3, Vec3T } from '../../noa/ir/vec3.js';
@@ -184,8 +185,13 @@ sourceSortingLayerId():number {
   return offset ? this.bb!.readInt32(this.bb_pos + offset) : 0;
 }
 
+meshDistribution():MeshDistribution {
+  const offset = this.bb!.__offset(this.bb_pos, 52);
+  return offset ? this.bb!.readUint8(this.bb_pos + offset) : MeshDistribution.UniformRandom;
+}
+
 static startParticleRenderer(builder:flatbuffers.Builder) {
-  builder.startObject(24);
+  builder.startObject(25);
 }
 
 static addSystemComponentId(builder:flatbuffers.Builder, systemComponentId:number) {
@@ -347,6 +353,10 @@ static addSourceSortingLayerId(builder:flatbuffers.Builder, sourceSortingLayerId
   builder.addFieldInt32(23, sourceSortingLayerId, 0);
 }
 
+static addMeshDistribution(builder:flatbuffers.Builder, meshDistribution:MeshDistribution) {
+  builder.addFieldInt8(24, meshDistribution, MeshDistribution.UniformRandom);
+}
+
 static endParticleRenderer(builder:flatbuffers.Builder):flatbuffers.Offset {
   const offset = builder.endObject();
   builder.requiredField(offset, 6) // materials
@@ -379,7 +389,8 @@ unpack(): ParticleRendererT {
     this.normalDirection(),
     this.freeformStretching(),
     this.rotateWithStretchDirection(),
-    this.sourceSortingLayerId()
+    this.sourceSortingLayerId(),
+    this.meshDistribution()
   );
 }
 
@@ -409,6 +420,7 @@ unpackTo(_o: ParticleRendererT): void {
   _o.freeformStretching = this.freeformStretching();
   _o.rotateWithStretchDirection = this.rotateWithStretchDirection();
   _o.sourceSortingLayerId = this.sourceSortingLayerId();
+  _o.meshDistribution = this.meshDistribution();
 }
 }
 
@@ -437,7 +449,8 @@ constructor(
   public normalDirection: number = 1.0,
   public freeformStretching: boolean = false,
   public rotateWithStretchDirection: boolean = true,
-  public sourceSortingLayerId: number = 0
+  public sourceSortingLayerId: number = 0,
+  public meshDistribution: MeshDistribution = MeshDistribution.UniformRandom
 ){}
 
 
@@ -472,6 +485,7 @@ pack(builder:flatbuffers.Builder): flatbuffers.Offset {
   ParticleRenderer.addFreeformStretching(builder, this.freeformStretching);
   ParticleRenderer.addRotateWithStretchDirection(builder, this.rotateWithStretchDirection);
   ParticleRenderer.addSourceSortingLayerId(builder, this.sourceSortingLayerId);
+  ParticleRenderer.addMeshDistribution(builder, this.meshDistribution);
 
   return ParticleRenderer.endParticleRenderer(builder);
 }

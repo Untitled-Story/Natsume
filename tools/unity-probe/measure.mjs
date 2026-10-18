@@ -25,6 +25,7 @@ const modes = [
   'noise-statistics',
   'custom-data',
   'compatibility',
+  'meshes',
 ];
 async function run(command, args, env = process.env) {
   const child = spawn(command, args, { cwd: root, env, stdio: 'inherit' });

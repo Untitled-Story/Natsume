@@ -66,6 +66,7 @@ export { MainModule, MainModuleT } from './ir/main-module.js';
 export { Material, MaterialT } from './ir/material.js';
 export { MaterialModel } from './ir/material-model.js';
 export { Matrix4, Matrix4T } from './ir/matrix4.js';
+export { MeshDistribution } from './ir/mesh-distribution.js';
 export { Metadata, MetadataT } from './ir/metadata.js';
 export { Node, NodeT } from './ir/node.js';
 export { NoiseModule, NoiseModuleT } from './ir/noise-module.js';

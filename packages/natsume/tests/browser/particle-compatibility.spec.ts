@@ -116,3 +116,42 @@ test('matches native scaling and alignment geometry', async ({ page }) => {
     }
   }
 });
+
+test('draws mixed mesh sizes with stable rows, pivots and sorted indices', async ({ page }) => {
+  const sample = fileURLToPath(new URL('../../../../data/kirakira.noap', import.meta.url));
+  test.skip(!existsSync(sample), 'Local sample is absent');
+  await page.goto('/');
+  await page.locator('#file').setInputFiles(sample);
+  await expect(page.locator('#status')).toHaveText('预览就绪');
+  const results = await page.evaluate(
+    async (path) => (await import('/@fs' + path)).measureMeshChoices(),
+    new URL('./render-fixture.ts', import.meta.url).pathname,
+  );
+  for (const result of results)
+    for (const frame of result.frames) {
+      const order: number[] = [],
+        widths: number[] = [];
+      for (let i = 0; i < frame.count; i++) {
+        const offset = i * 4 * 16;
+        const width = frame.vertices[offset + 16]! - frame.vertices[offset]!;
+        widths.push(width);
+        expect([1, 2, 3]).toContain(width);
+        if (result.distribution === 1) expect(width).toBe(2);
+        expect(frame.vertices[offset]!).toBeCloseTo(i * 10 - width * 0.25, 5);
+      }
+      for (let k = 0; k < frame.indices.length; ) {
+        const particle = Math.floor(frame.indices[k]! / 4);
+        order.push(particle);
+        const base = particle * 4;
+        const local = widths[particle] === 2 ? [0, 1, 2, 0, 2, 3] : [0, 1, 2];
+        expect(frame.indices.slice(k, k + local.length)).toEqual(local.map((v) => base + v));
+        k += local.length;
+      }
+      expect(order).toEqual(Array.from({ length: frame.count }, (_, i) => i));
+      if (frame.count === 12) {
+        const other = results[result.distribution === 0 ? 1 : 0]!.frames[0]!;
+        for (let i = 0; i < frame.count; i++)
+          expect(frame.vertices[i * 64 + 4]).toBe(other.vertices[i * 64 + 4]);
+      }
+    }
+});

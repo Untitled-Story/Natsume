@@ -1,3 +1,4 @@
+import { rendererVertexStride } from '../rendering/mesh-selection.js';
 import { NatsumeError, type ErrorCode } from '../errors.js';
 import type { EffectPack, DeepReadonly as R } from '../pack.js';
 import type { InstanceOptions, ScriptIdentity } from './runtime.js';
@@ -7,7 +8,6 @@ import type { RectLayoutT } from '../format/generated/noa/ir/rect-layout.js';
 import type { AnimatorT } from '../format/generated/noa/ir/animator.js';
 import type { CustomComponentT } from '../format/generated/noa/ir/custom-component.js';
 import { ComponentData as C } from '../format/generated/noa/ir/component-data.js';
-import { RenderMode } from '../format/generated/noa/ir/render-mode.js';
 import { CameraPolicy } from '../format/generated/noa/ir/camera-policy.js';
 import { ColorSpace } from '../format/generated/noa/ir/color-space.js';
 import { AnimationProperty } from '../format/generated/noa/ir/animation-property.js';
@@ -330,11 +330,7 @@ export function checkCompatibility(
         rules.issues.push(
           ...rendererSupport(definition, material, pack, system.main!.maxParticles, env),
         );
-        vertices +=
-          system.main!.maxParticles *
-          (definition.mode === RenderMode.Mesh
-            ? (pack.getMesh(definition.meshAssetIds[0]!)?.positions.length ?? 0)
-            : 4);
+        vertices += system.main!.maxParticles * rendererVertexStride(definition, pack);
         if (!materials.has(material.id)) {
           materials.add(material.id);
           for (const [index, binding] of material.textures.entries()) {
