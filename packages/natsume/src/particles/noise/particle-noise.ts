@@ -2,11 +2,14 @@ import type { DeepReadonly as R } from '../../pack.js';
 import type { NoiseModuleT } from '../../format/generated/noa/ir/noise-module.js';
 import { scalar } from '../../runtime/parameters.js';
 import { CurlNoiseField } from './curl-field.js';
+import { LowQualityNoiseField } from './low-quality-field.js';
+
+type NoiseField = CurlNoiseField | LowQualityNoiseField;
 
 /** Evaluates Unity Noise parameters over a calibrated, seeded curl field. */
 export class ParticleNoise {
-  readonly field: CurlNoiseField;
-  private readonly fields: CurlNoiseField[];
+  readonly field: NoiseField;
+  private readonly fields: NoiseField[];
   private readonly weights: Float64Array;
   private readonly sampleValue = new Float64Array(3);
   private readonly frequency: number;
@@ -16,21 +19,16 @@ export class ParticleNoise {
     seed: number,
   ) {
     this.frequency = Math.max(1e-4, settings.frequency);
-    // Native quality levels change amplitude and correlation length, but all
-    // three position axes still affect the field. Fitted to spatial statistics.
-    const coordinateScale = settings.quality === 0 ? 0.86 : settings.quality === 1 ? 0.96 : 1.02;
-    const amplitude =
-      0.9816303202717301 * (settings.quality === 0 ? 1.87 : settings.quality === 1 ? 1.26 : 1);
-    this.fields = Array.from(
-      { length: settings.octaves },
-      (_, i) =>
-        new CurlNoiseField(
-          seed,
-          this.frequency * settings.octaveScale ** i,
-          coordinateScale,
-          amplitude,
-        ),
-    );
+    // Low uses a measured separable field; the other qualities retain their
+    // calibrated three-dimensional curl approximation.
+    const coordinateScale = settings.quality === 1 ? 0.96 : 1.02;
+    const amplitude = 0.9816303202717301 * (settings.quality === 1 ? 1.26 : 1);
+    this.fields = Array.from({ length: settings.octaves }, (_, i) => {
+      const frequency = this.frequency * settings.octaveScale ** i;
+      return settings.quality === 0
+        ? new LowQualityNoiseField(seed, frequency)
+        : new CurlNoiseField(seed, frequency, coordinateScale, amplitude);
+    });
     this.weights = Float64Array.from(this.fields, (_, i) => settings.octaveMultiplier ** i);
     const sum = this.weights.reduce((total, weight) => total + weight, 0);
     for (let i = 0; i < this.weights.length; i++) this.weights[i] = this.weights[i]! / sum;

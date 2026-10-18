@@ -20,7 +20,6 @@ import { sampleShape } from './shapes.js';
 import { SheetTime } from '../format/generated/noa/ir/sheet-time.js';
 import { CustomDataMode } from '../format/generated/noa/ir/custom-data-mode.js';
 import { scalar, color, random, constantZero } from './parameters.js';
-import { CurlNoiseField } from '../particles/noise/curl-field.js';
 import { ParticleNoise } from '../particles/noise/particle-noise.js';
 import type { SceneNode } from './scene.js';
 import { maximumLifetime, prewarmDuration } from './prewarm.js';
@@ -58,7 +57,7 @@ export class Emitter {
   readonly lifetimes: Float32Array;
   readonly serials: Uint32Array;
   readonly seed: number;
-  readonly field: CurlNoiseField | undefined;
+  readonly field: ParticleNoise['field'] | undefined;
   readonly noiseSizes: Float32Array | undefined;
   private readonly noiseEvaluator: ParticleNoise | undefined;
   readonly prewarmSeconds: number;

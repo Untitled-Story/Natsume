@@ -4,12 +4,12 @@ using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 
-// Fixed spatial population; compare distributions, never seeded particle paths.
+// Fixed spatial population; Low also exposes first-step positions for field checks.
 public static class NatsumeNoiseStatisticsProbe
 {
     static int Count = 512;
     [Serializable] public class Input { public int count = 512; public Case[] cases; }
-    [Serializable] public class Sample { public int frame; public double displacementRms, rotationRms, sizeDeltaRms; }
+    [Serializable] public class Sample { public int frame; public double displacementRms, rotationRms, sizeDeltaRms; public Vector3[] positions; }
     [Serializable] public class Case {
         public string label; public uint seed, pointSeed;
         public int quality = 2, octaves = 1;
@@ -80,7 +80,12 @@ public static class NatsumeNoiseStatisticsProbe
                     }
                     UnityEngine.Object.DestroyImmediate(mesh);
                 }
-                samples.Add(new Sample {frame=frame, displacementRms=Math.Sqrt(position/Count), rotationRms=Math.Sqrt(rotation/Count), sizeDeltaRms=Math.Sqrt(size/Count)});
+                Vector3[] fieldPositions = null;
+                if (config.quality == 0 && config.scroll == 0 && frame == 1) {
+                    fieldPositions = new Vector3[Math.Min(8, Count)];
+                    for (int i = 0; i < fieldPositions.Length; i++) fieldPositions[i] = particles[i].position;
+                }
+                samples.Add(new Sample {frame=frame, displacementRms=Math.Sqrt(position/Count), rotationRms=Math.Sqrt(rotation/Count), sizeDeltaRms=Math.Sqrt(size/Count), positions=fieldPositions});
             }
             config.samples=samples.ToArray(); return config;
         } finally { UnityEngine.Object.DestroyImmediate(go); }

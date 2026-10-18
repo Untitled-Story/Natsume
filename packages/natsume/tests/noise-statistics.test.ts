@@ -15,6 +15,7 @@ interface Sample {
   displacementRms: number;
   rotationRms: number;
   sizeDeltaRms: number;
+  positions?: { x: number; y: number; z: number }[];
 }
 const native = JSON.parse(readNativeFixture('unity-noise-statistics.json')) as {
   count: number;
@@ -77,6 +78,19 @@ for (const sample of native.cases)
       e.step(1 / 60);
       const expected = sample.samples.find((s) => s.frame === frame);
       if (!expected) continue;
+      for (const [index, position] of (expected.positions ?? []).entries()) {
+        for (let axis = 0; axis < 3; axis++) {
+          const key = axis === 0 ? 'x' : axis === 1 ? 'y' : 'z';
+          const error = e.positions[index * 3 + axis]! - position[key];
+          expect(Math.abs(error)).toBeLessThan(2e-5);
+          recordError(
+            `noise.population.low.fieldPosition`,
+            error,
+            'units',
+            `${sample.label}/${sample.seed}/${index}/${key}`,
+          );
+        }
+      }
       let displacement = 0,
         rotation = 0,
         size = 0;
@@ -111,8 +125,8 @@ for (const sample of native.cases)
         String(sample.seed),
       );
       if (target > 1e-8) {
-        // Population bounds do not require Unity's per-particle random paths.
-        expect(Math.abs(actual / target - 1)).toBeLessThan(sample.quality === 0 ? 0.16 : 0.12);
+        const tolerance = sample.quality === 0 ? (sample.scroll === 0 ? 0.001 : 0.05) : 0.12;
+        expect(Math.abs(actual / target - 1)).toBeLessThan(tolerance);
         recordError(
           `noise.population.${sample.label}.frame${frame}.relative`,
           (actual - target) / target,
