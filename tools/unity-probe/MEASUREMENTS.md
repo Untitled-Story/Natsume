@@ -1,10 +1,10 @@
 # Unity 行为对照
 
-复测时间：**2026-10-18 12:21:50 UTC**。Unity **2022.3.21f1**，运行模拟采用 `1/60 s`；Shape 扫描另含 `0.25 s` 与端点邻域步进。浏览器为 Chromium / WebGL2。原生数据覆盖 16 种探针，405 项单元测试与 25 项浏览器测试通过。最近一次原生刷新为 Stretch、Custom Data、边界、Rotation / Prewarm、Compatibility 探针，其余复用已有本地原生记录。
+复测时间：**2026-10-18 12:21:50 UTC**。Unity **2022.3.21f1**，运行模拟采用 `1/60 s`；Shape 扫描另含 `0.25 s` 与端点邻域步进。浏览器为 Chromium / WebGL2。原生数据覆盖 16 种探针，405 项单元测试与 25 项浏览器测试通过。
 
 下表为本次采样的**最大实测绝对差**，数值四舍五入，不再以测试容差代替误差。`0` 仅表示已测输入相同；位置 / 速度使用场景单位，角度为 rad。随机分布比较统计量，不要求同种子逐粒子一致。部分已知差异仅作记录；Noise 统计与 Pivot 几何有数值回归边界，测试通过不代表所有参数组合一致。
 
-完整数值、比较次数、误差 RMS、最大差对应案例和输入 SHA-256 见 `data/unity-baselines/measurements.json`。本次记录 10,503 个标量比较、286 项指标；不同单位不合并为整体百分比。
+本次采样包含 10,503 个标量比较、286 项指标；不同单位不合并为整体百分比。
 
 ## 参数、运动与生命周期
 
@@ -194,16 +194,3 @@ materials[1] 为 Trails 材质槽，不参与普通粒子绘制；materials[0] �
 - 任意 Shape / 模拟空间 / Renderer 参数交叉组合，透视视图、跨系统 sortingFudge 最终像素、min/max size 的 Unity 像素差。
 - 随机 Custom 分量的原生分布、软粒子的真实游戏背景深度，以及未支持模块。
 - Script Bridge、Animator / active 与暂停 / 重启 / 销毁运行了功能回归；它们没有可合并为数值误差的通用 Unity 游戏脚本基准。95 个游戏包的整包视觉误差未在本次测量。
-
-## 数据与复测
-
-原生夹具位于 `data/unity-baselines/fixtures/`：`unity-curves`、`unity-boundaries`、`unity-random`、`unity-shape`、`unity-basic-shapes`、`unity-sweeps`、`unity-spaces`、`unity-rotation-prewarm`、`unity-noise-options`、`unity-noise-statistics`、`unity-custom-data`、`unity-sorting`、`unity-stretch`、`unity-layout`、`unity-compatibility`、`unity-meshes`。完整数值范围与对应输入摘要见 `data/unity-baselines/measurements.json`。
-
-```sh
-# 刷新全部原生测量后，运行单元 / 浏览器对比并汇总误差
-node tools/unity-probe/measure.mjs --refresh-unity
-# 已有本地原生结果时，只重新运行对比
-node tools/unity-probe/measure.mjs
-```
-
-环境与输入要求见 [README](README.md)。
