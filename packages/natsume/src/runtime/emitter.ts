@@ -129,11 +129,6 @@ export class Emitter {
       `System ${id}: custom simulation node is unavailable`,
     );
     this.updateSpace();
-    check(
-      main.flipRotationProbability === 0,
-      'CAPABILITY',
-      `System ${id}: rotation flip is not supported`,
-    );
     this.delaySeconds = Math.max(0, scalar(main.startDelay, 0, random(instanceSeed, id, 70)));
     this.delayRemaining = this.delaySeconds;
     check(main.maxParticles <= 100_000, 'LIMIT', 'Emitter capacity exceeds playback limit');
@@ -504,6 +499,9 @@ export class Emitter {
       this.rotations[o] = this.main.rotation3d ? scalar(rot.x, t, rnd(8)) : 0;
       this.rotations[o + 1] = this.main.rotation3d ? scalar(rot.y, t, rnd(9)) : 0;
       this.rotations[o + 2] = scalar(rot.z, t, rnd(10));
+      const rotationSign = rnd(68) < this.main.flipRotationProbability ? -1 : 1;
+      for (let axis = 0; axis < 3; axis++)
+        this.rotations[o + axis] = this.rotations[o + axis]! * rotationSign;
       if (this.shape?.alignToDirection) {
         this.rotations[o] = this.rotations[o]! - Math.asin(Math.max(-1, Math.min(1, dy)));
         this.rotations[o + 1] =
@@ -546,15 +544,19 @@ export class Emitter {
         rnd = (ch: number) => random(this.seed, serial, ch);
       if (this.rotationModule) {
         const r = this.rotationModule,
-          rotationTime = this.ages[i]! / this.lifetimes[i]!;
+          rotationTime = this.ages[i]! / this.lifetimes[i]!,
+          rotationSign = rnd(68) < this.main.flipRotationProbability ? -1 : 1;
         if (r.separateAxes) {
           this.rotations[o] =
-            this.rotations[o]! + scalar(r.angularVelocity?.x, rotationTime, rnd(60)) * dt;
+            this.rotations[o]! +
+            scalar(r.angularVelocity?.x, rotationTime, rnd(60)) * dt * rotationSign;
           this.rotations[o + 1] =
-            this.rotations[o + 1]! + scalar(r.angularVelocity?.y, rotationTime, rnd(61)) * dt;
+            this.rotations[o + 1]! +
+            scalar(r.angularVelocity?.y, rotationTime, rnd(61)) * dt * rotationSign;
         }
         this.rotations[o + 2] =
-          this.rotations[o + 2]! + scalar(r.angularVelocity?.z, rotationTime, rnd(62)) * dt;
+          this.rotations[o + 2]! +
+          scalar(r.angularVelocity?.z, rotationTime, rnd(62)) * dt * rotationSign;
       }
       let x = this.positions[o]!,
         y = this.positions[o + 1]!,
