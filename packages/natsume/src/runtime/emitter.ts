@@ -101,6 +101,9 @@ export class Emitter {
   private nextSerial = 0;
   private time = 0;
   private carry = 0;
+  private distanceCarry = 0;
+  private distanceStarted = false;
+  private readonly lastEmissionPosition = new Float64Array(3);
   private enabledLast = false;
   private started = false;
   private delayRemaining = 0;
@@ -126,8 +129,14 @@ export class Emitter {
       `System ${id}: custom simulation node is unavailable`,
     );
     this.updateSpace();
+    this.lastEmissionPosition.set([
+      this.node.worldMatrix[12]!,
+      this.node.worldMatrix[13]!,
+      this.node.worldMatrix[14]!,
+    ]);
     this.delaySeconds = Math.max(0, scalar(main.startDelay, 0, random(instanceSeed, id, 70)));
     this.delayRemaining = this.delaySeconds;
+    this.distanceStarted = this.delaySeconds > 0;
     check(main.maxParticles <= 100_000, 'LIMIT', 'Emitter capacity exceeds playback limit');
     check(
       main.durationSeconds >= 1 / 60,
@@ -178,25 +187,16 @@ export class Emitter {
       }
     }
     check(
-      constantZero(this.emission?.rateOverDistance),
-      'CAPABILITY',
-      'Distance emission unsupported',
-    );
-    for (const b of this.emission?.bursts ?? [])
-      check(
-        b.cycles !== 0 || b.intervalSeconds > 0,
-        'CAPABILITY',
-        `System ${id}: infinite burst requires a positive repeat interval`,
-      );
-    check(
       (this.emission?.bursts ?? []).reduce(
         (n, b) =>
           n +
-          (b.cycles ||
-            Math.max(
-              0,
-              Math.ceil((this.main.durationSeconds - b.timeSeconds) / b.intervalSeconds),
-            )),
+          (b.intervalSeconds === 0
+            ? 1
+            : b.cycles ||
+              Math.max(
+                0,
+                Math.ceil((this.main.durationSeconds - b.timeSeconds) / b.intervalSeconds),
+              )),
         0,
       ) <= 4096,
       'LIMIT',
@@ -360,8 +360,16 @@ export class Emitter {
     this.nextSerial = 0;
     this.time = 0;
     this.carry = 0;
+    this.distanceCarry = 0;
+    this.distanceStarted = this.delaySeconds > 0;
+    this.lastEmissionPosition.set([
+      this.node.worldMatrix[12]!,
+      this.node.worldMatrix[13]!,
+      this.node.worldMatrix[14]!,
+    ]);
     this.started = false;
     this.delayRemaining = this.delaySeconds;
+    this.distanceStarted = this.delaySeconds > 0;
     this.enabledLast = false;
     this.emitting = true;
   }
@@ -378,8 +386,16 @@ export class Emitter {
       this.noiseEvaluator?.reset();
       this.started = false;
       this.delayRemaining = this.delaySeconds;
+      this.distanceStarted = this.delaySeconds > 0;
       this.time = 0;
       this.carry = 0;
+      this.distanceCarry = 0;
+      this.distanceStarted = this.delaySeconds > 0;
+      this.lastEmissionPosition.set([
+        this.node.worldMatrix[12]!,
+        this.node.worldMatrix[13]!,
+        this.node.worldMatrix[14]!,
+      ]);
     } else if (this.main.playOnEnable && this.emitting) this.start();
   }
   start(): void {
@@ -400,6 +416,23 @@ export class Emitter {
     const lastCycle = this.main.loop ? Math.floor(to / duration) : 0;
     for (let cycle = firstCycle; cycle <= lastCycle; cycle++)
       for (const [index, b] of (this.emission?.bursts ?? []).entries()) {
+        if (b.cycles === 0 && b.intervalSeconds === 0) {
+          const localTo = to - cycle * duration;
+          if (
+            to > from &&
+            localTo > b.timeSeconds &&
+            localTo < duration - 1e-8 &&
+            random(this.seed, Math.floor(to * 60), index + 100) < b.probability
+          )
+            this.emit(
+              Math.round(
+                scalar(b.count, localTo / duration, random(this.seed, cycle, index + 110)),
+              ),
+              localTo / duration,
+              to,
+            );
+          continue;
+        }
         const epsilonTime = 1e-8 * Math.max(1, duration),
           repetitions =
             b.intervalSeconds === 0
@@ -558,7 +591,14 @@ export class Emitter {
     if (dt <= 0) return;
     if (this.delayRemaining > 0) {
       this.delayRemaining -= dt;
-      if (this.delayRemaining > 0) return;
+      if (this.delayRemaining > 0) {
+        this.lastEmissionPosition.set([
+          this.node.worldMatrix[12]!,
+          this.node.worldMatrix[13]!,
+          this.node.worldMatrix[14]!,
+        ]);
+        return;
+      }
       dt = -this.delayRemaining;
       this.delayRemaining = 0;
       this.bursts(-Number.EPSILON, 0);
@@ -789,8 +829,34 @@ export class Emitter {
       const amount = Math.floor(this.carry + 1e-8);
       this.carry -= amount;
       this.emit(amount, undefined, end);
+      const m = this.node.worldMatrix;
+      const distance = Math.hypot(
+        m[12]! - this.lastEmissionPosition[0]!,
+        m[13]! - this.lastEmissionPosition[1]!,
+        m[14]! - this.lastEmissionPosition[2]!,
+      );
+      this.distanceCarry +=
+        (this.distanceStarted ? distance : 0) *
+        (activeDt / dt) *
+        Math.max(
+          0,
+          scalar(
+            this.emission?.rateOverDistance,
+            (this.time % this.main.durationSeconds) / this.main.durationSeconds,
+            random(this.seed, 0, 91),
+          ),
+        );
+      const distanceAmount = Math.floor(this.distanceCarry + 1e-8);
+      this.distanceCarry -= distanceAmount;
+      this.distanceStarted = true;
+      this.emit(distanceAmount, undefined, end);
       this.time = end;
     }
+    this.lastEmissionPosition.set([
+      this.node.worldMatrix[12]!,
+      this.node.worldMatrix[13]!,
+      this.node.worldMatrix[14]!,
+    ]);
   }
   private remove(i: number): void {
     const last = --this.count;

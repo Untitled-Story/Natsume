@@ -65,6 +65,23 @@ public static class NatsumeCompatibilityProbe {
  ps.Emit(1);var samples=new List<Sample>{Read(ps,0,false)};for(int frame=1;frame<=3;frame++){ps.Simulate(1f/60,false,false,false);samples.Add(Read(ps,frame,false));}
  cases.Add(new Case{label="flip-rotation-"+axes+"-"+flip,samples=samples.ToArray()});UnityEngine.Object.DestroyImmediate(ps.gameObject);
  }
+
+ foreach(var kind in new[]{"local","world","fractional","delay","teleport"}) {
+ var ps=Create();var m=ps.main;m.duration=1;m.startSpeed=0;if(kind=="world")m.simulationSpace=ParticleSystemSimulationSpace.World;if(kind=="delay")m.startDelay=.05f;var emission=ps.emission;emission.enabled=true;emission.rateOverTime=0;emission.rateOverDistance=kind=="fractional"?1.5f:2;
+ ps.Simulate(0,false,true,false);ps.Play(false);var samples=new List<Sample>{Read(ps,0,false)};
+ for(int frame=1;frame<=12;frame++){ps.transform.position=new Vector3(kind=="teleport"?(frame>=3?10:0):frame*.25f,0,0);ps.Simulate(1f/60,false,false,false);samples.Add(Read(ps,frame,false));}
+ cases.Add(new Case{label="distance-"+kind,samples=samples.ToArray()});UnityEngine.Object.DestroyImmediate(ps.gameObject);
+ }
+
+ foreach(var kind in new[]{"world-orbital","local-worldsim","world-radial","world-offset","world-combined","world-scaled","world-translated","local-scaled"})cases.Add(Manual("velocity-"+kind,ps=>{
+ ps.transform.rotation=Quaternion.Euler(0,0,45);if(kind.Contains("scaled"))ps.transform.localScale=new Vector3(2,3,1);if(kind.Contains("translated"))ps.transform.position=new Vector3(2,3,4);
+ var m=ps.main;if(kind.Contains("worldsim"))m.simulationSpace=ParticleSystemSimulationSpace.World;
+ var v=ps.velocityOverLifetime;v.enabled=true;v.space=kind.StartsWith("world")?ParticleSystemSimulationSpace.World:ParticleSystemSimulationSpace.Local;
+ if(!kind.Contains("radial")){v.orbitalX=1;v.orbitalY=.5f;v.orbitalZ=.7f;}
+ if(kind.Contains("offset")||kind.Contains("combined")||kind.Contains("translated")){v.orbitalOffsetX=.2f;v.orbitalOffsetY=-.3f;v.orbitalOffsetZ=.4f;}
+ if(kind.Contains("radial")||kind.Contains("combined")||kind.Contains("translated"))v.radial=.4f;
+ if(kind.Contains("combined")){v.x=1;v.y=2;v.z=3;v.speedModifier=2;}
+ }));
  var curves=new List<CurveCase>();foreach(var weight in new[]{0f,.1f,.5f,1f}){var a=new Keyframe(0,2,0,4,1f/3,weight);a.weightedMode=WeightedMode.Out;var b=new Keyframe(1,3,-2,0,.7f,1f/3);b.weightedMode=WeightedMode.In;var c=new AnimationCurve(a,b);curves.Add(new CurveCase{label="weighted-"+weight,values=Enumerable.Range(0,41).Select(i=>c.Evaluate(i/40f)).ToArray()});}
  foreach(var code in new[]{0,1,2,3,4,5,8}){var asset=ScriptableObject.CreateInstance<NatsumeCurveProbe>();asset.curve=AnimationCurve.Linear(0,2,1,6);var so=new SerializedObject(asset);var p=so.FindProperty("curve");p.FindPropertyRelative("m_PreInfinity").intValue=code;p.FindPropertyRelative("m_PostInfinity").intValue=code;so.ApplyModifiedPropertiesWithoutUndo();curves.Add(new CurveCase{label="wrap-"+code,values=new[]{-1.25f,-.25f,0,.25f,1,1.25f,2.25f}.Select(t=>asset.curve.Evaluate(t)).ToArray()});UnityEngine.Object.DestroyImmediate(asset);}
  var g=new Gradient();g.SetKeys(new[]{new GradientColorKey(Color.red,0),new GradientColorKey(Color.blue,1)},new[]{new GradientAlphaKey(.2f,0),new GradientAlphaKey(.8f,1)});g.mode=GradientMode.PerceptualBlend;var output=new Output{unityVersion=Application.unityVersion,renderChecks=renderChecks.ToArray(),cases=cases.ToArray(),curves=curves.ToArray(),gradient=Enumerable.Range(0,5).Select(i=>g.Evaluate(i/4f)).ToArray()};var path=Environment.GetEnvironmentVariable("NATSUME_COMPAT_OUTPUT");Directory.CreateDirectory(Path.GetDirectoryName(path));File.WriteAllText(path,JsonUtility.ToJson(output,true));

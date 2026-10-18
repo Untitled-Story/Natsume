@@ -154,14 +154,18 @@ for (const label of [
   );
 }
 
-it('rejects unbounded burst work and infinite bursts without a positive interval', () => {
+it('bounds burst work and supports fixed-step infinite zero-interval bursts', () => {
   const source = particleSource();
   const burst = new BurstT(0, constant(1), 0, 0);
   source.modules.push(
     new ParticleModuleT(M.EmissionModule, new EmissionModuleT(null, null, [burst])),
   );
   const create = () => new Emitter(3, scene.nodes.get(1)!, source, true, 1, []);
-  expect(create).toThrow(/positive repeat interval/);
+  const emitter = create();
+  emitter.sync();
+  expect(emitter.count).toBe(0);
+  for (let i = 0; i < 5; i++) emitter.step(1 / 60);
+  expect(emitter.count).toBe(5);
   burst.intervalSeconds = 1e-12;
   expect(create).toThrow(/Too many burst repetitions/);
 });
@@ -427,3 +431,32 @@ for (const fixture of native.cases.filter((c) => c.label.startsWith('sheet-'))) 
     }
   });
 }
+
+it.skipIf(!hasNativeFixture('unity-boundaries.json'))(
+  'matches native infinite zero-interval burst counts',
+  () => {
+    const source = particleSource();
+    source.main!.durationSeconds = 0.1;
+    source.main!.loop = false;
+    source.modules.push(
+      new ParticleModuleT(
+        M.EmissionModule,
+        new EmissionModuleT(null, null, [new BurstT(0, constant(2), 0, 0)]),
+      ),
+    );
+    const emitter = new Emitter(3, scene.nodes.get(1)!, source, true, 1, []);
+    emitter.sync();
+    const fixture = native.cases.find((c) => c.label === 'burst-infinite-zero-interval')!;
+    for (let frame = 1; frame <= 18; frame++) {
+      emitter.step(1 / 60);
+      const count = fixture.samples.find((s) => s.frame === frame)!.count;
+      recordError(
+        'emission.zeroIntervalBurst.count',
+        emitter.count - count,
+        'particles',
+        String(frame),
+      );
+      expect(emitter.count).toBe(count);
+    }
+  },
+);
