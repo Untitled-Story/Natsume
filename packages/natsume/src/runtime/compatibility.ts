@@ -321,19 +321,6 @@ export function checkCompatibility(
       const slots = [...particleMaterialSlots(definition)];
       // A missing primary material is a Unity error shader, not a supported material model.
       if (!slots.includes(0)) slots.unshift(0);
-      const queues = slots
-        .map(
-          (slot) =>
-            pack.document.materials.find((m) => m.id === definition.materials[slot])?.renderQueue,
-        )
-        .filter((q) => q !== undefined);
-      if (new Set(queues).size > 1)
-        rules.warn(
-          'APPROXIMATE_MATERIAL_ORDER',
-          'materials.renderQueue',
-          queues,
-          'Particle material passes follow slot order; different render queues are not globally interleaved.',
-        );
       for (const slot of slots) {
         const material = pack.document.materials.find((m) => m.id === definition.materials[slot]);
         rules.require(
@@ -378,6 +365,27 @@ export function checkCompatibility(
     append(rules.issues, c.id);
   }
   const totals = new SupportChecks();
+  const opaqueGroups = new Map<string, Set<number>>();
+  for (const c of components) {
+    if (!c.enabled || c.dataType !== C.ParticleRenderer) continue;
+    const renderer = c.data as R<ParticleRendererT>;
+    for (const slot of particleMaterialSlots(renderer)) {
+      const material = pack.document.materials.find((m) => m.id === renderer.materials[slot]);
+      if (!material || material.renderQueue > 2500) continue;
+      const key = `${renderer.sortingLayerRank}/${renderer.sortingOrder}/${material.renderQueue}`;
+      const group = opaqueGroups.get(key) ?? new Set<number>();
+      group.add(material.id);
+      opaqueGroups.set(key, group);
+    }
+  }
+  for (const [key, ids] of opaqueGroups)
+    if (ids.size > 1)
+      totals.warn(
+        'OPAQUE_MATERIAL_IDENTITY',
+        'materials.renderQueue',
+        [...ids],
+        `Opaque group ${key} uses package material declaration order; Unity transient material identities are not serialized.`,
+      );
   totals.require(
     vertices <= 1_000_000,
     'LIMIT',

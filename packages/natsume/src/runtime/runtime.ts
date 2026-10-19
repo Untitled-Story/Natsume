@@ -109,6 +109,8 @@ export class NatsumeNode {
 export class EffectInstance {
   readonly container = new Container({ label: 'Natsume effect' });
   private readonly meshes: ParticleMesh[] = [];
+  private readonly passOrder = new Map<ParticleMesh, number>();
+  private readonly materialOrder: Map<number, number>;
   private readonly matrix = mat4.fromValues(1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 0.001, 0, 0, 0, 0, 1);
   private readonly nodeViews = new Map<number, NatsumeNode>();
   private readonly behaviors: {
@@ -127,6 +129,7 @@ export class EffectInstance {
     private readonly releaseTextures: () => void,
     options: InstanceOptions,
   ) {
+    this.materialOrder = new Map(simulation.pack.document.materials.map((m, i) => [m.id, i]));
     this.environment = copyEnvironment(options.particleEnvironment);
     this.colorSpace =
       options.sourceColorSpace ??
@@ -348,6 +351,7 @@ export class EffectInstance {
   }
   /** @internal */ addMesh(mesh: ParticleMesh): void {
     mesh.environment = this.environment;
+    this.passOrder.set(mesh, this.meshes.length);
     this.meshes.push(mesh);
     this.container.addChild(mesh);
   }
@@ -377,6 +381,34 @@ export class EffectInstance {
   }
   private render(): void {
     for (const mesh of this.meshes) mesh.sync(this.matrix, this.colorSpace);
+    this.meshes.sort((a, b) => {
+      const stage =
+        Number(a.materialDefinition.renderQueue > 2500) -
+        Number(b.materialDefinition.renderQueue > 2500);
+      if (stage) return stage;
+      const layer = a.definition.sortingLayerRank - b.definition.sortingLayerRank;
+      const order = a.definition.sortingOrder - b.definition.sortingOrder;
+      const queue = a.materialDefinition.renderQueue - b.materialDefinition.renderQueue;
+      if (layer || order || queue) return layer || order || queue;
+      // Opaque queues group material state before front-to-back distance. Native
+      // object IDs are not serialized; declaration order gives stable identities.
+      if (a.materialDefinition.renderQueue <= 2500) {
+        const material =
+          this.materialOrder.get(b.materialDefinition.id)! -
+          this.materialOrder.get(a.materialDefinition.id)!;
+        if (material) return material;
+      }
+      const depth =
+        a.sortingDepth + a.definition.sortingFudge - (b.sortingDepth + b.definition.sortingFudge);
+      return (
+        (a.materialDefinition.renderQueue <= 2500 ? depth : -depth) ||
+        this.passOrder.get(a)! - this.passOrder.get(b)!
+      );
+    });
+    for (let i = 0; i < this.meshes.length; i++) {
+      const mesh = this.meshes[i]!;
+      if (this.container.children[i] !== mesh) this.container.setChildIndex(mesh, i);
+    }
   }
   destroy(): void {
     if (this.disposed) return;
@@ -398,6 +430,7 @@ export class EffectInstance {
     this.destroying = false;
     for (const mesh of this.meshes) mesh.destroy();
     this.meshes.length = 0;
+    this.passOrder.clear();
     this.simulation.stop('clear');
     this.simulation.emitters.clear();
     this.nodeViews.clear();
@@ -491,7 +524,6 @@ export class NatsumeRuntime {
         (a, b) =>
           a.data.sortingLayerRank - b.data.sortingLayerRank ||
           a.data.sortingOrder - b.data.sortingOrder ||
-          b.data.sortingFudge - a.data.sortingFudge ||
           a.id - b.id,
       );
       const totalVertices = renderers.reduce((sum, { data }) => {

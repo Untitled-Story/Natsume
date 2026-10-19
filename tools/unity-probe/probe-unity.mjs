@@ -208,6 +208,7 @@ assert.equal(current.unityVersion, version);
 if (meshes) {
   assert.equal(current.cases.length, 8);
   assert.equal(current.materialCases.length, 15);
+  assert.equal(current.orderCases.length, 43);
   assert.equal(current.legacyCases.length, 18);
   assert.equal(current.multipleSubmeshesRejected, true);
   assert.deepEqual(

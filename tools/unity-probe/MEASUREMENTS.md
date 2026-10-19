@@ -1,10 +1,10 @@
 # Unity 行为对照
 
-复测时间：**2026-10-18 23:42:25 UTC**。Unity **2022.3.21f1**，运行模拟采用 `1/60 s`；Shape 扫描另含 `0.25 s` 与端点邻域步进。浏览器为 Chromium / WebGL2。原生数据覆盖 16 种探针，524 项单元测试与 26 项浏览器测试通过。
+复测时间：**2026-10-19 00:07:26 UTC**。Unity **2022.3.21f1**，运行模拟采用 `1/60 s`；Shape 扫描另含 `0.25 s` 与端点邻域步进。浏览器为 Chromium / WebGL2。原生数据覆盖 16 种探针，524 项单元测试与 27 项浏览器测试通过。
 
 下表为本次采样的**最大实测绝对差**，数值四舍五入，不再以测试容差代替误差。`0` 仅表示已测输入相同；位置 / 速度使用场景单位，角度为 rad。随机分布比较统计量，不要求同种子逐粒子一致。部分已知差异仅作记录；Noise 统计与 Pivot 几何有数值回归边界，测试通过不代表所有参数组合一致。
 
-本次采样包含 61,324 个标量比较、305 项指标；不同单位不合并为整体百分比。
+本次采样包含 61,453 个标量比较、306 项指标；不同单位不合并为整体百分比。
 
 ## 参数、运动与生命周期
 
@@ -264,12 +264,16 @@ Unity 内置 `Hidden/Internal-Colored` 与 Natsume ParticleUnlit 使用相同颜
 | 多材质 RGB 像素 | **1/255（0.393% 满量程）**             |
 | 多 submesh      | Unity 原生拒绝；Natsume 同样在预检拒绝 |
 
-materials[1] 为 Trails 材质槽，不参与普通粒子绘制；materials[0] 与 materials[2..] 按槽位顺序叠画完整几何，每个材质先完成全部粒子。两个粒子的红 / 蓝半透明对照，Unity RGB=(48,0,191)，Natsume=(48,0,192)。误差按通道满量程 255 归一化，低于本轮 10% 门槛。空主材质会触发 Unity 错误材质或跳过原生 Mesh；Natsume 保留明确阻塞，不自动生成替代材质。
+materials[1] 为 Trails 材质槽，不参与普通粒子绘制；materials[0] 与 materials[2..] 每个材质先完成全部粒子，同队列同序时按槽位顺序叠画完整几何。两个粒子的红 / 蓝半透明对照，Unity RGB=(48,0,191)，Natsume=(48,0,192)。误差按通道满量程 255 归一化。空主材质会触发 Unity 错误材质或跳过原生 Mesh；Natsume 保留明确阻塞，不自动生成替代材质。
 
-原生多 submesh 探针捕获诊断 `Particle system meshes will only work with exactly one (1) sub mesh`。此项为 Unity 粒子限制，不作为后续待实现能力。未覆盖不同材质 render queue、任意宿主混合与全部多 Mesh 交叉组合；透明顺序仅测同队列。
+原生多 submesh 探针捕获诊断 `Particle system meshes will only work with exactly one (1) sub mesh`。此项为 Unity 粒子限制，不作为后续待实现能力。
+
+队列与系统排序：**43 组 / 129 个 RGB 通道**，最大像素差 **0/255**。覆盖 2000 / 2100 / 2200 / 2500 / 2501 / 3000 / 3100 / 3200 队列、材质槽逆序与跨系统交错、Sorting Order=−10 / −1 / 0 / 1 / 10、sortingFudge=−4 / −1 / −0.1 / 0 / 0.1 / 1 / 4、Z=0–512；包含共享材质和材质创建逆序。浏览器另验证粒子移动和反转显示深度轴后的系统顺序更新。
+
+不透明阶段先于透明阶段；各阶段内先 Sorting Layer / Order，再队列。透明队列按系统包围盒中心的视图深度从远到近，sortingFudge 加到世界单位距离。不透明队列先材质分组，同材质从近到远；原生临时材质对象 ID 无法从 NOAP 恢复，Natsume 以包内声明逆序作为确定身份，并报告 `OPAQUE_MATERIAL_IDENTITY`。该身份映射对照合成材质的创建次序，不保证未知源工程运行时材质 ID 顺序一致。
 
 ## 尚未量化
 
-- 任意 Shape / 模拟空间 / Renderer 参数交叉组合，透视视图、跨系统 sortingFudge 最终像素、min/max size 的 Unity 像素差。
+- 任意 Shape / 模拟空间 / Renderer 参数交叉组合，透视视图、非默认 Sorting Layer 的原生像素、min/max size 的 Unity 像素差。
 - 随机 Custom 分量的原生分布、软粒子的真实游戏背景深度，以及未支持模块。
 - Script Bridge、Animator / active 与暂停 / 重启 / 销毁运行了功能回归；它们没有可合并为数值误差的通用 Unity 游戏脚本基准。95 个游戏包的整包视觉误差未在本次测量。

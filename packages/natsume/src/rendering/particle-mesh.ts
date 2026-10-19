@@ -167,6 +167,8 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
   readonly straightAlpha: boolean;
   readonly additive: boolean;
   environment: ParticleEnvironment | undefined;
+  /** @internal View-axis bounds center in world units, before sortingFudge. */
+  sortingDepth = 0;
   private readonly vertices: Float32Array;
   private readonly vertexBuffer: Buffer;
   private readonly indexBuffer: Buffer;
@@ -415,6 +417,12 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
     vec3.set(this.viewForward, matrix[2]!, matrix[6]!, matrix[10]!);
     if (vec3.length(this.viewForward) < 1e-8) vec3.set(this.viewForward, 0, 0, 1);
     vec3.normalize(this.viewForward, this.viewForward);
+    let minimumX = Infinity,
+      minimumY = Infinity,
+      minimumZ = Infinity,
+      maximumX = -Infinity,
+      maximumY = -Infinity,
+      maximumZ = -Infinity;
     vec3.set(this.basisRight, matrix[0]!, matrix[4]!, matrix[8]!);
     vec3.cross(this.viewUp, this.viewForward, this.basisRight);
     if (vec3.length(this.viewUp) < 1e-8) vec3.set(this.viewUp, 0, 1, 0);
@@ -765,6 +773,12 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
           wy += rotation[1]! * x + rotation[5]! * y + rotation[9]! * z;
           wz += rotation[2]! * x + rotation[6]! * y + rotation[10]! * z;
         }
+        minimumX = Math.min(minimumX, wx);
+        minimumY = Math.min(minimumY, wy);
+        minimumZ = Math.min(minimumZ, wz);
+        maximumX = Math.max(maximumX, wx);
+        maximumY = Math.max(maximumY, wy);
+        maximumZ = Math.max(maximumZ, wz);
         const w = matrix[3]! * wx + matrix[7]! * wy + matrix[11]! * wz + matrix[15]!;
         const k = (i * stride + j) * 16;
         v[k] = (matrix[0]! * wx + matrix[4]! * wy + matrix[8]! * wz + matrix[12]!) / w;
@@ -808,6 +822,11 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
         }
       }
     }
+    this.sortingDepth =
+      (this.viewForward[0]! * (minimumX + maximumX) +
+        this.viewForward[1]! * (minimumY + maximumY) +
+        this.viewForward[2]! * (minimumZ + maximumZ)) *
+      0.5;
     const sort = this.definition.sort;
     if (sort !== ParticleSort.None) {
       const order = this.particleOrder,

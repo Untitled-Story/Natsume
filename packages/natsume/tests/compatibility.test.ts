@@ -299,7 +299,24 @@ it('ignores the trail material slot and checks every particle material pass', ()
     checkCompatibility(queues.pack(), {}, context).issues.some(
       (i) => i.code === 'APPROXIMATE_MATERIAL_ORDER',
     ),
-  ).toBe(true);
+  ).toBe(false);
+  const opaqueFixture = fixture();
+  const opaqueMaterial = structuredClone(opaqueFixture.material);
+  opaqueMaterial.id = 7;
+  opaqueMaterial.renderQueue = opaqueFixture.material.renderQueue = 2000;
+  opaqueFixture.doc.materials.push(opaqueMaterial);
+  opaqueFixture.renderer.materials = [5, 0, 7];
+  const opaque = checkCompatibility(opaqueFixture.pack(), {}, context);
+  expect(opaque.compatible).toBe(true);
+  expect(opaque.issues.some((i) => i.code === 'OPAQUE_MATERIAL_IDENTITY')).toBe(true);
+  const shared = fixture();
+  shared.material.renderQueue = 2000;
+  shared.renderer.materials = [5, 0, 5];
+  expect(
+    checkCompatibility(shared.pack(), {}, context).issues.some(
+      (i) => i.code === 'OPAQUE_MATERIAL_IDENTITY',
+    ),
+  ).toBe(false);
   const budget = fixture();
   budget.renderer.materials = [5, 0, 5];
   budget.source.main!.maxParticles = 130000;

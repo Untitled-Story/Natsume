@@ -191,3 +191,46 @@ test('matches native particle material slots and transparent pass order', async 
     );
   }
 });
+
+test('interleaves particle material queues and updates system depth order', async ({ page }) => {
+  const sample = fileURLToPath(new URL('../../../../data/kirakira.noap', import.meta.url));
+  const fixture = new URL(
+    '../../../../data/unity-baselines/fixtures/unity-meshes.json',
+    import.meta.url,
+  );
+  test.skip(!existsSync(sample) || !existsSync(fixture), 'Local native inputs are absent');
+  const native = JSON.parse(readFileSync(fixture, 'utf8')).orderCases as {
+    label: string;
+    pixels: number[];
+    systems: { queues: number[]; order: number; fudge: number; z: number }[];
+    reverseMaterials?: boolean;
+    sharedMaterial?: boolean;
+  }[];
+  await page.goto('/');
+  await page.locator('#file').setInputFiles(sample);
+  await expect(page.locator('#status')).toHaveText('预览就绪');
+  const actual = await page.evaluate(
+    async ({ path, cases }) => (await import('/@fs' + path)).measureRenderOrder(cases),
+    {
+      path: new URL('./render-fixture.ts', import.meta.url).pathname,
+      cases: native,
+    },
+  );
+  for (const row of actual) {
+    const reference = native.find((c) => c.label === row.label)!;
+    expect(row.passes).toBe(reference.systems.reduce((n, s) => n + s.queues.length, 0));
+    for (const [i, pixel] of row.pixels.entries()) {
+      recordError(
+        'renderer.systemOrder.pixel',
+        (Math.abs(pixel - reference.pixels[i]!) / 255) * 100,
+        'percent',
+        `${row.label}/${i}`,
+      );
+      expect(Math.abs(pixel - reference.pixels[i]!), `${row.label}/${i}`).toBeLessThanOrEqual(1);
+    }
+    if (row.label === 'depth-forward') {
+      expect(row.reversed).toEqual(native.find((c) => c.label === 'depth-reverse')!.pixels);
+      expect(row.viewReversed).toEqual(reference.pixels);
+    }
+  }
+});

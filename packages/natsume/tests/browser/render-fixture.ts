@@ -1130,3 +1130,147 @@ export async function measureMaterialPasses() {
   }
   return results;
 }
+
+export async function measureRenderOrder(
+  cases: {
+    label: string;
+    systems: { queues: number[]; order: number; fudge: number; z: number }[];
+    reverseMaterials?: boolean;
+    sharedMaterial?: boolean;
+  }[],
+) {
+  const { app, effect } = getPreview();
+  if (!app || !effect) throw new Error('Missing preview');
+  effect.pause();
+  const { ComponentT } = await import('../../src/format/generated/noa/ir/component.js');
+  const { ParticleRendererT } =
+    await import('../../src/format/generated/noa/ir/particle-renderer.js');
+  const { MaterialT } = await import('../../src/format/generated/noa/ir/material.js');
+  const { TextureBindingT } = await import('../../src/format/generated/noa/ir/texture-binding.js');
+  const { RenderStateT } = await import('../../src/format/generated/noa/ir/render-state.js');
+  const { ColorT } = await import('../../src/format/generated/noa/ir/color.js');
+  const { VertexStreamT } = await import('../../src/format/generated/noa/ir/vertex-stream.js');
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 1;
+  const ctx = canvas.getContext('2d')!;
+  ctx.fillStyle = 'white';
+  ctx.fillRect(0, 0, 1, 1);
+  const blob = await new Promise<Blob>((resolve) => canvas.toBlob((b) => resolve(b!)));
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  const colors = [
+    [1, 0, 0],
+    [0, 1, 0],
+    [0, 0, 1],
+    [1, 1, 0],
+  ];
+  const results = [];
+  for (const c of cases) {
+    const doc = minimalDocument();
+    doc.components = [];
+    doc.materials = [];
+    for (const [i, system] of c.systems.entries()) {
+      const source = particleSource();
+      const renderer = new ParticleRendererT();
+      renderer.systemComponentId = 3 + i * 2;
+      renderer.alignment = Alignment.World;
+      renderer.maxSize = 100;
+      renderer.sortingOrder = system.order;
+      renderer.sortingFudge = system.fudge;
+      renderer.vertexStreams = [
+        new VertexStreamT(0, 3),
+        new VertexStreamT(2, 4),
+        new VertexStreamT(3, 2),
+      ];
+      const ids = system.queues.map((queue, j) => {
+        if (c.sharedMaterial && i > 0) return 10;
+        const m = new MaterialT();
+        m.id = 10 + i * 2 + j;
+        m.model = 1;
+        m.renderQueue = queue;
+        m.renderState = new RenderStateT();
+        m.renderState.srcAlpha = 4;
+        const rgb = c.sharedMaterial ? [1, 1, 1] : colors[i * 2 + j]!;
+        m.tint = new ColorT(rgb[0], rgb[1], rgb[2], 0.5);
+        const binding = new TextureBindingT();
+        binding.imageId = 30;
+        binding.colorSpace = 1;
+        m.textures = [binding];
+        doc.materials.push(m);
+        return m.id;
+      });
+      renderer.materials = ids.length === 1 ? ids : [ids[0]!, ids[0]!, ids[1]!];
+      doc.components.push(
+        new ComponentT(3 + i * 2, 1, true, 3, source),
+        new ComponentT(4 + i * 2, 1, true, 4, renderer),
+      );
+    }
+    if (c.reverseMaterials) doc.materials.reverse();
+    const pack = new EffectPack(
+      doc,
+      {
+        format: 'noa-package',
+        version: 1,
+        noir_version: [1, 0],
+        document: 'scene.noir',
+        files: [
+          {
+            path: 'white.png',
+            kind: 'image',
+            asset_id: 30,
+            byte_length: bytes.length,
+            sha256: '0'.repeat(64),
+          },
+        ],
+      },
+      new Map([['white.png', bytes]]),
+      new Map(),
+    );
+    const instance = await app.natsume.instantiate(pack, {
+      sourceColorSpace: 'gamma',
+      displayMatrix: [8, 0, 0, 0, 0, -8, 0, 0, 0, 0, 0.001, 0, 16, 16, 0, 1],
+    });
+    const target = RenderTexture.create({ width: 32, height: 32 });
+    try {
+      instance.pause();
+      for (const [i, system] of c.systems.entries()) {
+        const e = instance.simulation.emitters.get(3 + i * 2)!;
+        e.count = 1;
+        e.positions.set([0, 0, system.z]);
+        e.startSizes.fill(2);
+        e.lifetimes.fill(10);
+        e.startColors.fill(1);
+        if (c.sharedMaterial) e.startColors.set([...colors[i * 2]!, 1]);
+      }
+      const read = () => {
+        instance.update(0);
+        app.renderer.render({ container: instance.container, target, clear: true });
+        const pixels = app.renderer.extract.pixels({ target }).pixels;
+        return Array.from(pixels.slice((16 * 32 + 16) * 4, (16 * 32 + 16) * 4 + 3));
+      };
+      const pixels = read();
+      const reversed = [];
+      const viewReversed = [];
+      if (c.label === 'depth-forward') {
+        for (const [i, system] of c.systems.entries())
+          instance.simulation.emitters.get(3 + i * 2)!.positions[2] = 4 - system.z;
+        reversed.push(...read());
+        const matrix = instance.displayMatrix;
+        matrix[10] = -matrix[10]!;
+        instance.setDisplayMatrix(matrix);
+        viewReversed.push(...read());
+      }
+      results.push({
+        label: c.label,
+        pixels,
+        reversed,
+        viewReversed,
+        passes: instance.container.children.length,
+      });
+    } finally {
+      instance.destroy();
+      target.destroy(true);
+      pack.dispose();
+    }
+  }
+  return results;
+}
