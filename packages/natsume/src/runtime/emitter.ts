@@ -909,9 +909,9 @@ export class Emitter {
       const previousRateTime = this.rateTime;
       this.rateTime = Math.fround(this.rateTime + Math.fround(dt));
       const rateDt = this.rateTime - previousRateTime;
-      // Keep the live emission clock within a loop: absolute Float32 time drifts
+      // Keep the emission clock within a loop: absolute Float32 time drifts
       // enough to move boundary births to another step and change their initial values.
-      if (!this.warming && this.main.loop && this.rateTime >= this.main.durationSeconds)
+      if (this.main.loop && this.rateTime >= this.main.durationSeconds)
         this.rateTime = Math.fround(this.rateTime % this.main.durationSeconds);
       this.bursts(this.time, end);
       const activeDt = this.main.loop
@@ -930,16 +930,21 @@ export class Emitter {
         scalar(this.emission?.rateOverTime, phase, random(this.seed, 0, 90)),
       );
       const birthDt = this.warming
-        ? Math.max(0, this.rateTime - Math.max(previousRateTime, this.warmStart))
+        ? Math.min(rateDt, Math.max(0, end - this.warmStart))
         : !this.main.loop && this.rateTime >= this.main.durationSeconds
           ? 0
           : rateDt;
-      const spacing = rate > 0 ? Math.fround(1 / rate) : 0;
+      // Prewarm retains reciprocal precision and rounds the birth ratio at its
+      // Float32 boundary; live emission uses a Float32 interval instead.
+      const spacing = rate > 0 ? (this.warming ? 1 / rate : Math.fround(1 / rate)) : 0;
       if (spacing > 0 && this.rateSpacing > 0 && spacing !== this.rateSpacing)
         this.carry *= spacing / this.rateSpacing;
       if (spacing > 0) this.rateSpacing = spacing;
       this.carry += spacing > 0 ? birthDt : 0;
-      const amount = spacing > 0 ? Math.floor(this.carry / spacing) : 0;
+      const amount =
+        spacing > 0
+          ? Math.floor(this.warming ? Math.fround(this.carry / spacing) : this.carry / spacing)
+          : 0;
       this.carry -= amount * spacing;
       this.emit(amount, phase, end, spacing, spacing > 0 ? this.carry / spacing : 0);
       const m = this.node.worldMatrix;

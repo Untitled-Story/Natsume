@@ -322,7 +322,7 @@ if (sorting) {
   process.exit(0);
 }
 if (basicShapes || rotationPrewarm) {
-  assert.equal(current.cases.length, basicShapes ? 31 : 85);
+  assert.equal(current.cases.length, basicShapes ? 31 : 121);
   if (process.argv.includes('--update-fixtures'))
     await saveJson(
       resolve(

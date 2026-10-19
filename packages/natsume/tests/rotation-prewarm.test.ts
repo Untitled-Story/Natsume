@@ -158,7 +158,7 @@ for (const c of native.cases.filter((c) => c.label.startsWith('prewarm-direct-bo
     const main = source.main!;
     main.loop = main.prewarm = true;
     main.durationSeconds = c.duration;
-    main.maxParticles = 100;
+    main.maxParticles = 1024;
     main.simulationSpeed = c.speed;
     main.lifetime = linear(c.lifetime / 2, c.lifetime);
     source.modules.push(
@@ -168,8 +168,8 @@ for (const c of native.cases.filter((c) => c.label.startsWith('prewarm-direct-bo
     e.sync();
     let knownSerials = new Set(e.serials.slice(0, e.count));
     let knownSeeds = new Set(c.samples[0]!.seeds);
-    for (const sample of c.samples.slice(1)) {
-      e.step(c.dt ?? 1 / 60);
+    for (const sample of c.samples) {
+      if (sample.frame) e.step(c.dt ?? 1 / 60);
       const actual = Array.from({ length: e.count }, (_, i) => i)
         .filter((i) => !knownSerials.has(e.serials[i]!))
         .map((i) => ({ life: e.lifetimes[i]!, age: e.ages[i]! }))
@@ -182,22 +182,25 @@ for (const c of native.cases.filter((c) => c.label.startsWith('prewarm-direct-bo
         )
         .sort((a, b) => b.age - a.age);
       const label = `${c.label}/${sample.frame}`;
-      // Retained prewarm particles can already differ by one 0.02 s birth step.
-      // Measure that residual separately from the live newborn boundary regression.
+      // Compare retained prewarm particles separately from live newborns.
       recordError('prewarm.boundary.count', e.count - sample.count, 'particles', label);
-      expect(Math.abs(e.count - sample.count)).toBeLessThanOrEqual(1);
-      if (e.count === sample.count) {
-        const remaining = Array.from(
-          e.ages.slice(0, e.count),
-          (age, i) => e.lifetimes[i]! - age,
-        ).sort((a, b) => a - b);
-        const nativeRemaining = [...sample.remaining].sort((a, b) => a - b);
-        for (let i = 0; i < remaining.length; i++) {
-          const error = remaining[i]! - nativeRemaining[i]!;
-          recordError('prewarm.boundary.remainingLifetime', error, 's', `${label}/${i}`);
-          expect(Math.abs(error)).toBeLessThan(c.lifetime * 0.02);
-        }
+      const remaining = Array.from(e.ages.slice(0, e.count), (age, i) => e.lifetimes[i]! - age)
+        .filter((v) => v > 2e-5)
+        .sort((a, b) => a - b);
+      const nativeRemaining = sample.remaining.filter((v) => v > 2e-5).sort((a, b) => a - b);
+      recordError(
+        'prewarm.boundary.aliveCount',
+        remaining.length - nativeRemaining.length,
+        'particles',
+        label,
+      );
+      expect(remaining.length).toBe(nativeRemaining.length);
+      for (let i = 0; i < remaining.length; i++) {
+        const error = remaining[i]! - nativeRemaining[i]!;
+        recordError('prewarm.boundary.remainingLifetime', error, 's', `${label}/${i}`);
+        expect(Math.abs(error)).toBeLessThan(2e-5);
       }
+      if (!sample.frame) continue;
       recordError('prewarm.birth.count', actual.length - expected.length, 'particles', label);
       expect(actual.length).toBe(expected.length);
       for (let i = 0; i < actual.length; i++) {

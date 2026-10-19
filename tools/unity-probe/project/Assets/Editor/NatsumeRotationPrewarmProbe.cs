@@ -28,6 +28,7 @@ public static class NatsumeRotationPrewarmProbe
             r.z=curve ? new ParticleSystem.MinMaxCurve(1,new AnimationCurve(new Keyframe(0,0,2,2),new Keyframe(1,2,2,2))) : new ParticleSystem.MinMaxCurve(3);
             ps.GetComponent<ParticleSystemRenderer>().enabled=false;
             m.startLifetime=lifetime;m.duration=duration;m.simulationSpeed=speed;
+            if(label.StartsWith("prewarm-direct-boundary-"))m.maxParticles=1024;
             if(label.Contains("lifetime-curve")||label=="prewarm-direct-curve")m.startLifetime=new ParticleSystem.MinMaxCurve(1,AnimationCurve.Linear(0,lifetime/2,1,lifetime));
             if(!label.StartsWith("prewarm-direct"))ps.Simulate(0,false,true,false);
             else ps.Stop(false,ParticleSystemStopBehavior.StopEmittingAndClear);
@@ -64,7 +65,7 @@ public static class NatsumeRotationPrewarmProbe
             results.Add(Measure("prewarm-direct-window-step-"+dt,true,false,false,0.5f,1,1,17,dt));
         foreach(float duration in new [] {0.7f,1f,2.3f})
             foreach(float life in new [] {1.3f,3.7f,4f})
-                foreach(float rate in new [] {7f,17f})
+                foreach(float rate in new [] {7f,11f,17f,23f,60f,120f})
                     results.Add(Measure("prewarm-direct-boundary-"+duration+"-"+life+"-"+rate+"-lifetime-curve",true,false,false,life,duration,1,rate,1f/60,true));
         string output=Path.GetFullPath(Path.Combine(Application.dataPath,"../../unity-baselines/rotation-prewarm"));Directory.CreateDirectory(output);
         File.WriteAllText(Path.Combine(output,"unity-2022.3.21f1.json"),JsonUtility.ToJson(new Output{unityVersion=Application.unityVersion,cases=results.ToArray()},true));
