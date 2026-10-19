@@ -1,5 +1,6 @@
 import { selectMesh, rendererVertexStride } from './mesh-selection.js';
 import { rendererSupport } from './renderer-support.js';
+import { stretchInverseLength } from './stretch-normalization.js';
 import { assertSupport } from '../runtime/support-checks.js';
 import {
   Buffer,
@@ -189,6 +190,7 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
   private readonly scratchColor = new Float32Array(4);
   private readonly rotationMatrix = mat4.create();
   private readonly viewForward = vec3.create();
+  private readonly stretchView = new Float32Array(9);
   private readonly viewUp = vec3.create();
   private readonly basisRight = vec3.create();
   private readonly basisUp = vec3.create();
@@ -430,6 +432,19 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
     const rotation = this.rotationMatrix,
       localScale = { x: e.particleScale[0]!, y: e.particleScale[1]!, z: e.particleScale[2]! },
       rotationSign = this.definition.mode === RenderMode.Billboard ? -1 : 1;
+    const normalizeStretch =
+      this.definition.mode === RenderMode.StretchedBillboard &&
+      !this.definition.freeformStretching &&
+      this.definition.lengthScale !== 0;
+    const stretchView = this.stretchView;
+    if (normalizeStretch) {
+      for (let axis = 0; axis < 3; axis++) {
+        const scale =
+          Math.fround(Math.hypot(matrix[axis]!, matrix[axis + 4]!, matrix[axis + 8]!)) || 1;
+        for (let column = 0; column < 3; column++)
+          stretchView[axis + column * 3] = matrix[axis + column * 4]! / scale;
+      }
+    }
     if (this.definition.alignment === Alignment.View) {
       vec3.cross(this.basisRight, this.viewUp, this.viewForward);
       if (vec3.length(this.basisRight) < 1e-8) vec3.set(this.basisRight, 1, 0, 0);
@@ -542,8 +557,34 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
           world[2]! * vx + world[6]! * vy + world[10]! * vz - (view?.[2] ?? 0) * cameraScale;
         const length = Math.hypot(stretchX, stretchY, stretchZ);
         stretchSpeed = length;
+        let lengthNormalization = 1;
+        if (normalizeStretch && length > 1e-8) {
+          // Native normalization runs after rotating velocity into view space.
+          // Remove host display scaling before reproducing its Float32 lookup boundary.
+          const viewX = Math.fround(
+            Math.fround(
+              Math.fround(stretchView[0]! * stretchX) + Math.fround(stretchView[3]! * stretchY),
+            ) + Math.fround(stretchView[6]! * stretchZ),
+          );
+          const viewY = Math.fround(
+            Math.fround(
+              Math.fround(stretchView[1]! * stretchX) + Math.fround(stretchView[4]! * stretchY),
+            ) + Math.fround(stretchView[7]! * stretchZ),
+          );
+          const viewZ = Math.fround(
+            Math.fround(
+              Math.fround(stretchView[2]! * stretchX) + Math.fround(stretchView[5]! * stretchY),
+            ) + Math.fround(stretchView[8]! * stretchZ),
+          );
+          const squaredLength = Math.fround(
+            Math.fround(Math.fround(viewX * viewX) + Math.fround(viewY * viewY)) +
+              Math.fround(viewZ * viewZ),
+          );
+          lengthNormalization = length * stretchInverseLength(squaredLength);
+        }
         stretchLength =
-          sy * localScale.y * this.definition.lengthScale + length * this.definition.velocityScale;
+          sy * localScale.y * this.definition.lengthScale * lengthNormalization +
+          length * this.definition.velocityScale;
         if (length > 1e-8) {
           stretchX /= length;
           stretchY /= length;

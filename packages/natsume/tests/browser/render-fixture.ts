@@ -524,6 +524,7 @@ export function measureStretchedParticles(
     label: string;
     velocity: { x: number; y: number; z: number };
     position?: { x: number; y: number; z: number };
+    size?: { x: number; y: number; z: number };
     viewPosition?: { x: number; y: number; z: number };
     viewMatrix?: number[];
     viewVelocity?: { x: number; y: number; z: number };
@@ -532,6 +533,7 @@ export function measureStretchedParticles(
     cameraVelocityScale: number;
     rotate: boolean;
   }[],
+  displayScale: readonly [number, number, number] = [1, 1, 1],
 ) {
   const { effect } = getPreview();
   if (!effect) throw new Error('Missing preview');
@@ -546,6 +548,7 @@ export function measureStretchedParticles(
   return cases.map((sample) => {
     const e = new Emitter(3, new Scene(pack, [1]).nodes.get(1)!, particleSource(), true, 1, []);
     manualParticle(e);
+    if (sample.size) e.startSizes.set([sample.size.x, sample.size.y, sample.size.z]);
     if (sample.position) e.positions.set([sample.position.x, sample.position.y, sample.position.z]);
     e.velocities.set([sample.velocity.x, sample.velocity.y, sample.velocity.z]);
     const definition = structuredClone(original.definition) as ParticleRendererT;
@@ -566,14 +569,15 @@ export function measureStretchedParticles(
     });
     try {
       const view = sample.viewMatrix ?? [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
-      mesh.sync(view, 'gamma');
+      const display = view.map((value, i) => (i % 4 < 3 ? value * displayScale[i % 4]! : value));
+      mesh.sync(display, 'gamma');
       const buffer = mesh.geometry.getBuffer('aPosition').data as Float32Array;
       return {
         label: sample.label,
         vertices: [0, 1, 2, 3].map((i) => {
-          const x = buffer[i * 16]!,
-            y = buffer[i * 16 + 1]!,
-            z = buffer[i * 16 + 2]!;
+          const x = buffer[i * 16]! / displayScale[0],
+            y = buffer[i * 16 + 1]! / displayScale[1],
+            z = buffer[i * 16 + 2]! / displayScale[2];
           return [
             view[0]! * x + view[1]! * y + view[2]! * z,
             view[4]! * x + view[5]! * y + view[6]! * z,

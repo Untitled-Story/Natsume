@@ -162,8 +162,7 @@ test('matches Unity Billboard, Mesh and Stretch vertices with UVs', async ({ pag
           Math.hypot(p.x - vertex[0], p.y - vertex[1], p.z - vertex[2]),
         ),
       );
-      // Native normalized direction has a small length error for combined velocity.
-      const tolerance = label === 'stretch-linear-velocity' ? 0.015 : 1e-5;
+      const tolerance = 1e-5;
       recordError(
         'renderer.' +
           (label.startsWith('stretch')
@@ -741,9 +740,9 @@ test('matches Unity stretch velocity and moving-view geometry', async ({ page })
       (s: { freeform: boolean; label: string }) => !s.freeform && s.label !== 'camera-render-moved',
     ),
     ...native.motion.map(
-      (s: { cameraScale: number; velocityScale: number; lengthScale: number }) => ({
+      (s: { cameraScale: number; velocityScale: number; lengthScale: number }, index: number) => ({
         ...s,
-        label: `camera-${s.cameraScale}-velocity-${s.velocityScale}-length-${s.lengthScale}`,
+        label: `camera-${index}-${s.cameraScale}-velocity-${s.velocityScale}-length-${s.lengthScale}`,
         cameraVelocityScale: s.cameraScale,
         rotate: true,
       }),
@@ -774,7 +773,11 @@ test('matches Unity stretch velocity and moving-view geometry', async ({ page })
           ? 'renderer.stretch.xyzFullVertex'
           : sample.label.startsWith('camera-')
             ? 'renderer.stretch.movingView'
-            : 'renderer.stretch.velocity',
+            : sample.label.startsWith('holdout-')
+              ? 'renderer.stretch.holdout'
+              : sample.label.startsWith('isolated-') || sample.label.startsWith('length-scan-')
+                ? 'renderer.stretch.normalization'
+                : 'renderer.stretch.velocity',
         Math.hypot(...vertex.map((v: number, a: number) => v - p[a]!)),
         'units',
         sample.label + '/' + i,
@@ -785,9 +788,28 @@ test('matches Unity stretch velocity and moving-view geometry', async ({ page })
       expect(
         Math.hypot(...vertex.map((v: number, a: number) => v - p[a]!)),
         sample.label,
-      ).toBeLessThan(0.025);
+      ).toBeLessThan(sample.label.startsWith('camera-') ? 3e-5 : 1e-5);
     }
     expect(result.vertices.flat().every(Number.isFinite)).toBe(true);
+  }
+  const scaledCases = cases.filter((sample) => sample.label.startsWith('holdout-'));
+  const scaled = await page.evaluate(
+    async ({ path, cases }) =>
+      (await import(`/@fs${path}`)).measureStretchedParticles(cases, [80, 120, 0.001]),
+    { path: new URL('./render-fixture.ts', import.meta.url).pathname, cases: scaledCases },
+  );
+  for (const [ci, result] of scaled.entries()) {
+    const sample = scaledCases[ci];
+    for (const [i, vertex] of result.vertices.entries()) {
+      const index = sample.uv.findIndex(
+        (uv: { x: number; y: number }) =>
+          Math.hypot(uv.x - result.uv[i][0], uv.y - result.uv[i][1]) < 1e-6,
+      );
+      const point = sample.vertices[index];
+      const error = Math.hypot(vertex[0] - point.x, vertex[1] - point.y, vertex[2] - point.z);
+      recordError('renderer.stretch.displayScale', error, 'units', sample.label + '/' + i);
+      expect(error, sample.label).toBeLessThan(3e-5);
+    }
   }
 });
 

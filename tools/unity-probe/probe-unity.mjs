@@ -256,8 +256,8 @@ if (noiseStatistics || customData) {
 }
 if (stretch) {
   current.motion = JSON.parse(await readFile(resolve(output, 'camera-motion.json'), 'utf8')).cases;
-  assert.equal(current.cases.length, 16);
-  assert.equal(current.motion.length, 16);
+  assert.equal(current.cases.length, 239);
+  assert.equal(current.motion.length, 288);
   assert(
     current.motion.some((sample) => Math.abs(sample.viewVelocity.y - 3) < 0.01),
     'Moving-view probe must record a nonzero native camera velocity',
