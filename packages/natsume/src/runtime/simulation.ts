@@ -1,4 +1,6 @@
-import { AnimationClock, sampleBool, animationSupport, animatorSupport } from './animation.js';
+import { AnimationProperty } from '../format/generated/noa/ir/animation-property.js';
+import { ParticleParameter } from '../format/generated/noa/ir/particle-parameter.js';
+import { AnimationClock, animationSupport, animatorSupport } from './animation.js';
 import { assertSupport } from './support-checks.js';
 import type { AnimationT } from '../format/generated/noa/ir/animation.js';
 import type { SceneNode } from './scene.js';
@@ -6,7 +8,7 @@ import { check } from '../errors.js';
 import type { EffectPack, DeepReadonly as R } from '../pack.js';
 import type { ParticleSystemT } from '../format/generated/noa/ir/particle-system.js';
 import type { AnimatorT } from '../format/generated/noa/ir/animator.js';
-import type { BoolTrackT } from '../format/generated/noa/ir/bool-track.js';
+import { AnimationBindings, type CompiledBinding } from './animation-bindings.js';
 import { ComponentData } from '../format/generated/noa/ir/component-data.js';
 import { ActionKind } from '../format/generated/noa/ir/action-kind.js';
 import { CameraPolicy } from '../format/generated/noa/ir/camera-policy.js';
@@ -22,6 +24,22 @@ export interface SimulationOptions {
 }
 export type PlaybackState = 'idle' | 'playing' | 'paused' | 'draining' | 'stopped';
 
+/** Identifies an Animator or an entry action's continuously playing clip. */
+export type AnimationTarget =
+  | { readonly animatorId: number; readonly clipId?: never }
+  | { readonly clipId: number; readonly animatorId?: never };
+interface AnimationPlayer {
+  readonly key: string;
+  readonly clock: AnimationClock;
+  readonly owner: SceneNode | undefined;
+  disabled: boolean;
+  hierarchyDisabled: boolean;
+  resetOnEnable: boolean;
+  readonly keepState: boolean;
+  readonly animatorId: number | undefined;
+  readonly bindings: CompiledBinding[];
+}
+
 export class Simulation {
   readonly scene: Scene;
   readonly emitters = new Map<number, Emitter>();
@@ -34,18 +52,17 @@ export class Simulation {
   private resumeState: PlaybackState = 'playing';
   private initialized = false;
   readonly fixedDelta = 1 / 60;
+  readonly bindings: AnimationBindings;
+  private readonly animatorDefaults = new Map<number, CompiledBinding[]>();
+  private readonly startedAnimators = new Set<number>();
   private readonly clips = new Map<number, R<AnimationT>>();
-  private readonly players = new Map<
-    string,
-    {
-      clock: AnimationClock;
-      owner: SceneNode | undefined;
-      disabled: boolean;
-      keepState: boolean;
-      animatorId: number | undefined;
-      bindings: { node: SceneNode; keys: R<BoolTrackT>['keys']; baseline: boolean }[];
-    }
-  >();
+  private readonly players = new Map<string, AnimationPlayer>();
+  private readonly priorities = new Map<string, number>();
+  private readonly registrations = new Map<string, number>();
+  private registrationSequence = 0;
+  private orderDirty = false;
+  private orderedPlayers: AnimationPlayer[] = [];
+
   constructor(
     readonly pack: EffectPack,
     options: SimulationOptions = {},
@@ -77,6 +94,7 @@ export class Simulation {
     );
     this.entry = entry;
     this.scene = new Scene(pack, entry.roots, options.parentLayout);
+    this.bindings = new AnimationBindings(pack, this.scene);
     this.diagnostics.push({
       code: 'NATSUME_RANDOM_SEQUENCE',
       message:
@@ -110,7 +128,7 @@ export class Simulation {
         new Emitter(
           c.id,
           this.scene.nodes.get(c.nodeId)!,
-          c.data as R<ParticleSystemT>,
+          this.bindings.systems.get(c.id) ?? (c.data as R<ParticleSystemT>),
           c.enabled,
           seed,
           this.diagnostics,
@@ -118,6 +136,20 @@ export class Simulation {
           this.scene.nodes.get((c.data as R<ParticleSystemT>).main!.customSpaceNodeId),
         ),
       );
+    for (const animation of pack.document.animations)
+      for (const track of animation.tracks) {
+        const b = track.binding!;
+        if (
+          b.property === AnimationProperty.ParticleParameter &&
+          b.parameter === ParticleParameter.GravityMultiplier
+        ) {
+          const emitter = this.emitters.get(b.targetId);
+          if (emitter) {
+            emitter.requiresAnimatedGravity = true;
+            emitter.setGravity(options.gravity);
+          }
+        }
+      }
     for (const animation of pack.document.animations) {
       assertSupport(animationSupport(animation));
       this.clips.set(animation.id, animation);
@@ -147,22 +179,65 @@ export class Simulation {
   private sync(): void {
     this.scene.update();
     let changed = false;
+    if (this.initialized)
+      for (const c of this.pack.components) {
+        if (
+          c.dataType !== ComponentData.Animator ||
+          !this.scene.nodes.has(c.nodeId) ||
+          this.startedAnimators.has(c.id)
+        )
+          continue;
+        if (this.bindings.enabled.get(c.id) && this.scene.nodes.get(c.nodeId)!.activeInHierarchy) {
+          this.applyAnimatorState(c.id, (c.data as R<AnimatorT>).layers[0]!.defaultStateId, false);
+          changed = true;
+        }
+      }
     for (const player of this.players.values()) {
       if (!player.owner) continue;
-      if (!player.owner.activeInHierarchy) {
+      if (
+        !player.owner.activeInHierarchy ||
+        (player.animatorId !== undefined && !this.bindings.enabled.get(player.animatorId))
+      ) {
+        if (
+          !player.hierarchyDisabled &&
+          !player.owner.activeInHierarchy &&
+          player.animatorId !== undefined &&
+          (this.pack.getComponent(player.animatorId)!.data as R<AnimatorT>)
+            .writeDefaultValuesOnDisable
+        ) {
+          for (const binding of this.animatorDefaults.get(player.animatorId) ?? [])
+            binding.write(binding.baseline);
+          changed = true;
+        }
+        if (!player.disabled) this.orderDirty = true;
         player.disabled = true;
-        if (!player.keepState) player.clock.normalizedTime = 0;
+        if (!player.owner.activeInHierarchy && !player.keepState) {
+          player.clock.normalizedTime = 0;
+          player.resetOnEnable = true;
+        }
       } else if (player.disabled) {
         player.disabled = false;
-        if (!player.keepState && player.animatorId !== undefined) {
+        this.registrations.set(player.key, this.registrationSequence++);
+        this.orderDirty = true;
+        if (player.resetOnEnable && player.animatorId !== undefined) {
           const animator = this.pack.getComponent(player.animatorId)!.data as R<AnimatorT>;
           this.applyAnimatorState(player.animatorId, animator.layers[0]!.defaultStateId, false);
+          changed = true;
+        } else {
+          for (const binding of player.bindings) binding.sample(player.clock.seconds);
           changed = true;
         }
       }
     }
+    for (const player of this.players.values())
+      if (player.owner) player.hierarchyDisabled = !player.owner.activeInHierarchy;
     if (changed) this.scene.update();
-    if (this.initialized) for (const e of this.emitters.values()) e.sync();
+    if (this.orderDirty) this.animationOrder();
+    if (this.initialized)
+      for (const e of this.emitters.values()) {
+        if (this.bindings.systems.has(e.id)) e.refreshAnimatedParameters();
+        e.sync();
+      }
   }
   play(): void {
     if (this.state === 'playing') return;
@@ -228,8 +303,15 @@ export class Simulation {
     this.droppedSeconds = 0;
     this.initialized = false;
     this.players.clear();
+    this.registrations.clear();
+    this.registrationSequence = 0;
+    this.orderedPlayers = [];
+    this.orderDirty = true;
+    this.animatorDefaults.clear();
+    this.startedAnimators.clear();
+    this.bindings.reset();
     this.state = 'idle';
-    for (const n of this.scene.nodes.values()) n.active = n.source.active;
+    this.scene.reset();
     for (const e of this.emitters.values()) e.reset();
     this.scene.update();
     this.play();
@@ -250,6 +332,16 @@ export class Simulation {
     const layer = (c.data as R<AnimatorT>).layers[0]!,
       s = layer.states.find((s) => (typeof state === 'number' ? s.id === state : s.name === state));
     check(s, 'HOST', 'Unknown Animator state');
+    if (!this.animatorDefaults.has(animatorId)) {
+      const unique = new Map<string, CompiledBinding>();
+      for (const state of layer.states)
+        for (const track of this.clips.get(state.animationId)!.tracks) {
+          const binding = this.bindings.compile(track);
+          if (binding && !unique.has(binding.key)) unique.set(binding.key, binding);
+        }
+      this.animatorDefaults.set(animatorId, [...unique.values()]);
+    }
+    this.startedAnimators.add(animatorId);
     this.startClip(
       s.animationId,
       `animator:${animatorId}`,
@@ -258,6 +350,7 @@ export class Simulation {
       this.scene.nodes.get(c.nodeId),
       (c.data as R<AnimatorT>).keepStateOnDisable,
       animatorId,
+      s.writeDefaultValues,
     );
     if (sync) this.sync();
   }
@@ -269,32 +362,109 @@ export class Simulation {
     owner?: SceneNode,
     keepState = true,
     animatorId?: number,
+    writeDefaults = false,
   ): void {
     const clip = this.clips.get(id);
     check(clip, 'SEMANTIC', 'Missing clip');
-    if (key) this.players.delete(key);
+    if (key && !this.registrations.has(key))
+      this.registrations.set(key, this.registrationSequence++);
     const clock = new AnimationClock(clip.durationSeconds, clip.loop, speed, cycleOffset);
     const bindings = clip.tracks.flatMap((track) => {
-      const node = this.scene.nodes.get(track.binding!.targetId);
-      return node
-        ? [{ node, keys: (track.data as R<BoolTrackT>).keys, baseline: node.active }]
-        : [];
+      const binding = this.bindings.compile(track);
+      return binding ? [binding] : [];
     });
-    for (const { node, keys } of bindings) {
-      const value = sampleBool(keys, clock.seconds);
-      if (value !== undefined) node.active = value;
+    if (writeDefaults && animatorId !== undefined) {
+      const keys = new Set(bindings.map((b) => b.key));
+      for (const binding of this.animatorDefaults.get(animatorId) ?? [])
+        if (!keys.has(binding.key)) binding.write(binding.baseline);
     }
-    // Initialization clips never acquire a repeating playback head.
-    if (key && clip.durationSeconds > 0)
-      this.players.set(key, { clock, bindings, owner, disabled: false, keepState, animatorId });
+    for (const binding of bindings) binding.sample(clock.seconds);
+    if (key)
+      this.players.set(key, {
+        key,
+        clock,
+        bindings,
+        owner,
+        disabled: false,
+        hierarchyDisabled: !owner?.activeInHierarchy,
+        resetOnEnable: false,
+        keepState,
+        animatorId,
+      });
+    this.orderDirty = true;
+  }
+
+  /** Higher values write later. Changes apply on the next fixed step and survive restart. */
+  setAnimationPriority(target: AnimationTarget, priority: number): void {
+    check(
+      target && typeof target === 'object' && Number.isFinite(priority),
+      'HOST',
+      'Invalid animation priority',
+    );
+    const animator = target.animatorId !== undefined;
+    check(animator !== (target.clipId !== undefined), 'HOST', 'Specify one animation target');
+    if (animator) {
+      const c = this.pack.getComponent(target.animatorId!);
+      check(
+        c?.dataType === ComponentData.Animator && this.scene.nodes.has(c.nodeId),
+        'HOST',
+        'Unknown Animator',
+      );
+    } else
+      check(
+        this.entry.actions.some(
+          (a) => a.kind === ActionKind.PlayClip && a.animationId === target.clipId,
+        ),
+        'HOST',
+        'Unknown entry PlayClip',
+      );
+    const key = animator ? `animator:${target.animatorId}` : `clip:${target.clipId}`;
+    if (priority === 0) this.priorities.delete(key);
+    else this.priorities.set(key, priority);
+    this.orderDirty = true;
+    this.animationOrder();
+  }
+  private animationOrder(): readonly AnimationPlayer[] {
+    if (!this.orderDirty) return this.orderedPlayers;
+    this.orderDirty = false;
+    this.orderedPlayers = [...this.players.values()].sort(
+      (a, b) =>
+        (this.priorities.get(a.key) ?? 0) - (this.priorities.get(b.key) ?? 0) ||
+        Number(a.animatorId === undefined) - Number(b.animatorId === undefined) ||
+        this.registrations.get(a.key)! - this.registrations.get(b.key)!,
+    );
+    for (let i = this.diagnostics.length - 1; i >= 0; i--)
+      if (this.diagnostics[i]!.code === 'NATSUME_ANIMATION_ORDER') this.diagnostics.splice(i, 1);
+    const writers = new Map<string, AnimationPlayer[]>();
+    const overlaps = new Set<string>();
+    for (const player of this.orderedPlayers) {
+      if (player.disabled || (player.owner && !player.owner.activeInHierarchy)) continue;
+      for (const binding of player.bindings)
+        for (const key of binding.writes) {
+          const previous = writers.get(key) ?? [];
+          for (const other of previous)
+            if (
+              other !== player &&
+              (this.priorities.get(other.key) ?? 0) === (this.priorities.get(player.key) ?? 0)
+            )
+              overlaps.add(`${other.key} / ${player.key}`);
+          previous.push(player);
+          writers.set(key, previous);
+        }
+    }
+    if (overlaps.size)
+      this.diagnostics.push({
+        code: 'NATSUME_ANIMATION_ORDER',
+        message: `Overlapping animation writes use registration order: ${[...overlaps].join(', ')}. Set distinct animation priorities to choose the final writer.`,
+      });
+    return this.orderedPlayers;
   }
   private advanceAnimations(): void {
-    for (const { clock, bindings, owner } of this.players.values()) {
-      if (owner && !owner.activeInHierarchy) continue;
+    for (const { clock, bindings, owner, animatorId } of this.animationOrder()) {
+      if (animatorId !== undefined && !this.bindings.enabled.get(animatorId)) continue;
+      if ((owner && !owner.activeInHierarchy) || clock.duration === 0) continue;
       clock.advance(this.fixedDelta);
-      for (const { node, keys, baseline } of bindings) {
-        node.active = sampleBool(keys, clock.seconds) ?? baseline;
-      }
+      for (const binding of bindings) binding.sample(clock.seconds);
     }
   }
   update(seconds: number): void {

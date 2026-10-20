@@ -402,12 +402,12 @@ export function measureParticleSorting() {
       mesh.sync([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1], 'gamma');
       result[name] = Array.from(mesh.geometry.indexBuffer!.data.slice(0, 3));
       if (sort === ParticleSort.Depth) {
-        document.nodes[0]!.transform!.scale!.z = -1;
+        emitter.node.localScale.z = -1;
         emitter.node.localMatrix[10] = -1;
         scene.update();
         mesh.sync([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1], 'gamma');
         result.transformed = Array.from(mesh.geometry.indexBuffer!.data.slice(0, 3));
-        document.nodes[0]!.transform!.scale!.z = 1;
+        emitter.node.localScale.z = 1;
         emitter.node.localMatrix[10] = 1;
         scene.update();
         emitter.positions.fill(0);

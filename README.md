@@ -78,11 +78,23 @@ app.destroy();
 
 ## 动画
 
-支持单层、无过渡 Animator 的 NodeActive 多关键帧轨道，包括零时长初始化、循环、末帧停留、非负状态速度和 `[0,1]` 内的 cycle offset。偏移只作用于循环片段；`effect.playAnimatorState(animatorId, stateIdOrName)` 从起点重新播放状态。
+支持单层、无过渡 Animator 的节点启用、位置 / 缩放 / 旋转、Rect 布局、组件启用、粒子参数 / 颜色和 Renderer 材质轨道，包括零时长初始化、循环、末帧停留、非负状态速度和 `[0,1]` 内的 cycle offset。偏移只作用于循环片段；`effect.playAnimatorState(animatorId, stateIdOrName)` 从起点重新播放状态。
 
 动画按 1/60 s 固定步先采样，再推进粒子；暂停、停止排空和过载丢弃的时间不推进动画。`setNodeActive` 立即生效，下一个固定步可被动画覆盖。入口 ApplyClip 只应用起点，PlayClip 持续播放。
 
-Transform、布局、粒子 / 材质动画和事件派发尚未实现；不支持倒放、多层混合、状态过渡及禁用 Animator 时写回默认值。新增必需能力仍会明确拒绝加载。
+旋转支持归一化四元数分量与 Euler ZXY。缺失通道保留动作入口值；Write Defaults 恢复 Animator 启动时的属性值；重播恢复包初值。粒子参数只影响对应源分支，不改变参数模式；材质覆盖按 Renderer 和实例隔离。关闭 Animator 组件暂停并保留状态；节点失活时按 keep-state / write-defaults 设置处理。
+
+多个 Animator 或入口 PlayClip 重叠写入时默认按注册顺序执行，PlayClip 在 Animator 之后；同优先级重叠会给出 `NATSUME_ANIMATION_ORDER` 警告。宿主可以指定覆盖顺序：
+
+```ts
+// 数值越大越晚写入；默认 0。下一固定步生效，切状态和重播保留。
+effect.setAnimationPriority({ animatorId: 12 }, 10);
+effect.setAnimationPriority({ clipId: 56 }, 20);
+```
+
+重新启用的 Animator 重新注册；切状态保持原顺序。设置不同优先级后，该对写入者不再产生顺序警告。零时长片段仍只初始化，不会因优先级修改而重复执行。
+
+事件派发、倒放、多层混合和状态过渡尚未实现；未支持的必需能力明确拒绝加载。
 
 ## 粒子绘制环境
 

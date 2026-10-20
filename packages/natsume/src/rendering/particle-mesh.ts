@@ -196,6 +196,8 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
   private readonly basisUp = vec3.create();
   private readonly basisForward = vec3.create();
   private readonly binding;
+  private readonly inverseFade;
+  animationEnabled = () => true;
   constructor(
     readonly emitter: Emitter,
     readonly definition: R<ParticleRendererT>,
@@ -367,6 +369,7 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
       this.pivotSize = max.map((value, axis) => value - min[axis]!);
     }
     this.binding = material.textures[0]!;
+    this.inverseFade = material.floats.find((p) => p.name === '_InvFade');
     const mask = state.colorWriteMask;
     this.colorWriteMask =
       (mask & 1 ? 8 : 0) | (mask & 2 ? 4 : 0) | (mask & 4 ? 2 : 0) | (mask & 8 ? 1 : 0);
@@ -404,8 +407,13 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
   sync(matrix: ArrayLike<number>, colorSpace: SourceColorSpace): void {
     const e = this.emitter,
       n = e.count;
-    this.visible = e.node.activeInHierarchy && n > 0;
+    this.visible = this.animationEnabled() && e.node.activeInHierarchy && n > 0;
     if (!this.visible) return;
+    const uniforms = this.shader!.resources.colorUniforms.uniforms,
+      tintColor = this.materialDefinition.tint;
+    if (tintColor)
+      (uniforms.uTint as Float32Array).set([tintColor.r, tintColor.g, tintColor.b, tintColor.a]);
+    uniforms.uInvFade = this.inverseFade?.value ?? 1;
     this.shader!.resources.colorUniforms.uniforms.uLinear = colorSpace === 'linear' ? 1 : 0;
     e.updateSpace();
     const world = e.simulationMatrix,

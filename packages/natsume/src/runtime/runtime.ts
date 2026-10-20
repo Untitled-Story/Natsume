@@ -1,3 +1,5 @@
+import type { AnimationTarget } from './simulation.js';
+import { rendererCanPlay } from './animation.js';
 import { rendererVertexStride, particleMaterialSlots } from '../rendering/mesh-selection.js';
 import { Alignment } from '../format/generated/noa/ir/alignment.js';
 import { Container, ImageSource, Rectangle, Texture, type WebGLRenderer } from 'pixi.js';
@@ -141,18 +143,7 @@ export class EffectInstance {
       'HOST',
       'Unknown source color space',
     );
-    const size = simulation.scene.layoutSize;
-    if (size) {
-      const pivot = simulation.scene.nodes.get(simulation.entry.roots[0]!)?.rect?.pivot;
-      const x = -size.width * (pivot?.x ?? 0.5),
-        y = -size.height * (1 - (pivot?.y ?? 0.5));
-      this.container.boundsArea = new Rectangle(
-        Math.min(x, x + size.width),
-        Math.min(y, y + size.height),
-        Math.abs(size.width),
-        Math.abs(size.height),
-      );
-    }
+    this.syncLayoutBounds();
     if (options.displayMatrix) this.setDisplayMatrix(options.displayMatrix);
     if (
       simulation.pack.document.colorContext?.projectColorSpace === ColorSpace.Unspecified &&
@@ -187,7 +178,7 @@ export class EffectInstance {
   get displayMatrix(): Float32Array {
     return Float32Array.from(this.matrix);
   }
-  /** Snapshot of nodes with enabled renderer components, including inactive nodes; unique per node. */
+  /** Nodes with allocated particle renderers, including renderers that animations can enable; unique per node. */
   get renderedNodes(): readonly NatsumeNode[] {
     this.assertAlive();
     return [...new Set(this.meshes.map((mesh) => mesh.emitter.node.id))].map(
@@ -289,6 +280,11 @@ export class EffectInstance {
     this.syncBehaviors();
     this.render();
   }
+  /** Higher priorities write later. Applies next fixed step; retained across state changes and restart. */
+  setAnimationPriority(target: AnimationTarget, priority: number): void {
+    this.assertAlive();
+    this.simulation.setAnimationPriority(target, priority);
+  }
   update(seconds: number): void {
     this.assertAlive();
     const before = this.simulation.time;
@@ -381,7 +377,21 @@ export class EffectInstance {
       mesh.position.set(node.inheritedRenderOffsetX, node.inheritedRenderOffsetY);
     }
   }
+  private syncLayoutBounds(): void {
+    const size = this.simulation.scene.layoutSize;
+    if (!size) return;
+    const pivot = this.simulation.scene.nodes.get(this.simulation.entry.roots[0]!)?.rect?.pivot;
+    const x = -size.width * (pivot?.x ?? 0.5),
+      y = -size.height * (1 - (pivot?.y ?? 0.5));
+    const bounds = this.container.boundsArea ?? new Rectangle();
+    bounds.x = Math.min(x, x + size.width);
+    bounds.y = Math.min(y, y + size.height);
+    bounds.width = Math.abs(size.width);
+    bounds.height = Math.abs(size.height);
+    this.container.boundsArea = bounds;
+  }
   private render(): void {
+    this.syncLayoutBounds();
     for (const mesh of this.meshes) mesh.sync(this.matrix, this.colorSpace);
     this.meshes.sort((a, b) => {
       const stage =
@@ -517,7 +527,7 @@ export class NatsumeRuntime {
       const renderers = pack.components
         .filter(
           (c) =>
-            c.enabled &&
+            rendererCanPlay(pack, c.id, c.enabled) &&
             c.dataType === ComponentData.ParticleRenderer &&
             simulation.scene.nodes.has(c.nodeId),
         )
@@ -536,19 +546,28 @@ export class NatsumeRuntime {
         return sum + emitter.main.maxParticles * count * particleMaterialSlots(data).length;
       }, 0);
       check(totalVertices <= 1_000_000, 'LIMIT', 'Instance expanded vertex budget exceeded');
-      for (const { data } of renderers) {
+      for (const { id, data } of renderers) {
         const emitter = simulation.emitters.get(data.systemComponentId);
         check(emitter, 'SEMANTIC', 'Renderer system is outside entry');
         for (const slot of particleMaterialSlots(data)) {
-          const material = pack.document.materials.find((m) => m.id === data.materials[slot]);
+          const material =
+            simulation.bindings.materials.get(`${id}:${slot}`) ??
+            pack.document.materials.find((m) => m.id === data.materials[slot]);
           check(material, 'SEMANTIC', 'Missing material');
           const lease = this.acquireTexture(pack, material);
           releases.push(lease.release);
           const texture = await lease.promise;
           check(!this.disposed, 'DISPOSED', 'Runtime was destroyed during instantiation');
-          instance.addMesh(
-            new ParticleMesh(emitter, data, material, texture, pack, options.particleEnvironment),
+          const mesh = new ParticleMesh(
+            emitter,
+            data,
+            material,
+            texture,
+            pack,
+            options.particleEnvironment,
           );
+          mesh.animationEnabled = () => simulation.bindings.enabled.get(id) ?? false;
+          instance.addMesh(mesh);
         }
       }
       instance.initializeScripts();

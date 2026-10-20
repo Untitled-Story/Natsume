@@ -15,6 +15,11 @@ export class SceneNode {
   readonly localMatrix = mat4.create();
   readonly worldMatrix = mat4.create();
   readonly worldRotation = quat.create();
+  readonly localPosition = { x: 0, y: 0, z: 0 };
+  readonly localRotation = { x: 0, y: 0, z: 0, w: 1 };
+  readonly localScale = { x: 1, y: 1, z: 1 };
+  transformDirty = false;
+  layoutDirty = false;
   renderOffsetX = 0;
   renderOffsetY = 0;
   inheritedRenderOffsetX = 0;
@@ -25,11 +30,14 @@ export class SceneNode {
   constructor(
     readonly source: R<NodeT>,
     readonly parent: SceneNode | undefined,
-    readonly rect: R<RectLayoutT> | undefined,
+    readonly rect: RectLayoutT | undefined,
   ) {
     this.id = source.id;
     this.name = String(source.name);
     this.active = source.active;
+    Object.assign(this.localPosition, source.transform!.position);
+    Object.assign(this.localRotation, source.transform!.rotation);
+    Object.assign(this.localScale, source.transform!.scale);
   }
 }
 
@@ -38,7 +46,9 @@ export class Scene {
   readonly nodes = new Map<number, SceneNode>();
   readonly ordered: SceneNode[] = [];
   readonly layoutSize: LayoutSize | undefined;
+  private readonly hostLayout: LayoutSize | undefined;
   constructor(pack: EffectPack, roots: readonly number[], hostLayout?: LayoutSize) {
+    this.hostLayout = hostLayout;
     const rects = new Map(
       pack.components
         .filter((c) => c.dataType === ComponentData.RectLayout)
@@ -58,7 +68,11 @@ export class Scene {
     for (let i = 0; i < queue.length; i++) {
       const n = queue[i]!,
         parent = this.nodes.get(n.parentId),
-        node = new SceneNode(n, parent, rects.get(n.id));
+        node = new SceneNode(
+          n,
+          parent,
+          rects.has(n.id) ? (structuredClone(rects.get(n.id)!) as RectLayoutT) : undefined,
+        );
       check(!this.nodes.has(n.id), 'CAPABILITY', 'Overlapping entry roots are unsupported');
       this.nodes.set(n.id, node);
       this.ordered.push(node);
@@ -85,10 +99,10 @@ export class Scene {
           'HOST',
           `Node ${n.id} requires an external parent layout size`,
         );
-        node.layout = Object.freeze({
+        node.layout = {
           width: (parentSize?.width ?? 0) * stretchX + delta.x,
           height: (parentSize?.height ?? 0) * stretchY + delta.y,
-        });
+        };
         if (parent) {
           const pp = parent.rect?.pivot ?? { x: 0.5, y: 0.5 };
           x = (parentSize?.width ?? 0) * (min.x + stretchX * pivot.x - pp.x) + pos.x;
@@ -100,6 +114,7 @@ export class Scene {
           z = pos.z;
         }
       }
+      Object.assign(node.localPosition, { x, y, z });
       mat4.fromRotationTranslationScale(
         node.localMatrix,
         [q?.x ?? 0, q?.y ?? 0, q?.z ?? 0, q?.w ?? 1],
@@ -108,16 +123,71 @@ export class Scene {
       );
     }
     if (roots.length === 1) this.layoutSize = this.nodes.get(roots[0]!)?.layout;
+    for (const n of this.ordered) if (n.rect) this.initialRects.set(n.id, structuredClone(n.rect));
     this.update();
   }
+  /** Rebuild only animation-owned matrices; host matrix edits remain intact. */
+  private rebuild(n: SceneNode): void {
+    if (n.rect && n.layoutDirty) {
+      const r = n.rect,
+        parent = n.parent?.layout ?? this.hostLayout;
+      const sx = r.anchorMax!.x - r.anchorMin!.x,
+        sy = r.anchorMax!.y - r.anchorMin!.y;
+      Object.assign(n.layout!, {
+        width: (parent?.width ?? 0) * sx + r.sizeDelta!.x,
+        height: (parent?.height ?? 0) * sy + r.sizeDelta!.y,
+      });
+      const pp = n.parent?.rect?.pivot ?? { x: 0.5, y: 0.5 };
+      Object.assign(n.localPosition, {
+        x:
+          r.anchoredPosition!.x +
+          (n.parent ? (parent?.width ?? 0) * (r.anchorMin!.x + sx * r.pivot!.x - pp.x) : 0),
+        y:
+          r.anchoredPosition!.y +
+          (n.parent ? (parent?.height ?? 0) * (r.anchorMin!.y + sy * r.pivot!.y - pp.y) : 0),
+        z: r.anchoredPosition!.z,
+      });
+      n.transformDirty = true;
+    }
+    if (n.transformDirty) {
+      const p = n.localPosition,
+        q = n.localRotation,
+        s = n.localScale;
+      mat4.fromRotationTranslationScale(
+        n.localMatrix,
+        [q.x, q.y, q.z, q.w],
+        [p.x, p.y, p.z],
+        [s.x, s.y, s.z],
+      );
+    }
+  }
+  reset(): void {
+    for (const n of this.ordered) {
+      n.active = n.source.active;
+      Object.assign(n.localPosition, n.source.transform!.position);
+      Object.assign(n.localRotation, n.source.transform!.rotation);
+      Object.assign(n.localScale, n.source.transform!.scale);
+      if (n.rect) Object.assign(n.rect, structuredClone(this.initialRects.get(n.id)!));
+      n.transformDirty = true;
+      n.layoutDirty = !!n.rect;
+    }
+    this.update();
+  }
+  private readonly initialRects = new Map<number, RectLayoutT>();
   update(): void {
     for (const n of this.ordered) {
+      if (n.parent?.layoutDirty && n.rect) n.layoutDirty = true;
+      this.rebuild(n);
       n.activeInHierarchy = n.active && (n.parent?.activeInHierarchy ?? true);
-      const q = n.source.transform!.rotation!;
+      const q = n.localRotation;
       quat.set(n.worldRotation, q.x, q.y, q.z, q.w);
       if (n.parent) quat.multiply(n.worldRotation, n.parent.worldRotation, n.worldRotation);
       if (n.parent) mat4.multiply(n.worldMatrix, n.parent.worldMatrix, n.localMatrix);
       else mat4.copy(n.worldMatrix, n.localMatrix);
+    }
+    for (const n of this.ordered) {
+      n.transformDirty = false;
+      n.layoutDirty = false;
     }
   }
 }

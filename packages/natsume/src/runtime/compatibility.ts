@@ -1,4 +1,8 @@
-import { animationSupport, animatorSupport } from './animation.js';
+import { bindingWrites } from './animation-bindings.js';
+import { ActionKind } from '../format/generated/noa/ir/action-kind.js';
+import { AnimationProperty } from '../format/generated/noa/ir/animation-property.js';
+import { ParticleParameter } from '../format/generated/noa/ir/particle-parameter.js';
+import { animationSupport, animatorSupport, rendererCanPlay } from './animation.js';
 import { rendererVertexStride, particleMaterialSlots } from '../rendering/mesh-selection.js';
 import { NatsumeError, type ErrorCode } from '../errors.js';
 import type { EffectPack, DeepReadonly as R } from '../pack.js';
@@ -274,6 +278,21 @@ export function checkCompatibility(
     const rules = new SupportChecks();
     if (c.dataType === C.ParticleSystem) {
       const source = c.data as R<ParticleSystemT>;
+      const animatedGravity = pack.document.animations.some((a) =>
+        a.tracks.some(
+          (t) =>
+            t.binding!.targetId === c.id &&
+            t.binding!.property === AnimationProperty.ParticleParameter &&
+            t.binding!.parameter === ParticleParameter.GravityMultiplier,
+        ),
+      );
+      rules.require(
+        !animatedGravity || !!gravity || !!source.main!.gravity,
+        'HOST',
+        'main.gravityMultiplier',
+        source.main!.gravityMultiplier,
+        'Animated gravityMultiplier requires particleEnvironment.gravity',
+      );
       rules.issues.push(
         ...emitterSupport(source, gravity, nodeIds.has(source.main!.customSpaceNodeId)),
       );
@@ -301,7 +320,7 @@ export function checkCompatibility(
           'No script factory is registered; serialized data is retained.',
         );
     }
-    if (c.enabled && c.dataType === C.ParticleRenderer) {
+    if (rendererCanPlay(pack, c.id, c.enabled) && c.dataType === C.ParticleRenderer) {
       const definition = c.data as R<ParticleRendererT>;
       const system = systemMap.get(definition.systemComponentId);
       rules.require(
@@ -402,6 +421,35 @@ export function checkCompatibility(
   );
   for (const animation of pack.document.animations)
     totals.issues.push(...animationSupport(animation));
+  const writers = new Map<string, Set<string>>(),
+    overlaps = new Set<string>();
+  const inspectWriter = (writer: string, clipId: number) => {
+    for (const track of pack.document.animations.find((a) => a.id === clipId)?.tracks ?? []) {
+      const b = track.binding!,
+        c = pack.getComponent(b.targetId);
+      if (!nodeIds.has(c?.nodeId ?? b.targetId)) continue;
+      for (const field of bindingWrites(pack, track)) {
+        const owners = writers.get(field) ?? new Set<string>();
+        for (const owner of owners) if (owner !== writer) overlaps.add(`${owner} / ${writer}`);
+        owners.add(writer);
+        writers.set(field, owners);
+      }
+    }
+  };
+  for (const c of components)
+    if (c.dataType === C.Animator)
+      for (const layer of (c.data as R<AnimatorT>).layers)
+        for (const state of layer.states) inspectWriter(`animator:${c.id}`, state.animationId);
+  for (const action of entry.actions)
+    if (action.kind === ActionKind.PlayClip)
+      inspectWriter(`clip:${action.animationId}`, action.animationId);
+  if (overlaps.size)
+    totals.warn(
+      'NATSUME_ANIMATION_ORDER',
+      'animations.order',
+      [...overlaps],
+      `Animation writers may overlap: ${[...overlaps].join(', ')}. Default ordering depends on registration; setAnimationPriority selects the final writer.`,
+    );
   append(totals.issues);
   return finish();
 }

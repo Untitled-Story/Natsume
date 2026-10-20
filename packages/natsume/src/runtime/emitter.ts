@@ -60,8 +60,13 @@ export class Emitter {
   readonly field: ParticleNoise['field'] | undefined;
   readonly noiseSizes: Float32Array | undefined;
   private readonly noiseEvaluator: ParticleNoise | undefined;
-  readonly prewarmSeconds: number;
-  private readonly maximumBirthLifetime: number;
+  prewarmSeconds: number;
+  private maximumBirthLifetime: number;
+  requiresAnimatedGravity = false;
+  private lifetimeMin = NaN;
+  private lifetimeMax = NaN;
+  private lifetimeMultiplier = NaN;
+  private lifetimeLoop = false;
   readonly delaySeconds: number;
   readonly shapeMatrix = mat4.create();
   readonly simulationMatrix = mat4.create();
@@ -234,6 +239,23 @@ export class Emitter {
         );
     }
   }
+  /** Animated lifetime endpoints affect future births and the bounded prewarm window. */
+  refreshAnimatedParameters(): void {
+    const p = this.main.lifetime!;
+    if (
+      p.constantMin === this.lifetimeMin &&
+      p.constantMax === this.lifetimeMax &&
+      p.multiplier === this.lifetimeMultiplier &&
+      this.main.loop === this.lifetimeLoop
+    )
+      return;
+    this.lifetimeMin = p.constantMin;
+    this.lifetimeMax = p.constantMax;
+    this.lifetimeMultiplier = p.multiplier;
+    this.lifetimeLoop = this.main.loop;
+    this.prewarmSeconds = prewarmDuration(this.main);
+    this.maximumBirthLifetime = maximumLifetime(this.main);
+  }
   setGravity(value: readonly [number, number, number] | undefined): void {
     this.gravity = this.resolveGravity(value);
   }
@@ -243,7 +265,9 @@ export class Emitter {
   ): readonly [number, number, number] {
     const authored = this.main.gravity;
     check(
-      constantZero(this.main.gravityMultiplier) || value !== undefined || authored,
+      (!this.requiresAnimatedGravity && constantZero(this.main.gravityMultiplier)) ||
+        value !== undefined ||
+        authored,
       'HOST',
       `System ${this.id}: nonzero gravityMultiplier requires particleEnvironment.gravity`,
     );
@@ -260,7 +284,7 @@ export class Emitter {
         : this.main.space === Space.Custom
           ? this.customSpaceNode
           : undefined;
-    const scale = this.node.source.transform!.scale!;
+    const scale = this.node.localScale;
     if (this.main.scaling === ScalingMode.Hierarchy) {
       mat4.copy(this.emitterMatrix, this.node.worldMatrix);
       const r = mat4.fromQuat(this.vectorMatrix, this.node.worldRotation),
@@ -733,7 +757,7 @@ export class Emitter {
         multiplier = 1;
       const v = this.velocityModule;
       if (v) {
-        const scale = this.node.source.transform!.scale!;
+        const scale = this.node.localScale;
         const linear = this.vector(
           scalar(v.linear?.x, t, rnd(20)) * (v.space === Space.World ? scale.x : 1),
           scalar(v.linear?.y, t, rnd(21)) * (v.space === Space.World ? scale.y : 1),

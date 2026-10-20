@@ -1,9 +1,10 @@
+import { TrackData } from '../format/generated/noa/ir/track-data.js';
+import type { EffectPack } from '../pack.js';
 import type { DeepReadonly as R } from '../pack.js';
 import type { AnimationT } from '../format/generated/noa/ir/animation.js';
 import type { AnimatorT } from '../format/generated/noa/ir/animator.js';
 import type { BoolKeyT } from '../format/generated/noa/ir/bool-key.js';
 import { AnimationProperty } from '../format/generated/noa/ir/animation-property.js';
-import { TrackData } from '../format/generated/noa/ir/track-data.js';
 import { SupportChecks, type SupportIssue } from './support-checks.js';
 
 /** Native Animator state time is accumulated in normalized Float32 units. */
@@ -55,14 +56,35 @@ export function animationSupport(animation: R<AnimationT>): readonly SupportIssu
     animation.events.length,
     'Animation events are unsupported',
   );
+  const supported = new Set([
+    AnimationProperty.NodeActive,
+    AnimationProperty.NodePosition,
+    AnimationProperty.NodeRotation,
+    AnimationProperty.NodeScale,
+    AnimationProperty.RectAnchoredPosition,
+    AnimationProperty.RectSizeDelta,
+    AnimationProperty.RectAnchorMin,
+    AnimationProperty.RectAnchorMax,
+    AnimationProperty.RectPivot,
+    AnimationProperty.ComponentEnabled,
+    AnimationProperty.RendererEnabled,
+    AnimationProperty.ParticleParameter,
+    AnimationProperty.ParticleColor,
+    AnimationProperty.ParticleCustomColor,
+    AnimationProperty.ParticleLoop,
+    AnimationProperty.RendererMaterialTint,
+    AnimationProperty.RendererMaterialFloat,
+    AnimationProperty.RendererTextureST,
+  ]);
   for (const [index, track] of animation.tracks.entries())
     rules.require(
-      track.binding?.property === AnimationProperty.NodeActive &&
-        track.dataType === TrackData.BoolTrack,
+      supported.has(track.binding!.property) &&
+        (track.binding!.property !== AnimationProperty.NodeActive ||
+          track.dataType === TrackData.BoolTrack),
       'CAPABILITY',
       `${path}.tracks.${index}`,
       [track.binding?.property, track.dataType],
-      'Animator supports NodeActive tracks',
+      'Unsupported animation property',
     );
   return rules.issues;
 }
@@ -75,13 +97,6 @@ export function animatorSupport(animator: R<AnimatorT>, id: number): readonly Su
     'layers',
     animator.layers.length,
     'Only single-layer Animator is supported',
-  );
-  rules.require(
-    !animator.writeDefaultValuesOnDisable,
-    'CAPABILITY',
-    `animators.${id}.writeDefaultValuesOnDisable`,
-    animator.writeDefaultValuesOnDisable,
-    'Writing default values on Animator disable is unsupported',
   );
   for (const layer of animator.layers)
     for (const state of layer.states) {
@@ -101,4 +116,20 @@ export function animatorSupport(animator: R<AnimatorT>, id: number): readonly Su
       );
     }
   return rules.issues;
+}
+
+/** Disabled renderers acquire resources only when an animation can enable them. */
+export function rendererCanPlay(pack: EffectPack, id: number, enabled: boolean): boolean {
+  return (
+    enabled ||
+    pack.document.animations.some((a) =>
+      a.tracks.some(
+        (t) =>
+          t.binding!.targetId === id &&
+          [AnimationProperty.ComponentEnabled, AnimationProperty.RendererEnabled].includes(
+            t.binding!.property,
+          ),
+      ),
+    )
+  );
 }

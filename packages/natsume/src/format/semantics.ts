@@ -1,3 +1,4 @@
+import { validateAnimationBindings } from './animation-semantics.js';
 import { check } from '../errors.js';
 import type { DocumentT } from './generated/noa/ir/document.js';
 import type { MeshT } from './generated/noa/mesh/mesh.js';
@@ -57,6 +58,11 @@ export const KNOWN_FEATURES: Readonly<Record<string, number>> = Object.freeze(
       'script.bridge',
       'animator.single-layer',
       'animation.node-active',
+      'animation.transform',
+      'animation.layout',
+      'animation.component-enabled',
+      'animation.particle',
+      'animation.renderer-material',
       'particle.main',
       'particle.renderer',
       'particle.mesh-distribution',
@@ -546,6 +552,7 @@ export function validateDocument(document: DocumentT): void {
     }
   };
   visit('Document', document);
+  validateAnimationBindings(document, requireFeature);
   for (const material of document.materials)
     if (material.model === 4 || material.model === 5) {
       requireFeature(

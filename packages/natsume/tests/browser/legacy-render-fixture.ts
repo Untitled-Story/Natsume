@@ -1,3 +1,15 @@
+import { TrackData } from '../../src/format/generated/noa/ir/track-data.js';
+import { AnimationProperty } from '../../src/format/generated/noa/ir/animation-property.js';
+import { ComponentData } from '../../src/format/generated/noa/ir/component-data.js';
+import { AnimationBindings } from '../../src/runtime/animation-bindings.js';
+import { EffectPack as InstancePack } from '../../src/pack.js';
+import { ComponentT } from '../../src/format/generated/noa/ir/component.js';
+import { AnimationT } from '../../src/format/generated/noa/ir/animation.js';
+import { TrackT } from '../../src/format/generated/noa/ir/track.js';
+import { BindingT } from '../../src/format/generated/noa/ir/binding.js';
+import { ColorTrackT } from '../../src/format/generated/noa/ir/color-track.js';
+import { ScalarCurveT } from '../../src/format/generated/noa/ir/scalar-curve.js';
+import { FloatKeyT } from '../../src/format/generated/noa/ir/float-key.js';
 import {
   Application,
   Container,
@@ -101,6 +113,67 @@ export async function measureLegacyMaterials(nativeCases: readonly NativeLegacyC
     results[label + '-sibling'] = Array.from(
       pixels.slice((10 * 64 + 40) * 4, (10 * 64 + 40) * 4 + 4),
     );
+    if (label === 'alpha') {
+      const d = minimalDocument(),
+        r = new ParticleRendererT(3, [1]);
+      d.components = [new ComponentT(4, 1, true, ComponentData.ParticleRenderer, r)];
+      d.materials = [Object.assign(structuredClone(material), { id: 1 })];
+      const curve = new ScalarCurveT();
+      curve.keys = [
+        Object.assign(new FloatKeyT(), { value: 0.5, interpolation: 1 }),
+        Object.assign(new FloatKeyT(), { time: 1, value: 0 }),
+      ];
+      const track = new TrackT(
+        new BindingT(4, AnimationProperty.RendererMaterialTint, 0, '_TintColor'),
+        TrackData.ColorTrack,
+        new ColorTrackT(curve),
+      );
+      d.animations = [new AnimationT(5, 'tint', 1, false, [track])];
+      const source = new InstancePack(
+        d,
+        {
+          format: 'noa-package',
+          version: 1,
+          noir_version: [1, 0],
+          document: 'scene.noir',
+          files: [],
+        },
+        new Map(),
+        new Map(),
+      );
+      const sceneState = new Scene(source, [1]),
+        bindings = new AnimationBindings(source, sceneState);
+      const animated = new ParticleMesh(
+        e,
+        definition,
+        bindings.materials.get('4:0')!,
+        Texture.WHITE,
+        pack,
+        { fog: { mode: 'none' } },
+      );
+      mesh.visible = false;
+      holder.addChild(animated);
+      animated.animationEnabled = () => bindings.enabled.get(4) ?? false;
+      const sample = bindings.compile(track)!;
+      for (const [key, time] of [
+        ['animated-initial', 0],
+        ['animated-end', 1],
+      ] as const) {
+        sample.sample(time);
+        animated.sync(matrix, 'gamma');
+        app.renderer.render({ container: scene, target, clear: true });
+        const pixels = app.renderer.extract.pixels({ target }).pixels;
+        results[key] = Array.from(pixels.slice((10 * 64 + 10) * 4, (10 * 64 + 10) * 4 + 4));
+      }
+      bindings.enabled.set(4, false);
+      animated.sync(matrix, 'gamma');
+      app.renderer.render({ container: scene, target, clear: true });
+      const pixels = app.renderer.extract.pixels({ target }).pixels;
+      results['animated-disabled'] = Array.from(
+        pixels.slice((10 * 64 + 10) * 4, (10 * 64 + 10) * 4 + 4),
+      );
+      animated.destroy();
+    }
     mesh.destroy();
   };
   try {

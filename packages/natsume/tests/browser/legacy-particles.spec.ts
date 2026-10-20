@@ -102,6 +102,21 @@ test('renders legacy blending, three fog modes, zIndex fallback and soft particl
       ).toBeLessThanOrEqual(2),
     );
   }
+  for (const [label, expected] of Object.entries({
+    'animated-initial': [128, 0, 128, 255],
+    'animated-end': [0, 0, 128, 255],
+    'animated-disabled': [0, 0, 255, 255],
+  }))
+    expected.forEach((value, i) => {
+      recordError(
+        'animation.material.pixel',
+        result.results[label][i] - value,
+        '8-bit channel',
+        `${label}/${i}`,
+        'analytic',
+      );
+      expect(Math.abs(result.results[label][i] - value), `${label}/${i}`).toBeLessThanOrEqual(2);
+    });
   expect(result.borrowedAlive).toBe(true);
   expect(result.glError).toBe(0);
 });
