@@ -75,6 +75,8 @@ pnpm probe:unity --rotation-prewarm --update-fixtures
 pnpm probe:unity --rect-layout --update-fixtures
 pnpm probe:unity --noise-options --update-fixtures
 pnpm probe:unity --noise-statistics --update-fixtures
+pnpm probe:unity --animation --update-fixtures
+pnpm probe:unity --animation-bindings --update-fixtures
 pnpm probe:unity --custom-data --update-fixtures
 pnpm probe:unity --sweeps --update-fixtures
 pnpm probe:unity --spaces --update-fixtures

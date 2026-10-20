@@ -25,6 +25,7 @@ const modes = [
   'noise-statistics',
   'custom-data',
   'animation',
+  'animation-bindings',
   'compatibility',
   'meshes',
 ];
