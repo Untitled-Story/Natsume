@@ -26,6 +26,7 @@ const modes = [
   'custom-data',
   'animation',
   'animation-bindings',
+  'by-speed',
   'compatibility',
   'meshes',
 ];

@@ -6,6 +6,9 @@ import type { EmissionModuleT } from '../format/generated/noa/ir/emission-module
 import type { ShapeModuleT } from '../format/generated/noa/ir/shape-module.js';
 import type { RotationModuleT } from '../format/generated/noa/ir/rotation-module.js';
 import type { ColorModuleT } from '../format/generated/noa/ir/color-module.js';
+import type { SizeBySpeedModuleT } from '../format/generated/noa/ir/size-by-speed-module.js';
+import type { RotationBySpeedModuleT } from '../format/generated/noa/ir/rotation-by-speed-module.js';
+import { speedPhase, speedSize } from './speed-modules.js';
 import type { SizeModuleT } from '../format/generated/noa/ir/size-module.js';
 import type { VelocityModuleT } from '../format/generated/noa/ir/velocity-module.js';
 import type { LimitVelocityModuleT } from '../format/generated/noa/ir/limit-velocity-module.js';
@@ -39,6 +42,8 @@ export class Emitter {
   readonly emission: R<EmissionModuleT> | undefined;
   readonly shape: R<ShapeModuleT> | undefined;
   readonly colorModule: R<ColorModuleT> | undefined;
+  readonly sizeBySpeed: R<SizeBySpeedModuleT> | undefined;
+  readonly rotationBySpeed: R<RotationBySpeedModuleT> | undefined;
   readonly sizeModule: R<SizeModuleT> | undefined;
   readonly rotationModule: R<RotationModuleT> | undefined;
   readonly velocityModule: R<VelocityModuleT> | undefined;
@@ -50,6 +55,7 @@ export class Emitter {
   readonly positions: Float32Array;
   readonly velocities: Float32Array;
   renderVelocities: Float32Array | undefined;
+  readonly moduleSpeeds: Float32Array | undefined;
   readonly startSizes: Float32Array;
   readonly rotations: Float32Array;
   readonly startColors: Float32Array;
@@ -143,6 +149,12 @@ export class Emitter {
         case M.ColorModule:
           this.colorModule = m.data as R<ColorModuleT>;
           break;
+        case M.SizeBySpeedModule:
+          this.sizeBySpeed = m.data as R<SizeBySpeedModuleT>;
+          break;
+        case M.RotationBySpeedModule:
+          this.rotationBySpeed = m.data as R<RotationBySpeedModuleT>;
+          break;
         case M.SizeModule:
           this.sizeModule = m.data as R<SizeModuleT>;
           break;
@@ -202,6 +214,7 @@ export class Emitter {
     const cap = main.maxParticles;
     this.positions = new Float32Array(cap * 3);
     this.velocities = new Float32Array(cap * 3);
+    if (this.sizeBySpeed || this.rotationBySpeed) this.moduleSpeeds = new Float32Array(cap);
     if (this.sheet?.timeMode === SheetTime.Speed) this.renderVelocities = new Float32Array(cap * 3);
     this.startSizes = new Float32Array(cap * 3);
     this.rotations = new Float32Array(cap * 3);
@@ -643,6 +656,7 @@ export class Emitter {
         this.renderVelocities[o + 1] = dy * speed;
         this.renderVelocities[o + 2] = dz * speed;
       }
+      if (this.moduleSpeeds) this.moduleSpeeds[i] = Math.hypot(dx * speed, dy * speed, dz * speed);
       const size = this.main.size!,
         rot = this.main.rotation!;
       const sx = scalar(size.x, t, rnd(5));
@@ -874,10 +888,31 @@ export class Emitter {
         if (speed > 0) {
           let drag = Math.max(0, scalar(l.drag, t, rnd(43))) * dt;
           if (l.multiplyDragBySize) {
-            const size =
+            let size =
+              (this.sizeBySpeed
+                ? speedSize(this.sizeBySpeed, this.moduleSpeeds![i]!, rnd(73), 0)
+                : 1) *
               this.startSizes[o]! *
               scalar(this.sizeModule?.size?.x, this.ages[i]! / this.lifetimes[i]!, rnd(50), 1) *
               (this.noiseSizes?.[o] ?? 1);
+            if (this.main.size3d && this.sizeBySpeed) {
+              let maximum = size;
+              for (let axis = 1; axis < 3; axis++) {
+                const parameter = this.sizeModule?.separateAxes
+                  ? axis === 1
+                    ? this.sizeModule.size?.y
+                    : this.sizeModule.size?.z
+                  : this.sizeModule?.size?.x;
+                maximum = Math.max(
+                  maximum,
+                  this.startSizes[o + axis]! *
+                    speedSize(this.sizeBySpeed, this.moduleSpeeds![i]!, rnd(73), axis) *
+                    scalar(parameter, this.ages[i]! / this.lifetimes[i]!, rnd(50), 1) *
+                    (this.noiseSizes?.[o + axis] ?? 1),
+                );
+              }
+              size = maximum * 0.5;
+            }
             drag *= Math.PI * size * size;
           }
           if (l.multiplyDragByVelocity) drag *= speed * speed;
@@ -890,6 +925,21 @@ export class Emitter {
         this.velocities[o] = this.velocities[o]! + vx - beforeX;
         this.velocities[o + 1] = this.velocities[o + 1]! + vy - beforeY;
         this.velocities[o + 2] = this.velocities[o + 2]! + vz - beforeZ;
+      }
+      if (this.moduleSpeeds) this.moduleSpeeds[i] = Math.hypot(vx, vy, vz);
+      if (this.rotationBySpeed) {
+        const r = this.rotationBySpeed;
+        const phase = speedPhase(Math.hypot(vx, vy, vz), r.speedRange!);
+        const factor = rnd(74);
+        const sign = rnd(68) < this.main.flipRotationProbability ? -1 : 1;
+        if (r.separateAxes) {
+          this.rotations[o] =
+            this.rotations[o]! + scalar(r.angularVelocity?.x, phase, factor) * dt * sign;
+          this.rotations[o + 1] =
+            this.rotations[o + 1]! + scalar(r.angularVelocity?.y, phase, factor) * dt * sign;
+        }
+        this.rotations[o + 2] =
+          this.rotations[o + 2]! + scalar(r.angularVelocity?.z, phase, factor) * dt * sign;
       }
       if (this.renderVelocities) {
         this.renderVelocities[o] = vx * multiplier;
@@ -1007,6 +1057,7 @@ export class Emitter {
     for (const a of [this.positions, this.velocities, this.startSizes, this.rotations])
       a.copyWithin(i * 3, last * 3, last * 3 + 3);
     this.noiseSizes?.copyWithin(i * 3, last * 3, last * 3 + 3);
+    this.moduleSpeeds?.copyWithin(i, last, last + 1);
     this.renderVelocities?.copyWithin(i * 3, last * 3, last * 3 + 3);
     this.customData?.copyWithin(i * 8, last * 8, last * 8 + 8);
     this.startColors.copyWithin(i * 4, last * 4, last * 4 + 4);

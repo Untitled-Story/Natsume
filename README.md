@@ -157,7 +157,7 @@ runtime.registerScript(
 
 ## 模块支持状态
 
-按 [Unity 2022.3 粒子系统模块](https://docs.unity3d.com/2022.3/Documentation/Manual/ParticleSystemModules.html) 分类：Supported 2 项、Partial 10 项、Unsupported 12 项。以下指 Natsume 的运行能力；包能读取不代表其中的配置都能执行。
+按 [Unity 2022.3 粒子系统模块](https://docs.unity3d.com/2022.3/Documentation/Manual/ParticleSystemModules.html) 分类：Supported 4 项、Partial 10 项、Unsupported 10 项。以下指 Natsume 的运行能力；包能读取不代表其中的配置都能执行。
 
 ### Supported
 
@@ -167,6 +167,10 @@ runtime.registerScript(
 | ------------------- | -------------------------------------------------- |
 | Color over Lifetime | 生命周期颜色；Blend / Fixed 渐变及双渐变随机插值   |
 | Size over Lifetime  | 生命周期尺寸；统一或分轴缩放，三轴共用随机插值因子 |
+| Size by Speed       | 速度区间、统一 / 分轴尺寸乘数及四种参数模式        |
+| Rotation by Speed   | 速度区间、Z / 分轴角速度积分及四种参数模式         |
+
+速度取样包含重力、Velocity 和 Limit，不包含 Speed Multiplier 与 Noise 位移。零宽区间按 Unity 的端点规则处理。
 
 ### Partial
 
@@ -205,8 +209,6 @@ Unity 临时材质对象 ID 不在 NOAP 中；同队列不透明材质分组使�
 | Lifetime by Emitter Speed | 根据发射器速度设置寿命 |
 | Force over Lifetime       | 生命周期内施加力       |
 | Color by Speed            | 根据速度改变颜色       |
-| Size by Speed             | 根据速度改变尺寸       |
-| Rotation by Speed         | 根据速度改变旋转速度   |
 | External Forces           | 外部力场               |
 | Collision                 | 平面及场景碰撞         |
 | Triggers                  | 碰撞区域检测与事件     |

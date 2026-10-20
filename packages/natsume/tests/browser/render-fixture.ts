@@ -1278,3 +1278,74 @@ export async function measureRenderOrder(
   }
   return results;
 }
+
+export async function measureSpeedGeometry() {
+  const { effect } = getPreview();
+  if (!effect) throw new Error('Missing preview');
+  effect.pause();
+  const original = effect.container.children[0] as ParticleMesh;
+  const { SizeBySpeedModuleT } =
+    await import('../../src/format/generated/noa/ir/size-by-speed-module.js');
+  const { Vec2T } = await import('../../src/format/generated/noa/ir/vec2.js');
+  const { linear } = await import('../particle-fixtures.js');
+  const document = minimalDocument();
+  const pack = {
+    nodes: document.nodes,
+    components: [],
+    getNode: (id: number) => document.nodes.find((n) => n.id === id),
+  } as unknown as EffectPack;
+  const source = particleSource();
+  const values = vector();
+  values.x = linear(0.25, 1.75);
+  values.y = linear(0.5, 2);
+  values.z = linear(0.75, 2.25);
+  source.modules.push(
+    new ParticleModuleT(M.SizeBySpeedModule, new SizeBySpeedModuleT(values, true, new Vec2T(0, 4))),
+  );
+  const emitter = new Emitter(3, new Scene(pack, [1]).nodes.get(1)!, source, true, 12345, []);
+  manualParticle(emitter);
+  emitter.positions.fill(0);
+  emitter.rotations.fill(0);
+  const definition = structuredClone(original.definition) as ParticleRendererT;
+  definition.mode = RenderMode.Mesh;
+  definition.alignment = Alignment.World;
+  definition.meshAssetIds = [1];
+  definition.pivot = null;
+  definition.flip = null;
+  const meshPack = {
+    getMesh: () => ({
+      positions: [
+        { x: 1, y: 0, z: 0 },
+        { x: 0, y: 1, z: 0 },
+        { x: 0, y: 0, z: 1 },
+      ],
+      uv0: [
+        { x: 0, y: 0 },
+        { x: 1, y: 0 },
+        { x: 0, y: 1 },
+      ],
+      indices: [0, 1, 2],
+      submeshes: [{}],
+    }),
+  } as unknown as EffectPack;
+  const mesh = new ParticleMesh(
+    emitter,
+    definition,
+    original.materialDefinition,
+    Texture.WHITE,
+    meshPack,
+  );
+  try {
+    const result = [];
+    for (const speed of [0, 1, 2, 4, 8]) {
+      emitter.moduleSpeeds![0] = speed;
+      mesh.sync([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1], 'gamma');
+      const data = mesh.geometry.getBuffer('aPosition').data as Float32Array;
+      const stride = 16;
+      result.push({ speed, sizes: [data[0]!, data[stride + 1]!, data[2 * stride + 2]!] });
+    }
+    return result;
+  } finally {
+    mesh.destroy();
+  }
+}

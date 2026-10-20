@@ -76,6 +76,8 @@ export const KNOWN_FEATURES: Readonly<Record<string, number>> = Object.freeze(
       'particle.shape.edge',
       'particle.color',
       'particle.size',
+      'particle.size-by-speed',
+      'particle.rotation-by-speed',
       'particle.rotation',
       'particle.velocity',
       'particle.limit-velocity',
@@ -391,6 +393,19 @@ export function validateDocument(document: DocumentT): void {
         extent('halfLength');
         unit(number(o, 'spread'), 'edge spread');
         break;
+      case 'SizeBySpeedModule':
+      case 'RotationBySpeedModule': {
+        requireFeature(
+          name === 'SizeBySpeedModule' ? 'particle.size-by-speed' : 'particle.rotation-by-speed',
+        );
+        const range = object(o.speedRange);
+        check(
+          number(range, 'x') >= 0 && number(range, 'y') >= number(range, 'x'),
+          'SEMANTIC',
+          'Invalid speed range',
+        );
+        break;
+      }
       case 'NoiseModule':
         check(
           o.algorithm && number(o, 'algorithmRevision') > 0 && number(o, 'octaves') > 0,

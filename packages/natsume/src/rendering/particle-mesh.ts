@@ -1,3 +1,4 @@
+import { speedSize } from '../runtime/speed-modules.js';
 import { selectMesh, rendererVertexStride } from './mesh-selection.js';
 import { rendererSupport } from './renderer-support.js';
 import { stretchInverseLength } from './stretch-normalization.js';
@@ -534,6 +535,14 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
         sx *= uniform;
         sy *= size.separateAxes ? scalar(size.size?.y, t, factor, 1) : uniform;
         sz *= size.separateAxes ? scalar(size.size?.z, t, factor, 1) : uniform;
+      }
+      if (e.sizeBySpeed) {
+        const size = e.sizeBySpeed;
+        const speed = e.moduleSpeeds![i]!;
+        const factor = rnd(73);
+        sx *= speedSize(size, speed, factor, 0);
+        sy *= speedSize(size, speed, factor, 1);
+        sz *= speedSize(size, speed, factor, 2);
       }
       if (e.noiseSizes) {
         sx *= e.noiseSizes[o]!;
