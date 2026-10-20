@@ -21,6 +21,7 @@ async function saveJson(path, contents) {
 const tool = dirname(fileURLToPath(import.meta.url));
 const root = resolve(tool, '../..');
 const version = '2022.3.21f1';
+const events = process.argv.includes('--events');
 const bySpeed = process.argv.includes('--by-speed');
 const bindings = process.argv.includes('--animation-bindings');
 const animation = process.argv.includes('--animation');
@@ -42,7 +43,8 @@ const customData = process.argv.includes('--custom-data');
 const stretch = process.argv.includes('--stretch');
 const rectLayout = process.argv.includes('--rect-layout');
 assert(
-  Number(bySpeed) +
+  Number(events) +
+    Number(bySpeed) +
     Number(bindings) +
     Number(animation) +
     Number(meshes) +
@@ -76,47 +78,49 @@ const project = resolve(root, 'data/unity-probe');
 const output = resolve(
   root,
   'data/unity-baselines',
-  bySpeed
-    ? 'by-speed'
-    : bindings
-      ? 'animation-bindings'
-      : animation
-        ? 'animation'
-        : meshes
-          ? 'meshes'
-          : compatibility
-            ? 'compatibility'
-            : noiseStatistics
-              ? process.env.NATSUME_NOISE_STATISTICS_INPUT
-                ? 'noise-statistics-custom'
-                : 'noise-statistics'
-              : customData
-                ? 'custom-data'
-                : stretch
-                  ? 'stretch'
-                  : rectLayout
-                    ? 'layout'
-                    : noiseOptions
-                      ? 'noise-options'
-                      : sweeps
-                        ? 'sweeps'
-                        : spaces
-                          ? 'spaces'
-                          : sorting
-                            ? 'sorting'
-                            : basicShapes
-                              ? 'basic-shapes'
-                              : rotationPrewarm
-                                ? 'rotation-prewarm'
-                                : layout
-                                  ? 'prefab-layout'
-                                  : boundaries
-                                    ? 'boundaries'
-                                    : distributions
-                                      ? 'random'
-                                      : shape
-                                        ? 'shape'
-                                        : '.',
+  events
+    ? 'events'
+    : bySpeed
+      ? 'by-speed'
+      : bindings
+        ? 'animation-bindings'
+        : animation
+          ? 'animation'
+          : meshes
+            ? 'meshes'
+            : compatibility
+              ? 'compatibility'
+              : noiseStatistics
+                ? process.env.NATSUME_NOISE_STATISTICS_INPUT
+                  ? 'noise-statistics-custom'
+                  : 'noise-statistics'
+                : customData
+                  ? 'custom-data'
+                  : stretch
+                    ? 'stretch'
+                    : rectLayout
+                      ? 'layout'
+                      : noiseOptions
+                        ? 'noise-options'
+                        : sweeps
+                          ? 'sweeps'
+                          : spaces
+                            ? 'spaces'
+                            : sorting
+                              ? 'sorting'
+                              : basicShapes
+                                ? 'basic-shapes'
+                                : rotationPrewarm
+                                  ? 'rotation-prewarm'
+                                  : layout
+                                    ? 'prefab-layout'
+                                    : boundaries
+                                      ? 'boundaries'
+                                      : distributions
+                                        ? 'random'
+                                        : shape
+                                          ? 'shape'
+                                          : '.',
 );
 const baseline = resolve(output, fitting ? 'noise-fit-output.json' : `unity-${version}.json`);
 await mkdir(output, { recursive: true });
@@ -166,47 +170,49 @@ const child = spawn(
     '-projectPath',
     project,
     '-executeMethod',
-    bySpeed
-      ? 'NatsumeBySpeedProbe.Run'
-      : bindings
-        ? 'NatsumeBindingProbe.Run'
-        : animation
-          ? 'NatsumeAnimationProbe.Run'
-          : meshes
-            ? 'NatsumeMeshProbe.Run'
-            : compatibility
-              ? 'NatsumeCompatibilityProbe.Run'
-              : noiseStatistics
-                ? 'NatsumeNoiseStatisticsProbe.Run'
-                : customData
-                  ? 'NatsumeCustomDataProbe.Run'
-                  : stretch
-                    ? 'NatsumeStretchProbe.Run'
-                    : rectLayout
-                      ? 'NatsumeLayoutProbe.Run'
-                      : noiseOptions
-                        ? 'NatsumeNoiseOptionsProbe.Run'
-                        : sweeps
-                          ? 'NatsumeSweepProbe.Run'
-                          : spaces
-                            ? 'NatsumeSpaceProbe.Run'
-                            : sorting
-                              ? 'NatsumeSortingProbe.Run'
-                              : basicShapes
-                                ? 'NatsumeBasicShapeProbe.Run'
-                                : rotationPrewarm
-                                  ? 'NatsumeRotationPrewarmProbe.Run'
-                                  : shape
-                                    ? 'NatsumeShapeProbe.Run'
-                                    : distributions
-                                      ? 'NatsumeRandomProbe.Run'
-                                      : layout
-                                        ? 'NatsumePrefabLayoutProbe.Run'
-                                        : boundaries
-                                          ? 'NatsumeBoundaryProbe.Run'
-                                          : fitting
-                                            ? 'NatsumeNoiseFitProbe.Run'
-                                            : 'NatsumeProbe.Run',
+    events
+      ? 'NatsumeEventProbe.Run'
+      : bySpeed
+        ? 'NatsumeBySpeedProbe.Run'
+        : bindings
+          ? 'NatsumeBindingProbe.Run'
+          : animation
+            ? 'NatsumeAnimationProbe.Run'
+            : meshes
+              ? 'NatsumeMeshProbe.Run'
+              : compatibility
+                ? 'NatsumeCompatibilityProbe.Run'
+                : noiseStatistics
+                  ? 'NatsumeNoiseStatisticsProbe.Run'
+                  : customData
+                    ? 'NatsumeCustomDataProbe.Run'
+                    : stretch
+                      ? 'NatsumeStretchProbe.Run'
+                      : rectLayout
+                        ? 'NatsumeLayoutProbe.Run'
+                        : noiseOptions
+                          ? 'NatsumeNoiseOptionsProbe.Run'
+                          : sweeps
+                            ? 'NatsumeSweepProbe.Run'
+                            : spaces
+                              ? 'NatsumeSpaceProbe.Run'
+                              : sorting
+                                ? 'NatsumeSortingProbe.Run'
+                                : basicShapes
+                                  ? 'NatsumeBasicShapeProbe.Run'
+                                  : rotationPrewarm
+                                    ? 'NatsumeRotationPrewarmProbe.Run'
+                                    : shape
+                                      ? 'NatsumeShapeProbe.Run'
+                                      : distributions
+                                        ? 'NatsumeRandomProbe.Run'
+                                        : layout
+                                          ? 'NatsumePrefabLayoutProbe.Run'
+                                          : boundaries
+                                            ? 'NatsumeBoundaryProbe.Run'
+                                            : fitting
+                                              ? 'NatsumeNoiseFitProbe.Run'
+                                              : 'NatsumeProbe.Run',
     ...(stretch || bindings ? [] : ['-quit']),
     '-logFile',
     log,
@@ -223,6 +229,16 @@ await new Promise((accept, reject) => {
 });
 const current = JSON.parse(await readFile(baseline, 'utf8'));
 assert.equal(current.unityVersion, version);
+if (events) {
+  assert.equal(current.cases.length, 221);
+  if (process.argv.includes('--update-fixtures'))
+    await saveJson(
+      resolve(root, 'data/unity-baselines/fixtures/unity-events.json'),
+      JSON.stringify(current, null, 2) + '\n',
+    );
+  console.log('Event measurements: ' + current.cases.length);
+  process.exit(0);
+}
 if (bySpeed) {
   assert.equal(current.cases.length, 3584);
   if (process.argv.includes('--update-fixtures'))

@@ -209,6 +209,17 @@ export async function showPreview(pack: EffectPack, signal: AbortSignal): Promis
   clearPreview();
   effect = created;
   app!.stage.addChild(effect.container);
+  effect.onAnimationEvent((event) => {
+    log(
+      'Animation · ' +
+        event.name +
+        ' · node ' +
+        event.nodeId +
+        ' · ' +
+        event.timeSeconds.toFixed(3) +
+        ' s',
+    );
+  });
   effect.play();
   overlay = new OverlayView(effect);
   focus.replaceChildren(

@@ -24,3 +24,8 @@ export {
   type CompatibilityIssue,
   type CompatibilityReport,
 } from './runtime/compatibility.js';
+
+export {
+  type NatsumeAnimationEvent,
+  type AnimationEventHandler,
+} from './runtime/animation-events.js';

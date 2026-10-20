@@ -19,6 +19,7 @@ pnpm probe:unity
 
 ```sh
 pnpm probe:unity --animation    # 动画时钟、循环与多关键帧曲线
+pnpm probe:unity --events       # 类型化事件、循环端点与启停顺序
 pnpm probe:unity --boundaries   # 发射、运动、外观与 BakeMesh 边界
 pnpm probe:unity --random       # 随机分布与参数相关性
 pnpm probe:unity --shape        # 位置扰动与 Burst Spread

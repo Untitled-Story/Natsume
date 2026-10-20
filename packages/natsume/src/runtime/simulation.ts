@@ -1,3 +1,4 @@
+import { visitAnimationEvents, type NatsumeAnimationEvent } from './animation-events.js';
 import { AnimationProperty } from '../format/generated/noa/ir/animation-property.js';
 import { ParticleParameter } from '../format/generated/noa/ir/particle-parameter.js';
 import { AnimationClock, animationSupport, animatorSupport } from './animation.js';
@@ -29,6 +30,9 @@ export type AnimationTarget =
   | { readonly animatorId: number; readonly clipId?: never }
   | { readonly clipId: number; readonly animatorId?: never };
 interface AnimationPlayer {
+  readonly clip: R<AnimationT>;
+  eventTime: number;
+  skipAdvance: boolean;
   readonly key: string;
   readonly clock: AnimationClock;
   readonly owner: SceneNode | undefined;
@@ -49,6 +53,10 @@ export class Simulation {
   time = 0;
   droppedSeconds = 0;
   private accumulator = 0;
+  private revision = 0;
+  private updating = false;
+  private dispatchingEvents = false;
+  onAnimationEvent: ((event: NatsumeAnimationEvent) => void) | undefined;
   private resumeState: PlaybackState = 'playing';
   private initialized = false;
   readonly fixedDelta = 1 / 60;
@@ -282,14 +290,17 @@ export class Simulation {
       }
     }
     this.sync();
+    for (const player of this.animationOrder()) if (!this.dispatchEvents(player, true)) break;
   }
   pause(): void {
+    this.revision++;
     if (this.state === 'playing' || this.state === 'draining') {
       this.resumeState = this.state;
       this.state = 'paused';
     }
   }
   stop(mode: 'drain' | 'clear' = 'drain'): void {
+    this.revision++;
     for (const e of this.emitters.values()) {
       e.emitting = false;
       if (mode === 'clear') e.clear();
@@ -298,6 +309,7 @@ export class Simulation {
     this.accumulator = 0;
   }
   restart(): void {
+    this.revision++;
     this.time = 0;
     this.accumulator = 0;
     this.droppedSeconds = 0;
@@ -323,6 +335,7 @@ export class Simulation {
     this.sync();
   }
   applyAnimatorState(animatorId: number, state: string | number, sync = true): void {
+    this.revision++;
     const c = this.pack.getComponent(animatorId);
     check(
       c?.dataType === ComponentData.Animator && this.scene.nodes.has(c.nodeId),
@@ -352,7 +365,14 @@ export class Simulation {
       animatorId,
       s.writeDefaultValues,
     );
-    if (sync) this.sync();
+    if (sync) {
+      this.sync();
+      const player = this.players.get('animator:' + animatorId);
+      if (player && this.state === 'playing') {
+        this.dispatchEvents(player, true);
+        player.skipAdvance = true;
+      }
+    }
   }
   private startClip(
     id: number,
@@ -382,6 +402,9 @@ export class Simulation {
     if (key)
       this.players.set(key, {
         key,
+        clip,
+        eventTime: -Number.EPSILON,
+        skipAdvance: false,
         clock,
         bindings,
         owner,
@@ -459,11 +482,57 @@ export class Simulation {
       });
     return this.orderedPlayers;
   }
+  private dispatchEvents(player: AnimationPlayer, initial = false): boolean {
+    if (this.dispatchingEvents) return false;
+    if (player.disabled || (player.owner && !player.owner.activeInHierarchy)) return true;
+    const { clip, clock } = player;
+    const offset = clock.loop ? Math.fround(clock.cycleOffset) : 0;
+    const to = initial ? offset % 1 : Math.fround(clock.normalizedTime + offset);
+    const from = initial ? (offset % 1) - Number.EPSILON : player.eventTime;
+    const revision = this.revision;
+    player.eventTime = initial ? offset : to;
+    this.dispatchingEvents = true;
+    try {
+      visitAnimationEvents(clip.events, clock.duration, clock.loop, from, to, (event) => {
+        const animatorId = player.animatorId ?? event.animatorComponentId;
+        this.onAnimationEvent?.(
+          Object.freeze({
+            clipId: clip.id,
+            animatorId,
+            nodeId: this.pack.getComponent(animatorId)?.nodeId,
+            timeSeconds: event.timeSeconds,
+            name: String(event.name ?? ''),
+            stringParameter: String(event.stringParameter ?? ''),
+            floatParameter: event.floatParameter,
+            intParameter: event.intParameter,
+            objectParameter: event.objectParameter,
+            requireReceiver: event.messageOptions === 0,
+          }),
+        );
+        return (
+          this.revision === revision &&
+          this.state === 'playing' &&
+          (!player.owner || player.owner.activeInHierarchy)
+        );
+      });
+    } finally {
+      this.dispatchingEvents = false;
+    }
+    return this.revision === revision && this.state === 'playing';
+  }
   private advanceAnimations(): void {
-    for (const { clock, bindings, owner, animatorId } of this.animationOrder()) {
+    for (const player of this.animationOrder()) {
+      const { clock, bindings, owner, animatorId } = player;
       if (animatorId !== undefined && !this.bindings.enabled.get(animatorId)) continue;
-      if ((owner && !owner.activeInHierarchy) || clock.duration === 0) continue;
+      if (owner && !owner.activeInHierarchy) continue;
+      if (player.eventTime < 0 && !this.dispatchEvents(player, true)) return;
+      if (clock.duration === 0) continue;
+      if (player.skipAdvance) {
+        player.skipAdvance = false;
+        continue;
+      }
       clock.advance(this.fixedDelta);
+      if (!this.dispatchEvents(player)) return;
       for (const binding of bindings) binding.sample(clock.seconds);
     }
   }
@@ -473,28 +542,40 @@ export class Simulation {
       'HOST',
       'Delta time must be finite nonnegative seconds',
     );
+    check(!this.updating, 'HOST', 'Recursive animation update is unsupported');
     if (this.state !== 'playing' && this.state !== 'draining') return;
-    const accepted = Math.min(seconds, 0.25);
-    this.droppedSeconds += seconds - accepted;
-    this.accumulator += accepted;
-    this.sync();
-    // At most eight fixed steps. Preserve the fractional remainder, discard overload.
-    let steps = 0;
-    while (this.accumulator + 1e-10 >= this.fixedDelta && steps < 8) {
-      if (this.state === 'playing' && this.players.size > 0) {
-        this.advanceAnimations();
-        this.sync();
+    this.updating = true;
+    try {
+      const accepted = Math.min(seconds, 0.25);
+      this.droppedSeconds += seconds - accepted;
+      this.accumulator += accepted;
+      this.sync();
+      // At most eight fixed steps. Preserve the fractional remainder, discard overload.
+      let steps = 0;
+      while (this.accumulator + 1e-10 >= this.fixedDelta && steps < 8) {
+        const revision = this.revision;
+        if (this.state === 'playing' && this.players.size > 0) {
+          this.advanceAnimations();
+          if (revision !== this.revision) {
+            this.accumulator = 0;
+            return;
+          }
+          this.sync();
+        }
+        if (this.state !== 'playing' && this.state !== 'draining') break;
+        for (const e of this.emitters.values()) e.step(this.fixedDelta);
+        this.time += this.fixedDelta;
+        this.accumulator -= this.fixedDelta;
+        steps++;
       }
-      for (const e of this.emitters.values()) e.step(this.fixedDelta);
-      this.time += this.fixedDelta;
-      this.accumulator -= this.fixedDelta;
-      steps++;
+      if (this.accumulator >= this.fixedDelta) {
+        const excess = Math.floor((this.accumulator + 1e-10) / this.fixedDelta) * this.fixedDelta;
+        this.droppedSeconds += excess;
+        this.accumulator -= excess;
+      }
+      if (this.state === 'draining' && this.particleCount === 0) this.state = 'stopped';
+    } finally {
+      this.updating = false;
     }
-    if (this.accumulator >= this.fixedDelta) {
-      const excess = Math.floor((this.accumulator + 1e-10) / this.fixedDelta) * this.fixedDelta;
-      this.droppedSeconds += excess;
-      this.accumulator -= excess;
-    }
-    if (this.state === 'draining' && this.particleCount === 0) this.state = 'stopped';
   }
 }

@@ -94,7 +94,19 @@ effect.setAnimationPriority({ clipId: 56 }, 20);
 
 重新启用的 Animator 重新注册；切状态保持原顺序。设置不同优先级后，该对写入者不再产生顺序警告。零时长片段仍只初始化，不会因优先级修改而重复执行。
 
-事件派发、倒放、多层混合和状态过渡尚未实现；未支持的必需能力明确拒绝加载。
+宿主可以订阅类型化动画事件：
+
+```ts
+const unsubscribe = effect.onAnimationEvent((event) => {
+  console.log(event.name, event.stringParameter, event.objectParameter);
+  return true; // 确认已处理；不返回 true 时保留 RequireReceiver 检查。
+});
+unsubscribe();
+```
+
+Bridge 行为可实现 `onAnimationEvent(event)`，接收同节点 Animator 的事件。事件保留源字符串、数字和对象引用（包括 bigint fileID），不按名称自动调用方法。订阅者先于 Bridge，事件先于该固定步的轨道采样和粒子推进；初始化、循环末端与同时间戳按源顺序派发。ApplyClip 只采样起点，不派发持续播放事件。
+
+回调异常记录诊断，RequireReceiver 无人确认时给出警告；停止、暂停、重播、切状态或销毁取消当前失效批次。回调中启动的新状态，其起始事件延至下一固定步；递归 update 会报错。倒放、多层混合和状态过渡尚未实现；未支持的必需能力明确拒绝加载。
 
 ## 粒子绘制环境
 
@@ -157,18 +169,19 @@ runtime.registerScript(
 
 ## 模块支持状态
 
-按 [Unity 2022.3 粒子系统模块](https://docs.unity3d.com/2022.3/Documentation/Manual/ParticleSystemModules.html) 分类：Supported 4 项、Partial 10 项、Unsupported 10 项。以下指 Natsume 的运行能力；包能读取不代表其中的配置都能执行。
+按 [Unity 2022.3 粒子系统模块](https://docs.unity3d.com/2022.3/Documentation/Manual/ParticleSystemModules.html) 分类：Supported 4 项、Partial 11 项、Unsupported 10 项。以下指 Natsume 的运行能力；包能读取不代表其中的配置都能执行。
 
 ### Supported
 
 以下模块的主要行为已实现，仍受下方共享参数限制。
 
-| 模块                | 支持范围                                           |
-| ------------------- | -------------------------------------------------- |
-| Color over Lifetime | 生命周期颜色；Blend / Fixed 渐变及双渐变随机插值   |
-| Size over Lifetime  | 生命周期尺寸；统一或分轴缩放，三轴共用随机插值因子 |
-| Size by Speed       | 速度区间、统一 / 分轴尺寸乘数及四种参数模式        |
-| Rotation by Speed   | 速度区间、Z / 分轴角速度积分及四种参数模式         |
+| 模块                | 支持范围                                            |
+| ------------------- | --------------------------------------------------- |
+| Color over Lifetime | 生命周期颜色；Blend / Fixed 渐变及双渐变随机插值    |
+| Size over Lifetime  | 生命周期尺寸；统一或分轴缩放，三轴共用随机插值因子  |
+| Size by Speed       | 速度区间、统一 / 分轴尺寸乘数及四种参数模式         |
+| Rotation by Speed   | 速度区间、Z / 分轴角速度积分及四种参数模式          |
+| Animation           | 单层无过渡状态、已支持绑定轨道、类型化事件与 Bridge |
 
 速度取样包含重力、Velocity 和 Limit，不包含 Speed Multiplier 与 Noise 位移。零宽区间按 Unity 的端点规则处理。
 
@@ -184,6 +197,7 @@ runtime.registerScript(
 | Limit Velocity over Lifetime | Local / World 标量与分轴限速、Dampen、Drag，含尺寸 / 速度乘算                                                                                                                                                                                                                                                                                                                                                         | 任意剪切与非均匀缩放组合尚未验收                   |
 | Noise                        | 三档实测 Perlin Curl 场与种子偏移；多 octave、Scroll、Remap、位置 / 旋转 / 尺寸影响                                                                                                                                                                                                                                                                                                                                   | 尺寸及未穷举的参数组合；误差见测量文档             |
 | Texture Sheet Animation      | Grid；Lifetime / Speed / FPS；Whole Sheet / Single Row；Fixed / Random 行；MeshIndex 行；UV mask                                                                                                                                                                                                                                                                                                                      | Sprites 模式；已知材质仅采样 UV0                   |
+| Animation                    | 单层状态、已支持的曲线与绑定；事件按帧派发，携带原始 payload，支持宿主订阅与同节点 Bridge 接收                                                                                                                                                                                                                                                                                                                        | 多层混合、状态过渡、倒放；任意 C# 方法执行         |
 | Custom Data                  | Custom1 / Custom2 Vector（1–4 维）与 Color                                                                                                                                                                                                                                                                                                                                                                            | 已知材质只消费 Custom1.x，其余分量保留为求值数据   |
 | Renderer                     | Billboard、Horizontal / Vertical Billboard、普通 / Freeform Stretch；View / World / Local / Facing / Velocity 对齐；多 Mesh、均匀 / 加权选择；多材质叠加、实例内 Render Queue 交错与系统深度排序（第二槽保留给 Trails）；每个 Mesh 使用单 submesh；None / Distance / Oldest / Youngest / Depth 排序；Pivot、Flip、尺寸限制、allowRoll；ParticleAddAlpha、ParticleUnlit、Legacy Additive / Alpha Blended、雾效与软粒子 | 其他材质模型；已知无光照材质不消费 normalDirection |
 

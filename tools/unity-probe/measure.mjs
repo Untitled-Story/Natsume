@@ -27,6 +27,7 @@ const modes = [
   'animation',
   'animation-bindings',
   'by-speed',
+  'events',
   'compatibility',
   'meshes',
 ];

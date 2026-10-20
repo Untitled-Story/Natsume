@@ -49,13 +49,6 @@ export function sampleBool(keys: readonly R<BoolKeyT>[], seconds: number): boole
 export function animationSupport(animation: R<AnimationT>): readonly SupportIssue[] {
   const rules = new SupportChecks();
   const path = `animations.${animation.id}`;
-  rules.require(
-    animation.events.length === 0,
-    'CAPABILITY',
-    `${path}.events`,
-    animation.events.length,
-    'Animation events are unsupported',
-  );
   const supported = new Set([
     AnimationProperty.NodeActive,
     AnimationProperty.NodePosition,

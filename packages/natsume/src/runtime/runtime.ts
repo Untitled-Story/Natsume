@@ -1,3 +1,4 @@
+import type { AnimationEventHandler, NatsumeAnimationEvent } from './animation-events.js';
 import type { AnimationTarget } from './simulation.js';
 import { rendererCanPlay } from './animation.js';
 import { rendererVertexStride, particleMaterialSlots } from '../rendering/mesh-selection.js';
@@ -37,6 +38,8 @@ export interface InstanceOptions extends SimulationOptions {
   readonly displayMatrix?: ArrayLike<number>;
 }
 export interface ScriptBehavior {
+  /** Receives source messages from the Animator on this node; return true when handled. */
+  onAnimationEvent?: AnimationEventHandler;
   onEnable?(): void;
   onDisable?(): void;
   update?(deltaSeconds: number): void;
@@ -121,6 +124,11 @@ export class EffectInstance {
     active: boolean;
     failed: boolean;
   }[] = [];
+  private readonly eventHandlers = new Set<AnimationEventHandler>();
+  private readonly missingReceivers = new Set<string>();
+  private updating = false;
+  private eventRevision = 0;
+  private dispatchingEvent = false;
   private disposed = false;
   private destroying = false;
   private colorSpace: SourceColorSpace;
@@ -131,6 +139,7 @@ export class EffectInstance {
     private readonly releaseTextures: () => void,
     options: InstanceOptions,
   ) {
+    simulation.onAnimationEvent = (event) => this.dispatchAnimationEvent(event);
     this.materialOrder = new Map(simulation.pack.document.materials.map((m, i) => [m.id, i]));
     this.environment = copyEnvironment(options.particleEnvironment);
     this.colorSpace =
@@ -255,28 +264,35 @@ export class EffectInstance {
   play(): void {
     this.assertAlive();
     this.simulation.play();
+    if (this.disposed) return;
     this.syncBehaviors();
     this.render();
   }
   pause(): void {
+    this.eventRevision++;
     this.assertAlive();
     this.simulation.pause();
   }
   stop(mode: 'drain' | 'clear' = 'drain'): void {
+    this.eventRevision++;
     this.assertAlive();
     this.simulation.stop(mode);
     this.render();
   }
   restart(): void {
+    this.eventRevision++;
     this.assertAlive();
     this.simulation.restart();
+    if (this.disposed) return;
     this.syncBehaviors();
     this.render();
   }
   /** Restarts a state by ID or name, applying its initial sample and source speed / cycle offset. */
   playAnimatorState(animatorId: number, state: string | number): void {
+    this.eventRevision++;
     this.assertAlive();
     this.simulation.applyAnimatorState(animatorId, state);
+    if (this.disposed) return;
     this.syncBehaviors();
     this.render();
   }
@@ -285,16 +301,84 @@ export class EffectInstance {
     this.assertAlive();
     this.simulation.setAnimationPriority(target, priority);
   }
+  /** Subscribes to source animation messages. Returns an idempotent unsubscribe function. */
+  onAnimationEvent(handler: AnimationEventHandler): () => void {
+    this.assertAlive();
+    check(typeof handler === 'function', 'HOST', 'Animation event handler must be a function');
+    this.eventHandlers.add(handler);
+    return () => {
+      this.eventHandlers.delete(handler);
+    };
+  }
+  private dispatchAnimationEvent(event: NatsumeAnimationEvent): void {
+    if (this.disposed || this.dispatchingEvent) return;
+    this.dispatchingEvent = true;
+    const revision = this.eventRevision;
+    let handled = false;
+    const invoke = (callback: AnimationEventHandler): void => {
+      try {
+        handled = callback(event) === true || handled;
+      } catch (error) {
+        this.simulation.diagnostics.push({
+          code: 'ANIMATION_EVENT_ERROR',
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
+    };
+    try {
+      this.syncBehaviors();
+      for (const handler of [...this.eventHandlers]) {
+        if (this.disposed || revision !== this.eventRevision) break;
+        if (this.eventHandlers.has(handler)) invoke(handler);
+      }
+      for (const b of this.behaviors) {
+        if (this.disposed || revision !== this.eventRevision) break;
+        if (b.node.id === event.nodeId && b.active && !b.failed && b.behavior.onAnimationEvent)
+          invoke((e) => b.behavior.onAnimationEvent!(e));
+      }
+      const key = event.clipId + ':' + event.animatorId + ':' + event.name;
+      if (
+        !this.disposed &&
+        revision === this.eventRevision &&
+        event.requireReceiver &&
+        !handled &&
+        !this.missingReceivers.has(key)
+      ) {
+        this.missingReceivers.add(key);
+        this.simulation.diagnostics.push({
+          code: 'ANIMATION_EVENT_RECEIVER',
+          componentId: event.animatorId,
+          message: 'Animation event has no receiver: ' + event.name,
+        });
+      }
+    } finally {
+      this.dispatchingEvent = false;
+    }
+  }
   update(seconds: number): void {
     this.assertAlive();
-    const before = this.simulation.time;
-    this.simulation.update(seconds);
-    const advanced = this.simulation.time - before;
-    if (advanced > 0)
-      for (const b of this.behaviors)
-        if (b.active && !b.failed) b.failed = !this.invoke(() => b.behavior.update?.(advanced));
-    this.syncBehaviors();
-    this.render();
+    check(
+      !this.updating && !this.dispatchingEvent,
+      'HOST',
+      'Recursive effect update is unsupported',
+    );
+    this.updating = true;
+    try {
+      const before = this.simulation.time;
+      this.simulation.update(seconds);
+      if (this.disposed) return;
+      const advanced = this.simulation.time - before;
+      if (advanced > 0)
+        for (const b of this.behaviors) {
+          if (this.disposed) return;
+          if (b.active && !b.failed) b.failed = !this.invoke(() => b.behavior.update?.(advanced));
+        }
+      if (this.disposed) return;
+      this.syncBehaviors();
+      this.render();
+    } finally {
+      this.updating = false;
+    }
   }
   private invoke(action: () => void): boolean {
     try {
@@ -423,6 +507,7 @@ export class EffectInstance {
     }
   }
   destroy(): void {
+    this.eventRevision++;
     if (this.disposed) return;
     this.disposed = true;
     this.destroying = true;
@@ -446,6 +531,8 @@ export class EffectInstance {
     this.simulation.stop('clear');
     this.simulation.emitters.clear();
     this.nodeViews.clear();
+    this.eventHandlers.clear();
+    this.simulation.onAnimationEvent = undefined;
     this.behaviors.length = 0;
     this.container.destroy();
     this.releaseTextures();

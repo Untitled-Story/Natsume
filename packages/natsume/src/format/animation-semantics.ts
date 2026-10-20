@@ -18,6 +18,33 @@ import { CustomDataMode } from './generated/noa/ir/custom-data-mode.js';
 /** Validates executable animation targets, source branches and feature declarations together. */
 export function validateAnimationBindings(d: DocumentT, required: (name: string) => void): void {
   for (const animation of d.animations) {
+    if (animation.events.length) required('animation.events-typed');
+    let eventTime = -1;
+    for (const event of animation.events) {
+      check(
+        event.timeSeconds >= 0 &&
+          event.timeSeconds >= eventTime &&
+          event.timeSeconds <= animation.durationSeconds,
+        'SEMANTIC',
+        'Invalid animation event time or order',
+      );
+      check(
+        !!event.name && [0, 1].includes(event.messageOptions),
+        'SEMANTIC',
+        'Invalid animation event message',
+      );
+      check(
+        d.components.some((c) => c.id === event.animatorComponentId && c.dataType === C.Animator),
+        'SEMANTIC',
+        'Missing event Animator',
+      );
+      check(
+        !event.objectParameter || !!event.objectParameter.target,
+        'SEMANTIC',
+        'Unresolved animation event object',
+      );
+      eventTime = event.timeSeconds;
+    }
     const seen = new Set<string>();
     for (const track of animation.tracks) {
       const b = track.binding!,

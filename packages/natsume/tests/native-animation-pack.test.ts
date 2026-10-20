@@ -31,6 +31,10 @@ it.skipIf(!existsSync(source))(
         gravity: [0, -9.81, 0],
         parentLayout: { width: 640, height: 360 },
       });
+      const eventSequence: string[] = [];
+      simulation.onAnimationEvent = (event) => {
+        eventSequence.push(`${event.clipId}:${event.animatorId}:${event.stringParameter}`);
+      };
       simulation.play();
       const activeSnapshot = () => [...simulation.scene.nodes.values()].map((n) => n.active);
       const sequence: boolean[][] = [];
@@ -38,11 +42,14 @@ it.skipIf(!existsSync(source))(
         simulation.update(1 / 60);
         sequence.push(activeSnapshot());
       }
+      const expectedEvents = [...eventSequence];
+      eventSequence.length = 0;
       simulation.restart();
       for (const expected of sequence) {
         simulation.update(1 / 60);
         expect(activeSnapshot(), file).toEqual(expected);
       }
+      expect(eventSequence, file).toEqual(expectedEvents);
       const timed = document.animations.filter((a) => a.durationSeconds > 0).length;
       results.push({ file, accepted: true, timed, unsupported });
       pack.dispose();

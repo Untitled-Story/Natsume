@@ -63,6 +63,7 @@ export const KNOWN_FEATURES: Readonly<Record<string, number>> = Object.freeze(
       'animation.component-enabled',
       'animation.particle',
       'animation.renderer-material',
+      'animation.events-typed',
       'particle.main',
       'particle.renderer',
       'particle.mesh-distribution',
