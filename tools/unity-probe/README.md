@@ -18,6 +18,7 @@ pnpm probe:unity
 默认测量曲线与 Noise。其他模式每次选择一个：
 
 ```sh
+pnpm probe:unity --animation    # 动画时钟、循环与多关键帧曲线
 pnpm probe:unity --boundaries   # 发射、运动、外观与 BakeMesh 边界
 pnpm probe:unity --random       # 随机分布与参数相关性
 pnpm probe:unity --shape        # 位置扰动与 Burst Spread

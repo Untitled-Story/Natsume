@@ -76,6 +76,14 @@ app.destroy();
 
 也可以通过 `new NatsumeRuntime(renderer)` 手动管理运行时。当前包为私有 workspace 包，尚未发布到 npm。
 
+## 动画
+
+支持单层、无过渡 Animator 的 NodeActive 多关键帧轨道，包括零时长初始化、循环、末帧停留、非负状态速度和 `[0,1]` 内的 cycle offset。偏移只作用于循环片段；`effect.playAnimatorState(animatorId, stateIdOrName)` 从起点重新播放状态。
+
+动画按 1/60 s 固定步先采样，再推进粒子；暂停、停止排空和过载丢弃的时间不推进动画。`setNodeActive` 立即生效，下一个固定步可被动画覆盖。入口 ApplyClip 只应用起点，PlayClip 持续播放。
+
+Transform、布局、粒子 / 材质动画和事件派发尚未实现；不支持倒放、多层混合、状态过渡及禁用 Animator 时写回默认值。新增必需能力仍会明确拒绝加载。
+
 ## 粒子绘制环境
 
 Legacy Additive / Alpha Blended 材质需要显式提供环境。普通二维预览可关闭雾效；未提供 `depth` 时使用 `effect.container.zIndex`，负值按零处理：

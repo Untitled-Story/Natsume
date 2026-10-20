@@ -1,3 +1,4 @@
+import { animationSupport, animatorSupport } from './animation.js';
 import { rendererVertexStride, particleMaterialSlots } from '../rendering/mesh-selection.js';
 import { NatsumeError, type ErrorCode } from '../errors.js';
 import type { EffectPack, DeepReadonly as R } from '../pack.js';
@@ -10,8 +11,6 @@ import type { CustomComponentT } from '../format/generated/noa/ir/custom-compone
 import { ComponentData as C } from '../format/generated/noa/ir/component-data.js';
 import { CameraPolicy } from '../format/generated/noa/ir/camera-policy.js';
 import { ColorSpace } from '../format/generated/noa/ir/color-space.js';
-import { AnimationProperty } from '../format/generated/noa/ir/animation-property.js';
-import { TrackData } from '../format/generated/noa/ir/track-data.js';
 import { copyEnvironment } from '../rendering/particle-environment.js';
 import { rendererSupport } from '../rendering/renderer-support.js';
 import { emitterSupport } from './emitter-support.js';
@@ -291,13 +290,7 @@ export function checkCompatibility(
       );
     }
     if (c.dataType === C.Animator)
-      rules.require(
-        (c.data as R<AnimatorT>).layers.length === 1,
-        'CAPABILITY',
-        'layers',
-        (c.data as R<AnimatorT>).layers.length,
-        'Only single-layer Animator is supported',
-      );
+      rules.issues.push(...animatorSupport(c.data as R<AnimatorT>, c.id));
     if (c.enabled && c.dataType === C.CustomComponent) {
       const script = (c.data as R<CustomComponentT>).script;
       if (!script || !context.hasScript(script))
@@ -407,32 +400,8 @@ export function checkCompatibility(
     context.imageBitmapAvailable,
     'ImageBitmap decoding is required',
   );
-  for (const animation of pack.document.animations) {
-    const path = `animations.${animation.id}`;
-    totals.require(
-      animation.durationSeconds === 0,
-      'CAPABILITY',
-      `${path}.durationSeconds`,
-      animation.durationSeconds,
-      'Animator supports zero-duration clips',
-    );
-    totals.require(
-      animation.events.length === 0,
-      'CAPABILITY',
-      `${path}.events`,
-      animation.events.length,
-      'Animation events are unsupported',
-    );
-    for (const [index, track] of animation.tracks.entries())
-      totals.require(
-        track.binding?.property === AnimationProperty.NodeActive &&
-          track.dataType === TrackData.BoolTrack,
-        'CAPABILITY',
-        `${path}.tracks.${index}`,
-        [track.binding?.property, track.dataType],
-        'Animator supports NodeActive tracks',
-      );
-  }
+  for (const animation of pack.document.animations)
+    totals.issues.push(...animationSupport(animation));
   append(totals.issues);
   return finish();
 }

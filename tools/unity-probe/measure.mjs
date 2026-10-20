@@ -24,6 +24,7 @@ const modes = [
   'stretch',
   'noise-statistics',
   'custom-data',
+  'animation',
   'compatibility',
   'meshes',
 ];

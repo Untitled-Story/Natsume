@@ -254,6 +254,7 @@ export class EffectInstance {
     }
     return view;
   }
+  /** Sets the node immediately; a playing animation may overwrite it on the next fixed step. */
   setNodeActive(id: number, active: boolean): void {
     this.assertAlive();
     this.simulation.setNodeActive(id, active);
@@ -281,6 +282,7 @@ export class EffectInstance {
     this.syncBehaviors();
     this.render();
   }
+  /** Restarts a state by ID or name, applying its initial sample and source speed / cycle offset. */
   playAnimatorState(animatorId: number, state: string | number): void {
     this.assertAlive();
     this.simulation.applyAnimatorState(animatorId, state);

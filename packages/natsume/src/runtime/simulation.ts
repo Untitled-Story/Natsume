@@ -1,11 +1,13 @@
+import { AnimationClock, sampleBool, animationSupport, animatorSupport } from './animation.js';
+import { assertSupport } from './support-checks.js';
+import type { AnimationT } from '../format/generated/noa/ir/animation.js';
+import type { SceneNode } from './scene.js';
 import { check } from '../errors.js';
 import type { EffectPack, DeepReadonly as R } from '../pack.js';
 import type { ParticleSystemT } from '../format/generated/noa/ir/particle-system.js';
 import type { AnimatorT } from '../format/generated/noa/ir/animator.js';
 import type { BoolTrackT } from '../format/generated/noa/ir/bool-track.js';
 import { ComponentData } from '../format/generated/noa/ir/component-data.js';
-import { AnimationProperty } from '../format/generated/noa/ir/animation-property.js';
-import { TrackData } from '../format/generated/noa/ir/track-data.js';
 import { ActionKind } from '../format/generated/noa/ir/action-kind.js';
 import { CameraPolicy } from '../format/generated/noa/ir/camera-policy.js';
 import { Scene, type LayoutSize } from './scene.js';
@@ -32,6 +34,18 @@ export class Simulation {
   private resumeState: PlaybackState = 'playing';
   private initialized = false;
   readonly fixedDelta = 1 / 60;
+  private readonly clips = new Map<number, R<AnimationT>>();
+  private readonly players = new Map<
+    string,
+    {
+      clock: AnimationClock;
+      owner: SceneNode | undefined;
+      disabled: boolean;
+      keepState: boolean;
+      animatorId: number | undefined;
+      bindings: { node: SceneNode; keys: R<BoolTrackT>['keys']; baseline: boolean }[];
+    }
+  >();
   constructor(
     readonly pack: EffectPack,
     options: SimulationOptions = {},
@@ -104,28 +118,14 @@ export class Simulation {
           this.scene.nodes.get((c.data as R<ParticleSystemT>).main!.customSpaceNodeId),
         ),
       );
-    for (const a of pack.document.animations) {
-      check(
-        a.durationSeconds === 0 && a.events.length === 0,
-        'CAPABILITY',
-        'Initial Animator supports zero-duration clips without events',
-      );
-      for (const t of a.tracks)
-        check(
-          t.binding?.property === AnimationProperty.NodeActive &&
-            t.dataType === TrackData.BoolTrack,
-          'CAPABILITY',
-          'Initial Animator supports NodeActive tracks',
-        );
+    for (const animation of pack.document.animations) {
+      assertSupport(animationSupport(animation));
+      this.clips.set(animation.id, animation);
     }
     for (const c of pack.components.filter(
       (c) => c.dataType === ComponentData.Animator && this.scene.nodes.has(c.nodeId),
     ))
-      check(
-        (c.data as R<AnimatorT>).layers.length === 1,
-        'CAPABILITY',
-        'Only single-layer Animator is supported',
-      );
+      assertSupport(animatorSupport(c.data as R<AnimatorT>, c.id));
     for (const a of entry.actions)
       check(
         [
@@ -146,6 +146,22 @@ export class Simulation {
   }
   private sync(): void {
     this.scene.update();
+    let changed = false;
+    for (const player of this.players.values()) {
+      if (!player.owner) continue;
+      if (!player.owner.activeInHierarchy) {
+        player.disabled = true;
+        if (!player.keepState) player.clock.normalizedTime = 0;
+      } else if (player.disabled) {
+        player.disabled = false;
+        if (!player.keepState && player.animatorId !== undefined) {
+          const animator = this.pack.getComponent(player.animatorId)!.data as R<AnimatorT>;
+          this.applyAnimatorState(player.animatorId, animator.layers[0]!.defaultStateId, false);
+          changed = true;
+        }
+      }
+    }
+    if (changed) this.scene.update();
     if (this.initialized) for (const e of this.emitters.values()) e.sync();
   }
   play(): void {
@@ -172,8 +188,10 @@ export class Simulation {
     for (const a of this.entry.actions) {
       switch (a.kind) {
         case ActionKind.ApplyClip:
+          this.startClip(a.animationId);
+          break;
         case ActionKind.PlayClip:
-          this.applyClip(a.animationId);
+          this.startClip(a.animationId, `clip:${a.animationId}`);
           break;
         case ActionKind.SetActive: {
           const n = this.scene.nodes.get(a.targetId);
@@ -209,6 +227,7 @@ export class Simulation {
     this.accumulator = 0;
     this.droppedSeconds = 0;
     this.initialized = false;
+    this.players.clear();
     this.state = 'idle';
     for (const n of this.scene.nodes.values()) n.active = n.source.active;
     for (const e of this.emitters.values()) e.reset();
@@ -231,16 +250,51 @@ export class Simulation {
     const layer = (c.data as R<AnimatorT>).layers[0]!,
       s = layer.states.find((s) => (typeof state === 'number' ? s.id === state : s.name === state));
     check(s, 'HOST', 'Unknown Animator state');
-    this.applyClip(s.animationId);
+    this.startClip(
+      s.animationId,
+      `animator:${animatorId}`,
+      s.speed,
+      s.cycleOffset,
+      this.scene.nodes.get(c.nodeId),
+      (c.data as R<AnimatorT>).keepStateOnDisable,
+      animatorId,
+    );
     if (sync) this.sync();
   }
-  private applyClip(id: number): void {
-    const clip = this.pack.document.animations.find((a) => a.id === id);
+  private startClip(
+    id: number,
+    key?: string,
+    speed = 1,
+    cycleOffset = 0,
+    owner?: SceneNode,
+    keepState = true,
+    animatorId?: number,
+  ): void {
+    const clip = this.clips.get(id);
     check(clip, 'SEMANTIC', 'Missing clip');
-    for (const t of clip.tracks) {
-      const node = this.scene.nodes.get(t.binding!.targetId);
-      if (!node) continue;
-      for (const k of (t.data as R<BoolTrackT>).keys) if (k.time <= 0) node.active = k.value;
+    if (key) this.players.delete(key);
+    const clock = new AnimationClock(clip.durationSeconds, clip.loop, speed, cycleOffset);
+    const bindings = clip.tracks.flatMap((track) => {
+      const node = this.scene.nodes.get(track.binding!.targetId);
+      return node
+        ? [{ node, keys: (track.data as R<BoolTrackT>).keys, baseline: node.active }]
+        : [];
+    });
+    for (const { node, keys } of bindings) {
+      const value = sampleBool(keys, clock.seconds);
+      if (value !== undefined) node.active = value;
+    }
+    // Initialization clips never acquire a repeating playback head.
+    if (key && clip.durationSeconds > 0)
+      this.players.set(key, { clock, bindings, owner, disabled: false, keepState, animatorId });
+  }
+  private advanceAnimations(): void {
+    for (const { clock, bindings, owner } of this.players.values()) {
+      if (owner && !owner.activeInHierarchy) continue;
+      clock.advance(this.fixedDelta);
+      for (const { node, keys, baseline } of bindings) {
+        node.active = sampleBool(keys, clock.seconds) ?? baseline;
+      }
     }
   }
   update(seconds: number): void {
@@ -257,6 +311,10 @@ export class Simulation {
     // At most eight fixed steps. Preserve the fractional remainder, discard overload.
     let steps = 0;
     while (this.accumulator + 1e-10 >= this.fixedDelta && steps < 8) {
+      if (this.state === 'playing' && this.players.size > 0) {
+        this.advanceAnimations();
+        this.sync();
+      }
       for (const e of this.emitters.values()) e.step(this.fixedDelta);
       this.time += this.fixedDelta;
       this.accumulator -= this.fixedDelta;

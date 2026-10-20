@@ -449,6 +449,12 @@ export function validateDocument(document: DocumentT): void {
         const binding = object(o.binding),
           target = number(binding, 'targetId');
         check(ids.has(target), 'SEMANTIC', 'Missing animation target');
+        for (const curve of Object.values(object(o.data))) {
+          if (!curve || typeof curve !== 'object' || !('domain' in curve)) continue;
+          check(object(curve).domain === 0, 'SEMANTIC', 'Animation curves require Seconds domain');
+          for (const key of array(object(curve).keys))
+            check(number(key, 'time') >= 0, 'SEMANTIC', 'Negative animation key time');
+        }
         if (binding.property === 1) {
           ref(target, 'node');
           check(o.dataType === 5, 'SEMANTIC', 'NodeActive requires BoolTrack');
@@ -457,6 +463,8 @@ export function validateDocument(document: DocumentT): void {
       }
       case 'BoolTrack':
         ordered(array(o.keys));
+        for (const key of array(o.keys))
+          check(number(key, 'time') >= 0, 'SEMANTIC', 'Negative animation key time');
         break;
       case 'ReferenceTrack':
         ordered(array(o.keys));
