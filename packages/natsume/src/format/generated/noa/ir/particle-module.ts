@@ -10,8 +10,10 @@ import { EmissionModule, EmissionModuleT } from '../../noa/ir/emission-module.js
 import { LimitVelocityModule, LimitVelocityModuleT } from '../../noa/ir/limit-velocity-module.js';
 import { NoiseModule, NoiseModuleT } from '../../noa/ir/noise-module.js';
 import { ParticleModuleData, unionToParticleModuleData, unionListToParticleModuleData } from '../../noa/ir/particle-module-data.js';
+import { RotationBySpeedModule, RotationBySpeedModuleT } from '../../noa/ir/rotation-by-speed-module.js';
 import { RotationModule, RotationModuleT } from '../../noa/ir/rotation-module.js';
 import { ShapeModule, ShapeModuleT } from '../../noa/ir/shape-module.js';
+import { SizeBySpeedModule, SizeBySpeedModuleT } from '../../noa/ir/size-by-speed-module.js';
 import { SizeModule, SizeModuleT } from '../../noa/ir/size-module.js';
 import { TextureSheetModule, TextureSheetModuleT } from '../../noa/ir/texture-sheet-module.js';
 import { VelocityModule, VelocityModuleT } from '../../noa/ir/velocity-module.js';
@@ -94,7 +96,7 @@ unpackTo(_o: ParticleModuleT): void {
 export class ParticleModuleT implements flatbuffers.IGeneratedObject {
 constructor(
   public dataType: ParticleModuleData = ParticleModuleData.NONE,
-  public data: ColorModuleT|CustomDataModuleT|EmissionModuleT|LimitVelocityModuleT|NoiseModuleT|RotationModuleT|ShapeModuleT|SizeModuleT|TextureSheetModuleT|VelocityModuleT|null = null
+  public data: ColorModuleT|CustomDataModuleT|EmissionModuleT|LimitVelocityModuleT|NoiseModuleT|RotationBySpeedModuleT|RotationModuleT|ShapeModuleT|SizeBySpeedModuleT|SizeModuleT|TextureSheetModuleT|VelocityModuleT|null = null
 ){}
 
 

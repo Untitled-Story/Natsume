@@ -8,6 +8,7 @@ import { FloatTrack, FloatTrackT } from '../../noa/ir/float-track.js';
 import { ReferenceTrack, ReferenceTrackT } from '../../noa/ir/reference-track.js';
 import { RotationTrack, RotationTrackT } from '../../noa/ir/rotation-track.js';
 import { Vector3Track, Vector3TrackT } from '../../noa/ir/vector3-track.js';
+import { Vector4Track, Vector4TrackT } from '../../noa/ir/vector4-track.js';
 
 
 export enum TrackData {
@@ -17,13 +18,14 @@ export enum TrackData {
   RotationTrack = 3,
   ColorTrack = 4,
   BoolTrack = 5,
-  ReferenceTrack = 6
+  ReferenceTrack = 6,
+  Vector4Track = 7
 }
 
 export function unionToTrackData(
   type: TrackData,
-  accessor: (obj:BoolTrack|ColorTrack|FloatTrack|ReferenceTrack|RotationTrack|Vector3Track) => BoolTrack|ColorTrack|FloatTrack|ReferenceTrack|RotationTrack|Vector3Track|null
-): BoolTrack|ColorTrack|FloatTrack|ReferenceTrack|RotationTrack|Vector3Track|null {
+  accessor: (obj:BoolTrack|ColorTrack|FloatTrack|ReferenceTrack|RotationTrack|Vector3Track|Vector4Track) => BoolTrack|ColorTrack|FloatTrack|ReferenceTrack|RotationTrack|Vector3Track|Vector4Track|null
+): BoolTrack|ColorTrack|FloatTrack|ReferenceTrack|RotationTrack|Vector3Track|Vector4Track|null {
   switch(TrackData[type]) {
     case 'NONE': return null; 
     case 'FloatTrack': return accessor(new FloatTrack())! as FloatTrack;
@@ -32,15 +34,16 @@ export function unionToTrackData(
     case 'ColorTrack': return accessor(new ColorTrack())! as ColorTrack;
     case 'BoolTrack': return accessor(new BoolTrack())! as BoolTrack;
     case 'ReferenceTrack': return accessor(new ReferenceTrack())! as ReferenceTrack;
+    case 'Vector4Track': return accessor(new Vector4Track())! as Vector4Track;
     default: return null;
   }
 }
 
 export function unionListToTrackData(
   type: TrackData, 
-  accessor: (index: number, obj:BoolTrack|ColorTrack|FloatTrack|ReferenceTrack|RotationTrack|Vector3Track) => BoolTrack|ColorTrack|FloatTrack|ReferenceTrack|RotationTrack|Vector3Track|null, 
+  accessor: (index: number, obj:BoolTrack|ColorTrack|FloatTrack|ReferenceTrack|RotationTrack|Vector3Track|Vector4Track) => BoolTrack|ColorTrack|FloatTrack|ReferenceTrack|RotationTrack|Vector3Track|Vector4Track|null, 
   index: number
-): BoolTrack|ColorTrack|FloatTrack|ReferenceTrack|RotationTrack|Vector3Track|null {
+): BoolTrack|ColorTrack|FloatTrack|ReferenceTrack|RotationTrack|Vector3Track|Vector4Track|null {
   switch(TrackData[type]) {
     case 'NONE': return null; 
     case 'FloatTrack': return accessor(index, new FloatTrack())! as FloatTrack;
@@ -49,6 +52,7 @@ export function unionListToTrackData(
     case 'ColorTrack': return accessor(index, new ColorTrack())! as ColorTrack;
     case 'BoolTrack': return accessor(index, new BoolTrack())! as BoolTrack;
     case 'ReferenceTrack': return accessor(index, new ReferenceTrack())! as ReferenceTrack;
+    case 'Vector4Track': return accessor(index, new Vector4Track())! as Vector4Track;
     default: return null;
   }
 }

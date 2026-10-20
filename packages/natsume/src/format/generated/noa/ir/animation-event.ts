@@ -4,6 +4,8 @@
 
 import * as flatbuffers from 'flatbuffers';
 
+import { AnimationMessageOptions } from '../../noa/ir/animation-message-options.js';
+import { ReferenceValue, ReferenceValueT } from '../../noa/ir/reference-value.js';
 
 
 export class AnimationEvent implements flatbuffers.IUnpackableObject<AnimationEventT> {
@@ -36,15 +38,40 @@ name(optionalEncoding?:any):string|Uint8Array|null {
   return offset ? this.bb!.__string(this.bb_pos + offset, optionalEncoding) : null;
 }
 
-payload():string|null
-payload(optionalEncoding:flatbuffers.Encoding):string|Uint8Array|null
-payload(optionalEncoding?:any):string|Uint8Array|null {
+stringParameter():string|null
+stringParameter(optionalEncoding:flatbuffers.Encoding):string|Uint8Array|null
+stringParameter(optionalEncoding?:any):string|Uint8Array|null {
   const offset = this.bb!.__offset(this.bb_pos, 8);
   return offset ? this.bb!.__string(this.bb_pos + offset, optionalEncoding) : null;
 }
 
+floatParameter():number {
+  const offset = this.bb!.__offset(this.bb_pos, 10);
+  return offset ? this.bb!.readFloat32(this.bb_pos + offset) : 0.0;
+}
+
+intParameter():number {
+  const offset = this.bb!.__offset(this.bb_pos, 12);
+  return offset ? this.bb!.readInt32(this.bb_pos + offset) : 0;
+}
+
+objectParameter(obj?:ReferenceValue):ReferenceValue|null {
+  const offset = this.bb!.__offset(this.bb_pos, 14);
+  return offset ? (obj || new ReferenceValue()).__init(this.bb!.__indirect(this.bb_pos + offset), this.bb!) : null;
+}
+
+messageOptions():AnimationMessageOptions {
+  const offset = this.bb!.__offset(this.bb_pos, 16);
+  return offset ? this.bb!.readUint8(this.bb_pos + offset) : AnimationMessageOptions.RequireReceiver;
+}
+
+animatorComponentId():number {
+  const offset = this.bb!.__offset(this.bb_pos, 18);
+  return offset ? this.bb!.readUint32(this.bb_pos + offset) : 0;
+}
+
 static startAnimationEvent(builder:flatbuffers.Builder) {
-  builder.startObject(3);
+  builder.startObject(8);
 }
 
 static addTimeSeconds(builder:flatbuffers.Builder, timeSeconds:number) {
@@ -55,8 +82,28 @@ static addName(builder:flatbuffers.Builder, nameOffset:flatbuffers.Offset) {
   builder.addFieldOffset(1, nameOffset, 0);
 }
 
-static addPayload(builder:flatbuffers.Builder, payloadOffset:flatbuffers.Offset) {
-  builder.addFieldOffset(2, payloadOffset, 0);
+static addStringParameter(builder:flatbuffers.Builder, stringParameterOffset:flatbuffers.Offset) {
+  builder.addFieldOffset(2, stringParameterOffset, 0);
+}
+
+static addFloatParameter(builder:flatbuffers.Builder, floatParameter:number) {
+  builder.addFieldFloat32(3, floatParameter, 0.0);
+}
+
+static addIntParameter(builder:flatbuffers.Builder, intParameter:number) {
+  builder.addFieldInt32(4, intParameter, 0);
+}
+
+static addObjectParameter(builder:flatbuffers.Builder, objectParameterOffset:flatbuffers.Offset) {
+  builder.addFieldOffset(5, objectParameterOffset, 0);
+}
+
+static addMessageOptions(builder:flatbuffers.Builder, messageOptions:AnimationMessageOptions) {
+  builder.addFieldInt8(6, messageOptions, AnimationMessageOptions.RequireReceiver);
+}
+
+static addAnimatorComponentId(builder:flatbuffers.Builder, animatorComponentId:number) {
+  builder.addFieldInt32(7, animatorComponentId, 0);
 }
 
 static endAnimationEvent(builder:flatbuffers.Builder):flatbuffers.Offset {
@@ -65,19 +112,17 @@ static endAnimationEvent(builder:flatbuffers.Builder):flatbuffers.Offset {
   return offset;
 }
 
-static createAnimationEvent(builder:flatbuffers.Builder, timeSeconds:number, nameOffset:flatbuffers.Offset, payloadOffset:flatbuffers.Offset):flatbuffers.Offset {
-  AnimationEvent.startAnimationEvent(builder);
-  AnimationEvent.addTimeSeconds(builder, timeSeconds);
-  AnimationEvent.addName(builder, nameOffset);
-  AnimationEvent.addPayload(builder, payloadOffset);
-  return AnimationEvent.endAnimationEvent(builder);
-}
 
 unpack(): AnimationEventT {
   return new AnimationEventT(
     this.timeSeconds(),
     this.name(),
-    this.payload()
+    this.stringParameter(),
+    this.floatParameter(),
+    this.intParameter(),
+    (this.objectParameter() !== null ? this.objectParameter()!.unpack() : null),
+    this.messageOptions(),
+    this.animatorComponentId()
   );
 }
 
@@ -85,7 +130,12 @@ unpack(): AnimationEventT {
 unpackTo(_o: AnimationEventT): void {
   _o.timeSeconds = this.timeSeconds();
   _o.name = this.name();
-  _o.payload = this.payload();
+  _o.stringParameter = this.stringParameter();
+  _o.floatParameter = this.floatParameter();
+  _o.intParameter = this.intParameter();
+  _o.objectParameter = (this.objectParameter() !== null ? this.objectParameter()!.unpack() : null);
+  _o.messageOptions = this.messageOptions();
+  _o.animatorComponentId = this.animatorComponentId();
 }
 }
 
@@ -93,18 +143,30 @@ export class AnimationEventT implements flatbuffers.IGeneratedObject {
 constructor(
   public timeSeconds: number = 0.0,
   public name: string|Uint8Array|null = null,
-  public payload: string|Uint8Array|null = null
+  public stringParameter: string|Uint8Array|null = null,
+  public floatParameter: number = 0.0,
+  public intParameter: number = 0,
+  public objectParameter: ReferenceValueT|null = null,
+  public messageOptions: AnimationMessageOptions = AnimationMessageOptions.RequireReceiver,
+  public animatorComponentId: number = 0
 ){}
 
 
 pack(builder:flatbuffers.Builder): flatbuffers.Offset {
   const name = (this.name !== null ? builder.createString(this.name!) : 0);
-  const payload = (this.payload !== null ? builder.createString(this.payload!) : 0);
+  const stringParameter = (this.stringParameter !== null ? builder.createString(this.stringParameter!) : 0);
+  const objectParameter = (this.objectParameter !== null ? this.objectParameter!.pack(builder) : 0);
 
-  return AnimationEvent.createAnimationEvent(builder,
-    this.timeSeconds,
-    name,
-    payload
-  );
+  AnimationEvent.startAnimationEvent(builder);
+  AnimationEvent.addTimeSeconds(builder, this.timeSeconds);
+  AnimationEvent.addName(builder, name);
+  AnimationEvent.addStringParameter(builder, stringParameter);
+  AnimationEvent.addFloatParameter(builder, this.floatParameter);
+  AnimationEvent.addIntParameter(builder, this.intParameter);
+  AnimationEvent.addObjectParameter(builder, objectParameter);
+  AnimationEvent.addMessageOptions(builder, this.messageOptions);
+  AnimationEvent.addAnimatorComponentId(builder, this.animatorComponentId);
+
+  return AnimationEvent.endAnimationEvent(builder);
 }
 }

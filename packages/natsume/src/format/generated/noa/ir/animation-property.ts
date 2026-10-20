@@ -19,5 +19,17 @@ export enum AnimationProperty {
   RendererEnabled = 13,
   RendererMaterial = 14,
   RendererMesh = 15,
-  MaterialTexture = 16
+  MaterialTexture = 16,
+  RectAnchoredPosition = 17,
+  RectSizeDelta = 18,
+  RectAnchorMin = 19,
+  RectAnchorMax = 20,
+  RectPivot = 21,
+  RendererMaterialTint = 22,
+  RendererMaterialFloat = 23,
+  RendererTextureST = 24,
+  ComponentEnabled = 25,
+  ParticleColor = 26,
+  ParticleCustomColor = 27,
+  ParticleLoop = 28
 }

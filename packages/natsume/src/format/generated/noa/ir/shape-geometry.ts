@@ -23,7 +23,7 @@ export function unionToShapeGeometry(
   accessor: (obj:BoxShape|CircleShape|ConeShape|EdgeShape|SphereShape) => BoxShape|CircleShape|ConeShape|EdgeShape|SphereShape|null
 ): BoxShape|CircleShape|ConeShape|EdgeShape|SphereShape|null {
   switch(ShapeGeometry[type]) {
-    case 'NONE': return null;
+    case 'NONE': return null; 
     case 'CircleShape': return accessor(new CircleShape())! as CircleShape;
     case 'BoxShape': return accessor(new BoxShape())! as BoxShape;
     case 'SphereShape': return accessor(new SphereShape())! as SphereShape;
@@ -34,12 +34,12 @@ export function unionToShapeGeometry(
 }
 
 export function unionListToShapeGeometry(
-  type: ShapeGeometry,
-  accessor: (index: number, obj:BoxShape|CircleShape|ConeShape|EdgeShape|SphereShape) => BoxShape|CircleShape|ConeShape|EdgeShape|SphereShape|null,
+  type: ShapeGeometry, 
+  accessor: (index: number, obj:BoxShape|CircleShape|ConeShape|EdgeShape|SphereShape) => BoxShape|CircleShape|ConeShape|EdgeShape|SphereShape|null, 
   index: number
 ): BoxShape|CircleShape|ConeShape|EdgeShape|SphereShape|null {
   switch(ShapeGeometry[type]) {
-    case 'NONE': return null;
+    case 'NONE': return null; 
     case 'CircleShape': return accessor(index, new CircleShape())! as CircleShape;
     case 'BoxShape': return accessor(index, new BoxShape())! as BoxShape;
     case 'SphereShape': return accessor(index, new SphereShape())! as SphereShape;

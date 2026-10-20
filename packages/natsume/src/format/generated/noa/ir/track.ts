@@ -12,6 +12,7 @@ import { ReferenceTrack, ReferenceTrackT } from '../../noa/ir/reference-track.js
 import { RotationTrack, RotationTrackT } from '../../noa/ir/rotation-track.js';
 import { TrackData, unionToTrackData, unionListToTrackData } from '../../noa/ir/track-data.js';
 import { Vector3Track, Vector3TrackT } from '../../noa/ir/vector3-track.js';
+import { Vector4Track, Vector4TrackT } from '../../noa/ir/vector4-track.js';
 
 
 export class Track implements flatbuffers.IUnpackableObject<TrackT> {
@@ -105,7 +106,7 @@ export class TrackT implements flatbuffers.IGeneratedObject {
 constructor(
   public binding: BindingT|null = null,
   public dataType: TrackData = TrackData.NONE,
-  public data: BoolTrackT|ColorTrackT|FloatTrackT|ReferenceTrackT|RotationTrackT|Vector3TrackT|null = null
+  public data: BoolTrackT|ColorTrackT|FloatTrackT|ReferenceTrackT|RotationTrackT|Vector3TrackT|Vector4TrackT|null = null
 ){}
 
 
