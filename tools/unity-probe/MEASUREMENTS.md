@@ -216,10 +216,10 @@ Unity 2022.3.21f1，2026-10-22 UTC；Gamma，94 组、424 个 RGBA 通道，固�
 | submesh / 环境      | 12 组、96 通道；2 submesh、空 / 缺少 / 超额材质槽；SpritesDefault 阴影 / 探针意图 | **1/255（0.393%）** |
 | 混合与光栅状态      | 10 种源 / 目标混合因子、5 种运算、8 种深度比较、3 种剔除、16 种 ColorMask         | **1/255（0.393%）** |
 | 纹理 / 几何         | 顶点色、ST、UV3、三轴负缩放剔除、mip bias=0                                       | **1/255（0.393%）** |
-| mip bias            | 8×8 纹理、Trilinear、bias=8                                                       | **6/255（2.353%）** |
+| mip bias            | 8×8 纹理、Trilinear、bias=8                                                       | **1/255（0.393%）** |
 | 深度 / stencil 叠画 | 19 组、76 通道；深度写入、8 种 stencil 操作、读写掩码、比较失败与深度失败         |           **0/255** |
 
-mip 偏移保留原生与 WebGL 的 mip 生成 / 过滤差异。SpritesDefault 的阴影和探针设置不改变颜色；ShadowsOnly 不绘制颜色。源 stencil 与宿主 Pixi stencil mask 的嵌套组合尚未验收。
+mip 最末级：Unity RGBA=(127,127,63,255)，WebGL=(128,128,64,255)；源纹理颜色一致，保留 8-bit mip 量化差异。SpritesDefault 的阴影和探针设置不改变颜色；ShadowsOnly 不绘制颜色。源 stencil 与宿主 Pixi stencil mask 的嵌套组合尚未验收。
 
 ## 开销
 

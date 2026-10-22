@@ -240,6 +240,9 @@ if (sceneMaterials) {
   assert.equal(current.cases.length, 12);
   assert.equal(current.states.length, 63);
   assert.equal(current.layers.length, 19);
+  assert.equal(current.generatedMips.length, 4);
+  for (const mip of current.generatedMips)
+    assert.equal(mip.pixels.length, mip.width * mip.height * 4);
   if (process.argv.includes('--update-fixtures'))
     await saveJson(
       resolve(root, 'data/unity-baselines/fixtures/unity-scene-materials.json'),

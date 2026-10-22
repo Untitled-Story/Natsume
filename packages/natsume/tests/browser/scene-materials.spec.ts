@@ -15,6 +15,20 @@ test('matches native ordinary mesh slots, source pass states and instance lifecy
     'Local Unity measurements are not distributed',
   );
   const native = JSON.parse(readFileSync(baseline, 'utf8'));
+  // Unity Color.yellow differs from RGB yellow; compare the actual source texels.
+  const source = native.generatedMips[0];
+  expect([source.width, source.height]).toEqual([8, 8]);
+  for (let y = 0; y < 8; y++)
+    for (let x = 0; x < 8; x++)
+      expect(source.pixels.slice((y * 8 + x) * 4, (y * 8 + x + 1) * 4)).toEqual(
+        y < 4
+          ? x < 4
+            ? [255, 0, 0, 255]
+            : [0, 255, 0, 255]
+          : x < 4
+            ? [0, 0, 255, 255]
+            : [255, 255, 0, 255],
+      );
   await page.goto('/');
   const measured = await page.evaluate(
     async ({ path, bytes, cases, states, layers }) =>
@@ -35,9 +49,7 @@ test('matches native ordinary mesh slots, source pass states and instance lifecy
     for (let i = 0; i < c.pixels.length; i++) {
       const difference = measured.results[c.label][i] - c.pixels[i];
       recordError('material.scene', difference, '8-bit channel', c.label + '/' + i, 'unity');
-      expect(Math.abs(difference), c.label + '/' + i).toBeLessThanOrEqual(
-        c.label === 'texture-mip-bias' ? 255 * 0.1 : 2,
-      );
+      expect(Math.abs(difference), c.label + '/' + i).toBeLessThanOrEqual(2);
     }
   expect(measured.lifecycle).toEqual({ compatible: true, meshes: 2, nodes: 1, glError: 0 });
 });

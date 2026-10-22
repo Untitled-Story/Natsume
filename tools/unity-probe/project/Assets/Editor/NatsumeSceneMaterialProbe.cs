@@ -8,11 +8,14 @@ using UnityEditor;
 
 public static class NatsumeSceneMaterialProbe {
  [Serializable] public class Sample { public string label; public int[] slots; public int shadow; public bool probes; public int[] pixels; }
- [Serializable] public class Output { public string unityVersion; public Sample[] cases; public StateSample[] states;public LayerSample[] layers; }
+ [Serializable] public class Output { public string unityVersion; public Sample[] cases; public StateSample[] states;public LayerSample[] layers;public MipLevel[] generatedMips; }
  [Serializable] public class StateSample {public string label;public int src=1,dst=5,srcAlpha=1,dstAlpha=5,op,alphaOp,compare=7,cull,mask=15;public bool premultiply;public bool textured;public int uvSet;public bool mipmaps;public float bias;public float depth;public bool write;public int stencilCompare=7,stencilReference,stencilPass,stencilFail,stencilDepthFail,readMask=255,writeMask=255;public float[] tint;public float[] color;public float[] st;public float[] scale;public int[] pixels;}
+ [Serializable] public class MipLevel {public int level,width,height;public int[] pixels;}
+ static MipLevel[] generatedMips;
  static StateSample[] States(Camera camera,MeshRenderer renderer,Mesh mesh,RenderTexture rt,Texture2D image){
   var result=new List<StateSample>();
-  var texture=new Texture2D(8,8,TextureFormat.RGBA32,true,true);var texels=new Color[64];for(int y=0;y<8;y++)for(int x=0;x<8;x++)texels[y*8+x]=y<4?(x<4?Color.red:Color.green):(x<4?Color.blue:Color.yellow);texture.SetPixels(texels);texture.Apply(true);texture.wrapMode=TextureWrapMode.Clamp;
+  var texture=new Texture2D(8,8,TextureFormat.RGBA32,true,true);var texels=new Color[64];for(int y=0;y<8;y++)for(int x=0;x<8;x++)texels[y*8+x]=y<4?(x<4?Color.red:Color.green):(x<4?Color.blue:new Color(1f,1f,0f,1f));texture.SetPixels(texels);texture.Apply(true);texture.wrapMode=TextureWrapMode.Clamp;
+  generatedMips=Enumerable.Range(0,texture.mipmapCount).Select(level=>new MipLevel{level=level,width=Math.Max(1,8>>level),height=Math.Max(1,8>>level),pixels=texture.GetPixels(level).SelectMany(c=>new[]{Mathf.RoundToInt(c.r*255),Mathf.RoundToInt(c.g*255),Mathf.RoundToInt(c.b*255),Mathf.RoundToInt(c.a*255)}).ToArray()}).ToArray();
   var shader=Shader.Find("Hidden/Natsume/SceneMaterialProbe");if(!shader)throw new Exception("Missing state probe shader");
   var material=new Material(shader);renderer.sharedMaterials=new[]{material,material};
   int[] factors={0,1,3,6,5,10,2,4,7,8};int[] compares={1,2,3,4,5,6,7,8};
@@ -86,7 +89,7 @@ public static class NatsumeSceneMaterialProbe {
   var states=States(camera,renderer,mesh,rt,image);var layers=Layers(camera,renderer,mesh,rt,image);
   renderer.sharedMaterials=new[]{AssetDatabase.GetBuiltinExtraResource<Material>("Sprites-Default.mat"),AssetDatabase.GetBuiltinExtraResource<Material>("Sprites-Default.mat")};
   PrefabUtility.SaveAsPrefabAsset(go,"Assets/SceneMaterialProbe/scene.prefab");AssetDatabase.SaveAssets();
-  var output=Environment.GetEnvironmentVariable("NATSUME_COMPAT_OUTPUT");File.WriteAllText(output,JsonUtility.ToJson(new Output{unityVersion=Application.unityVersion,cases=cases.ToArray(),states=states,layers=layers},true));
+  var output=Environment.GetEnvironmentVariable("NATSUME_COMPAT_OUTPUT");File.WriteAllText(output,JsonUtility.ToJson(new Output{unityVersion=Application.unityVersion,cases=cases.ToArray(),states=states,layers=layers,generatedMips=generatedMips},true));
   camera.targetTexture=null;RenderTexture.active=null;UnityEngine.Object.DestroyImmediate(go);UnityEngine.Object.DestroyImmediate(camGo);UnityEngine.Object.DestroyImmediate(rt);UnityEngine.Object.DestroyImmediate(image);foreach(var m in mats)UnityEngine.Object.DestroyImmediate(m);
  }
 }
