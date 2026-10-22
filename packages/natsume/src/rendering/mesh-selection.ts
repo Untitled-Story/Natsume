@@ -28,12 +28,15 @@ export function selectMesh(
 
 /** Per-particle vertex reservation; all mesh choices share one fixed stride. */
 export function rendererVertexStride(definition: R<ParticleRendererT>, pack: EffectPack): number {
-  return definition.mode === RenderMode.Mesh
-    ? Math.max(0, ...definition.meshAssetIds.map((id) => pack.getMesh(id)?.positions.length ?? 0))
-    : 4;
+  return definition.mode === RenderMode.None
+    ? 0
+    : definition.mode === RenderMode.Mesh
+      ? Math.max(0, ...definition.meshAssetIds.map((id) => pack.getMesh(id)?.positions.length ?? 0))
+      : 4;
 }
 
 /** Slot one belongs to Trails; remaining slots render the particle geometry in order. */
 export function particleMaterialSlots(definition: R<ParticleRendererT>): readonly number[] {
+  if (definition.mode === RenderMode.None) return [];
   return definition.materials.flatMap((id, index) => (index !== 1 && id !== 0 ? [index] : []));
 }

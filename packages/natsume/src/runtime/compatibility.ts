@@ -341,8 +341,6 @@ export function checkCompatibility(
         'Renderer system is outside entry',
       );
       const slots = [...particleMaterialSlots(definition)];
-      // A missing primary material is a Unity error shader, not a supported material model.
-      if (!slots.includes(0)) slots.unshift(0);
       for (const slot of slots) {
         const material = pack.document.materials.find((m) => m.id === definition.materials[slot]);
         rules.require(

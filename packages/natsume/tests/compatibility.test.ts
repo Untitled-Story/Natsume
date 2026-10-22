@@ -83,6 +83,18 @@ function fixture() {
   return { doc, source, renderer, material, pack };
 }
 
+it('simulates hidden particle renderers without requiring draw resources', () => {
+  for (const mode of [RenderMode.None, RenderMode.Mesh]) {
+    const f = fixture();
+    f.renderer.mode = mode;
+    f.renderer.materials = mode === RenderMode.None ? [5] : [0, 0];
+    const pack = f.pack();
+    const report = checkCompatibility(pack, {}, { ...context, imageBitmapAvailable: false });
+    expect(report.issues.filter((i) => i.severity === 'error')).toEqual([]);
+    pack.dispose();
+  }
+});
+
 it('reports independent blocking fields and preserves every issue in the thrown error', () => {
   const f = fixture();
   f.source.main!.durationSeconds = 0.001;
@@ -335,5 +347,5 @@ it('ignores the trail material slot and checks every particle material pass', ()
   missing.renderer.materials = [0, 5];
   expect(
     checkCompatibility(missing.pack(), {}, context).issues.some((i) => i.field === 'materials.0'),
-  ).toBe(true);
+  ).toBe(false);
 });
