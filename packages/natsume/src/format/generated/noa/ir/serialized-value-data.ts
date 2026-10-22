@@ -31,7 +31,7 @@ export function unionToSerializedValueData(
   accessor: (obj:ArrayValue|BooleanValue|DoubleValue|NullValue|ObjectValue|ReferenceValue|SignedValue|StringValue|UnsignedValue) => ArrayValue|BooleanValue|DoubleValue|NullValue|ObjectValue|ReferenceValue|SignedValue|StringValue|UnsignedValue|null
 ): ArrayValue|BooleanValue|DoubleValue|NullValue|ObjectValue|ReferenceValue|SignedValue|StringValue|UnsignedValue|null {
   switch(SerializedValueData[type]) {
-    case 'NONE': return null; 
+    case 'NONE': return null;
     case 'NullValue': return accessor(new NullValue())! as NullValue;
     case 'BooleanValue': return accessor(new BooleanValue())! as BooleanValue;
     case 'SignedValue': return accessor(new SignedValue())! as SignedValue;
@@ -46,12 +46,12 @@ export function unionToSerializedValueData(
 }
 
 export function unionListToSerializedValueData(
-  type: SerializedValueData, 
-  accessor: (index: number, obj:ArrayValue|BooleanValue|DoubleValue|NullValue|ObjectValue|ReferenceValue|SignedValue|StringValue|UnsignedValue) => ArrayValue|BooleanValue|DoubleValue|NullValue|ObjectValue|ReferenceValue|SignedValue|StringValue|UnsignedValue|null, 
+  type: SerializedValueData,
+  accessor: (index: number, obj:ArrayValue|BooleanValue|DoubleValue|NullValue|ObjectValue|ReferenceValue|SignedValue|StringValue|UnsignedValue) => ArrayValue|BooleanValue|DoubleValue|NullValue|ObjectValue|ReferenceValue|SignedValue|StringValue|UnsignedValue|null,
   index: number
 ): ArrayValue|BooleanValue|DoubleValue|NullValue|ObjectValue|ReferenceValue|SignedValue|StringValue|UnsignedValue|null {
   switch(SerializedValueData[type]) {
-    case 'NONE': return null; 
+    case 'NONE': return null;
     case 'NullValue': return accessor(index, new NullValue())! as NullValue;
     case 'BooleanValue': return accessor(index, new BooleanValue())! as BooleanValue;
     case 'SignedValue': return accessor(index, new SignedValue())! as SignedValue;

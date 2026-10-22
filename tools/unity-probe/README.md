@@ -102,6 +102,14 @@ node tools/unity-probe/measure.mjs --refresh-unity
 
 ## 本地包生命周期
 
+批量审计 Noa 编译索引中的资源包：
+
+```sh
+node tools/unity-probe/audit-packages.mjs path/to/compile-successes.json path/to/Noa data/package-audit.json
+```
+
+校验结构、资源文件与引用，记录组件、材质配方、环境、动画、形状、Sprite 和网格属性，并运行兼容性预检。该检查不创建图形设备；读取或预检通过不代表实际绘制通过。
+
 ```sh
 node tools/unity-probe/verify-pack-lifecycle.mjs path/to/packages
 ```

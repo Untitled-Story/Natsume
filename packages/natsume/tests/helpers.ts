@@ -9,6 +9,7 @@ import { EntryPointT } from '../src/format/generated/noa/ir/entry-point.js';
 
 export function minimalDocument(): DocumentT {
   const document = new DocumentT();
+  document.formatMajor = 2;
   document.nodes = [
     new NodeT(
       1,
@@ -37,7 +38,7 @@ export async function archive(scene = encode(minimalDocument())) {
   const manifest = {
     format: 'noa-package',
     version: 1,
-    noir_version: [1, 0],
+    noir_version: [2, 0],
     document: 'scene.noir',
     files: [{ path: 'scene.noir', kind: 'noir', byte_length: scene.length, sha256: hash }],
   };

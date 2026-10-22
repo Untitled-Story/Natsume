@@ -7,6 +7,7 @@ import { verifyBuffer } from '../format/verify.js';
 import { validateDocument, validateMesh } from '../format/semantics.js';
 import { parseJson, parseManifest, record, verifyFiles } from './manifest.js';
 import { DEFAULT_LIMITS, readZip, type LoadLimits } from './zip.js';
+import { AssetKind } from '../format/generated/noa/ir/asset-kind.js';
 
 export interface LoadOptions {
   signal?: AbortSignal;
@@ -76,7 +77,45 @@ function validateShader(bytes: Uint8Array, path: string) {
     );
     return shader.model;
   }
-  check(shader.model === 'particle-add-alpha', 'VERSION', 'Unsupported shader recipe', path);
+  if (shader.model === 'unity-ui-default' || shader.model === 'unity-sprites-default') {
+    const ui = shader.model === 'unity-ui-default';
+    const keys = [
+      'format',
+      'version',
+      'revision',
+      'model',
+      'source_revision',
+      'texture_source',
+      'formula',
+      'canvas_depth_test',
+      'premultiplied_output',
+      'lighting',
+      'stencil',
+    ];
+    check(
+      Object.keys(shader).every((key) => keys.includes(key)) &&
+        keys.every((key) => key in shader) &&
+        shader.source_revision === 'unity-2022.3.21f1' &&
+        shader.texture_source === 'renderer-sprite-or-white' &&
+        typeof shader.formula === 'string' &&
+        shader.premultiplied_output === true &&
+        shader.lighting === 'unlit' &&
+        shader.stencil === (ui ? 'mask-stack' : 'sprite-mask') &&
+        shader.canvas_depth_test ===
+          (ui ? 'ScreenOverlay=Always; ScreenCamera/World=LessEqual' : null),
+      'SEMANTIC',
+      'Invalid Sprite or UI recipe',
+      path,
+    );
+    return shader.model;
+  }
+  const simple = shader.model === 'texture-vertex-color';
+  check(
+    shader.model === 'particle-add-alpha' || simple,
+    'VERSION',
+    'Unsupported shader recipe',
+    path,
+  );
   const allowed = [
     'format',
     'version',
@@ -92,6 +131,7 @@ function validateShader(bytes: Uint8Array, path: string) {
     'source_passes',
     'source_program_encoding',
     'source_program_hex',
+    ...(simple ? ['global_mip_bias', 'global_mip_bias_slot'] : []),
   ];
   check(
     Object.keys(shader).every((key) => allowed.includes(key)) &&
@@ -104,7 +144,7 @@ function validateShader(bytes: Uint8Array, path: string) {
     shader.output_policy === 'primary-color' &&
       JSON.stringify(shader.outputs) === '[0]' &&
       JSON.stringify(shader.source_outputs) === '[0,1,2]' &&
-      shader.rgb_premultiply === true,
+      shader.rgb_premultiply === !simple,
     'SEMANTIC',
     'Unsupported shader output policy',
     path,
@@ -122,6 +162,22 @@ function validateShader(bytes: Uint8Array, path: string) {
     path,
   );
   const mode = shader.alpha_mode;
+  if (simple) {
+    const mip =
+      shader.program_sha256 === 'f07136c5ab507bfcb309c1920a6afce6f1d5653f80c1c2f97e8ec0066ba58ac2';
+    check(
+      (mip ||
+        shader.program_sha256 ===
+          '09bc049fd22991be3a180c1550dd85a5f3cbdc1a7b764383cca275b3afbcf236') &&
+        mode === null &&
+        shader.global_mip_bias === mip &&
+        shader.global_mip_bias_slot === (mip ? 'source-global-mip-bias' : null),
+      'SEMANTIC',
+      'Invalid texture vertex color recipe',
+      path,
+    );
+    return shader.model;
+  }
   check(
     record(mode) &&
       Object.keys(mode).length === 4 &&
@@ -203,14 +259,24 @@ export async function loadPack(
   const document = Document.getRootAsDocument(new ByteBuffer(scene)).unpack();
   validateDocument(document);
   check(
-    document.assets.length === manifest.files.filter((file) => file.asset_id !== undefined).length,
+    document.assets.filter((a) => a.kind !== AssetKind.Sprite).length ===
+      manifest.files.filter((file) => file.asset_id !== undefined).length,
     'MANIFEST',
     'NOIR/manifest asset sets differ',
   );
   const meshes = new Map<number, MeshT>();
   const shaderModels = new Map<number, string>();
+  const assetFiles = new Map(
+    manifest.files
+      .filter((file) => file.asset_id !== undefined)
+      .map((file) => [file.asset_id!, file]),
+  );
   for (const asset of document.assets) {
-    const file = manifest.files.find((file) => file.asset_id === asset.id);
+    const file = assetFiles.get(asset.id);
+    if (asset.kind === AssetKind.Sprite) {
+      check(!file, 'MANIFEST', 'Inline Sprite must not have a file');
+      continue;
+    }
     check(
       file && file.kind === ['unknown', 'image', 'mesh', 'shader_data'][asset.kind],
       'MANIFEST',
@@ -224,7 +290,7 @@ export async function loadPack(
       validateMesh(mesh);
       meshes.set(asset.id, mesh);
     }
-    if (asset.kind === 3) shaderModels.set(asset.id, validateShader(data, file.path));
+    if (asset.kind === 3) shaderModels.set(asset.id, String(validateShader(data, file.path)));
     if (asset.kind === 1)
       check(
         data.length >= 24 &&
@@ -241,6 +307,9 @@ export async function loadPack(
       2: 'particle-add-alpha',
       4: 'unity-legacy-particle-additive',
       5: 'unity-legacy-particle-alpha-blend',
+      6: 'unity-sprites-default',
+      7: 'unity-ui-default',
+      8: 'texture-vertex-color',
     };
     if (material.model === 4 || material.model === 5 || material.shaderDataAssetId)
       check(

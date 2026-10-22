@@ -6,5 +6,6 @@ export enum AssetKind {
   Unknown = 0,
   Image = 1,
   Mesh = 2,
-  ShaderData = 3
+  ShaderData = 3,
+  Sprite = 4
 }

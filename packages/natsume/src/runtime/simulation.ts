@@ -1,4 +1,5 @@
 import { visitAnimationEvents, type NatsumeAnimationEvent } from './animation-events.js';
+import { SUPPORTED_FEATURES } from '../format/semantics.js';
 import { AnimationProperty } from '../format/generated/noa/ir/animation-property.js';
 import { ParticleParameter } from '../format/generated/noa/ir/particle-parameter.js';
 import { AnimationClock, animationSupport, animatorSupport } from './animation.js';
@@ -76,6 +77,12 @@ export class Simulation {
     options: SimulationOptions = {},
   ) {
     check(!pack.disposed, 'DISPOSED', 'Pack has been disposed');
+    for (const feature of pack.document.features)
+      check(
+        !feature.required || SUPPORTED_FEATURES[String(feature.name)] === feature.revision,
+        'CAPABILITY',
+        'Required feature is not implemented: ' + feature.name,
+      );
     const seed = options.seed ?? Math.floor(Math.random() * 4294967296);
     check(
       Number.isInteger(seed) && seed >= 0 && seed <= 0xffffffff,

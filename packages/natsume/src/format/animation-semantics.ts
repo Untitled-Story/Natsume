@@ -2,6 +2,8 @@ import { check } from '../errors.js';
 import type { DocumentT } from './generated/noa/ir/document.js';
 import type { ParticleSystemT } from './generated/noa/ir/particle-system.js';
 import type { ParticleRendererT } from './generated/noa/ir/particle-renderer.js';
+import type { MeshRendererT } from './generated/noa/ir/mesh-renderer.js';
+import type { SpriteRendererT } from './generated/noa/ir/sprite-renderer.js';
 import type { Vector3TrackT } from './generated/noa/ir/vector3-track.js';
 import type { Vector4TrackT } from './generated/noa/ir/vector4-track.js';
 import type { ColorTrackT } from './generated/noa/ir/color-track.js';
@@ -15,7 +17,7 @@ import { RotationEncoding } from './generated/noa/ir/rotation-encoding.js';
 import { MaterialModel } from './generated/noa/ir/material-model.js';
 import { CustomDataMode } from './generated/noa/ir/custom-data-mode.js';
 
-/** Validates executable animation targets, source branches and feature declarations together. */
+/** Validates animation targets, source branches and feature declarations. */
 export function validateAnimationBindings(d: DocumentT, required: (name: string) => void): void {
   for (const animation of d.animations) {
     if (animation.events.length) required('animation.events-typed');
@@ -91,8 +93,14 @@ export function validateAnimationBindings(d: DocumentT, required: (name: string)
           required('animation.component-enabled');
           valid =
             track.dataType === D.BoolTrack &&
-            (c?.dataType === C.ParticleRenderer ||
+            ([C.ParticleRenderer, C.MeshRenderer, C.SpriteRenderer].includes(
+              c?.dataType ?? C.NONE,
+            ) ||
               (b.property === P.ComponentEnabled && c?.dataType === C.Animator));
+          break;
+        case P.SpriteColor:
+          required('animation.sprite');
+          valid = c?.dataType === C.SpriteRenderer && hasColor;
           break;
         case P.ParticleLoop:
           required('animation.particle');
@@ -142,18 +150,24 @@ export function validateAnimationBindings(d: DocumentT, required: (name: string)
         case P.RendererTextureST: {
           required('animation.renderer-material');
           const renderer =
-            c?.dataType === C.ParticleRenderer ? (c.data as ParticleRendererT) : undefined;
+            c && [C.ParticleRenderer, C.MeshRenderer, C.SpriteRenderer].includes(c.dataType)
+              ? (c.data as ParticleRendererT | MeshRendererT | SpriteRendererT)
+              : undefined;
           const material = d.materials.find((m) => m.id === renderer?.materials[b.slotIndex]);
-          valid = !!material && b.slotIndex === 0;
+          valid = !!material;
           if (material) {
             if (b.property === P.RendererMaterialTint)
               valid &&=
                 hasColor &&
-                b.propertyName === '_TintColor' &&
-                [
-                  MaterialModel.LegacyParticleAdditive,
-                  MaterialModel.LegacyParticleAlphaBlend,
-                ].includes(material.model);
+                ((b.propertyName === '_TintColor' &&
+                  [
+                    MaterialModel.LegacyParticleAdditive,
+                    MaterialModel.LegacyParticleAlphaBlend,
+                  ].includes(material.model)) ||
+                  (b.propertyName === '_Color' &&
+                    [MaterialModel.SpriteDefault, MaterialModel.UIDefault].includes(
+                      material.model,
+                    )));
             else if (b.property === P.RendererMaterialFloat)
               valid &&=
                 track.dataType === D.FloatTrack &&
@@ -163,7 +177,6 @@ export function validateAnimationBindings(d: DocumentT, required: (name: string)
               valid &&=
                 track.dataType === D.Vector4Track &&
                 !!(v.x || v.y || v.z || v.w) &&
-                b.propertyName === '_MainTex' &&
                 material.textures.some((t) => t.slot === b.propertyName);
             }
           }

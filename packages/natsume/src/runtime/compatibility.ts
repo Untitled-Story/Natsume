@@ -1,4 +1,5 @@
 import { bindingWrites } from './animation-bindings.js';
+import { SUPPORTED_FEATURES } from '../format/semantics.js';
 import { ActionKind } from '../format/generated/noa/ir/action-kind.js';
 import { AnimationProperty } from '../format/generated/noa/ir/animation-property.js';
 import { ParticleParameter } from '../format/generated/noa/ir/particle-parameter.js';
@@ -117,6 +118,15 @@ export function checkCompatibility(
     append(global.issues);
     return finish();
   }
+  for (const feature of pack.document.features)
+    if (feature.required)
+      global.require(
+        SUPPORTED_FEATURES[String(feature.name)] === feature.revision,
+        'CAPABILITY',
+        'features.' + feature.name,
+        feature.revision,
+        'Required feature is not implemented',
+      );
   global.require(entry, 'HOST', 'entryId', options.entryId, 'Unknown entry');
   global.require(
     options.seed === undefined ||

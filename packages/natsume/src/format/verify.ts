@@ -172,6 +172,23 @@ export function verifyBuffer(bytes: Uint8Array, format: keyof typeof schemas): v
       );
       return offset ? table + offset : 0;
     };
+    if (type === schema.root && depth === 0) {
+      const version = (name: string, fallback: number) => {
+        const field = definition.fields?.find((f) => f.name === name);
+        if (!field) return fallback;
+        const pos = fieldAt(field.slot ?? 0);
+        if (!pos) return fallback;
+        check(pos + sizeOf(field.type) <= table + objectSize, 'BINARY', 'Version outside table');
+        return scalar(field.type, pos);
+      };
+      check(
+        version('format_major', 0) === 2 &&
+          version('format_minor', 0) === 0 &&
+          (format !== 'noir' || version('semantics_revision', 1) === 1),
+        'VERSION',
+        `Unsupported ${schema.identifier} version or semantics revision`,
+      );
+    }
     for (const field of definition.fields ?? []) {
       const pos = fieldAt(field.slot ?? 0);
       check(!field.required || pos !== 0, 'BINARY', `Required ${type}.${field.name} missing`);

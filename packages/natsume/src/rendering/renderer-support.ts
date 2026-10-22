@@ -1,3 +1,4 @@
+import { meshUV } from '../format/mesh-attributes.js';
 import { MeshDistribution } from '../format/generated/noa/ir/mesh-distribution.js';
 import { rendererVertexStride } from './mesh-selection.js';
 import type { DeepReadonly as R, EffectPack } from '../pack.js';
@@ -176,8 +177,20 @@ export function rendererSupport(
     );
   }
   const state = material.renderState;
+  const neutralStencil =
+    !state?.stencil ||
+    [state.stencil.front, state.stencil.back].every(
+      (face) =>
+        face &&
+        face.compare === CompareOp.Always &&
+        face.pass === 0 &&
+        face.fail === 0 &&
+        face.depthFail === 0,
+    );
   r.require(
     state &&
+      neutralStencil &&
+      state.depthTestSource === 0 &&
       state.srcRgb === (straight ? B.SrcAlpha : B.One) &&
       state.dstRgb === (additive ? B.One : B.OneMinusSrcAlpha) &&
       state.srcAlpha === (straight ? B.SrcAlpha : B.One) &&
@@ -222,11 +235,18 @@ export function rendererSupport(
     for (const [index, id] of definition.meshAssetIds.entries()) {
       const mesh = pack.getMesh(id);
       r.require(
-        mesh && mesh.uv0.length === mesh.positions.length && mesh.submeshes.length === 1,
+        mesh && meshUV(mesh).length === mesh.positions.length && mesh.submeshes.length === 1,
         'CAPABILITY',
         `meshAssetIds.${index}`,
         id,
         'Mesh requires UV0 and one submesh',
+      );
+      r.require(
+        !mesh || mesh.colors.every((c) => c.x === 1 && c.y === 1 && c.z === 1 && c.w === 1),
+        'CAPABILITY',
+        `meshAssetIds.${index}.colors`,
+        id,
+        'Authored mesh vertex colors are not implemented',
       );
     }
     count = rendererVertexStride(definition, pack);

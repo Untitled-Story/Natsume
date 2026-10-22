@@ -40,6 +40,10 @@ app.ticker.add(tick);
 
 `loadPack` 接受 URL、`Uint8Array` 或 `ArrayBuffer`。同一个资源包可以创建多个独立实例；实例提供 `play()`、`pause()`、`restart()` 和 `stop()` 控制播放，宿主以秒调用 `update()` 推进模拟。
 
+当前读取 NOAP v1、NOIR 2.0 和 NOMESH 2.0；旧包需要用新版 Noa 重新编译。Sprite 描述符内联于 NOIR，通过资产 ID 引用图像和网格，没有独立文件。NOMESH 保留源顶点属性、UV0–UV7 和三角形顺序，绘制能力仍受下方支持范围限制。
+
+`loadPack` 校验结构与已知契约，可用于检查尚未支持绘制的包；未知必需能力直接报错。已知但未实现的必需能力由 `checkCompatibility` 和实例化明确阻止。
+
 Noise 的 Low / Medium / High 使用原生实测的一维 / 二维 / 三维 Perlin Curl 结构与种子偏移；实例保留近似诊断。
 
 创建前可调用 `runtime.checkCompatibility(pack, options)`，一次查看当前入口的阻塞项与近似说明：

@@ -1,3 +1,4 @@
+import { meshUV } from '../format/mesh-attributes.js';
 import { speedSize } from '../runtime/speed-modules.js';
 import { selectMesh, rendererVertexStride } from './mesh-selection.js';
 import { rendererSupport } from './renderer-support.js';
@@ -246,7 +247,7 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
       const mesh = pack.getMesh(definition.meshAssetIds[0]!);
       check(mesh, 'SEMANTIC', 'Missing mesh');
       positions = mesh.positions;
-      uv = mesh.uv0;
+      uv = meshUV(mesh);
       meshIndices = mesh.indices;
     }
     const choices =
@@ -262,7 +263,7 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
               }
             return {
               positions: mesh.positions,
-              uv: mesh.uv0,
+              uv: meshUV(mesh),
               indices: mesh.indices,
               pivotSize: max.map((value, axis) => value - min[axis]!),
             };

@@ -5,8 +5,9 @@
 import * as flatbuffers from 'flatbuffers';
 
 import { Submesh, SubmeshT } from '../../noa/mesh/submesh.js';
-import { Vec2, Vec2T } from '../../noa/mesh/vec2.js';
+import { TexCoord, TexCoordT } from '../../noa/mesh/tex-coord.js';
 import { Vec3, Vec3T } from '../../noa/mesh/vec3.js';
+import { Vec4, Vec4T } from '../../noa/mesh/vec4.js';
 
 
 export class Mesh implements flatbuffers.IUnpackableObject<MeshT> {
@@ -33,7 +34,7 @@ static bufferHasIdentifier(bb:flatbuffers.ByteBuffer):boolean {
 
 formatMajor():number {
   const offset = this.bb!.__offset(this.bb_pos, 4);
-  return offset ? this.bb!.readUint16(this.bb_pos + offset) : 1;
+  return offset ? this.bb!.readUint16(this.bb_pos + offset) : 0;
 }
 
 formatMinor():number {
@@ -68,47 +69,67 @@ normalsLength():number {
   return offset ? this.bb!.__vector_len(this.bb_pos + offset) : 0;
 }
 
-uv0(index: number, obj?:Vec2):Vec2|null {
+tangents(index: number, obj?:Vec4):Vec4|null {
   const offset = this.bb!.__offset(this.bb_pos, 14);
-  return offset ? (obj || new Vec2()).__init(this.bb!.__vector(this.bb_pos + offset) + index * 8, this.bb!) : null;
+  return offset ? (obj || new Vec4()).__init(this.bb!.__vector(this.bb_pos + offset) + index * 16, this.bb!) : null;
 }
 
-uv0Length():number {
+tangentsLength():number {
   const offset = this.bb!.__offset(this.bb_pos, 14);
+  return offset ? this.bb!.__vector_len(this.bb_pos + offset) : 0;
+}
+
+colors(index: number, obj?:Vec4):Vec4|null {
+  const offset = this.bb!.__offset(this.bb_pos, 16);
+  return offset ? (obj || new Vec4()).__init(this.bb!.__vector(this.bb_pos + offset) + index * 16, this.bb!) : null;
+}
+
+colorsLength():number {
+  const offset = this.bb!.__offset(this.bb_pos, 16);
+  return offset ? this.bb!.__vector_len(this.bb_pos + offset) : 0;
+}
+
+texcoords(index: number, obj?:TexCoord):TexCoord|null {
+  const offset = this.bb!.__offset(this.bb_pos, 18);
+  return offset ? (obj || new TexCoord()).__init(this.bb!.__indirect(this.bb!.__vector(this.bb_pos + offset) + index * 4), this.bb!) : null;
+}
+
+texcoordsLength():number {
+  const offset = this.bb!.__offset(this.bb_pos, 18);
   return offset ? this.bb!.__vector_len(this.bb_pos + offset) : 0;
 }
 
 indices(index: number):number|null {
-  const offset = this.bb!.__offset(this.bb_pos, 16);
+  const offset = this.bb!.__offset(this.bb_pos, 20);
   return offset ? this.bb!.readUint32(this.bb!.__vector(this.bb_pos + offset) + index * 4) : 0;
 }
 
 indicesLength():number {
-  const offset = this.bb!.__offset(this.bb_pos, 16);
+  const offset = this.bb!.__offset(this.bb_pos, 20);
   return offset ? this.bb!.__vector_len(this.bb_pos + offset) : 0;
 }
 
 indicesArray():Uint32Array|null {
-  const offset = this.bb!.__offset(this.bb_pos, 16);
+  const offset = this.bb!.__offset(this.bb_pos, 20);
   return offset ? new Uint32Array(this.bb!.bytes().buffer, this.bb!.bytes().byteOffset + this.bb!.__vector(this.bb_pos + offset), this.bb!.__vector_len(this.bb_pos + offset)) : null;
 }
 
 submeshes(index: number, obj?:Submesh):Submesh|null {
-  const offset = this.bb!.__offset(this.bb_pos, 18);
+  const offset = this.bb!.__offset(this.bb_pos, 22);
   return offset ? (obj || new Submesh()).__init(this.bb!.__indirect(this.bb!.__vector(this.bb_pos + offset) + index * 4), this.bb!) : null;
 }
 
 submeshesLength():number {
-  const offset = this.bb!.__offset(this.bb_pos, 18);
+  const offset = this.bb!.__offset(this.bb_pos, 22);
   return offset ? this.bb!.__vector_len(this.bb_pos + offset) : 0;
 }
 
 static startMesh(builder:flatbuffers.Builder) {
-  builder.startObject(8);
+  builder.startObject(10);
 }
 
 static addFormatMajor(builder:flatbuffers.Builder, formatMajor:number) {
-  builder.addFieldInt16(0, formatMajor, 1);
+  builder.addFieldInt16(0, formatMajor, 0);
 }
 
 static addFormatMinor(builder:flatbuffers.Builder, formatMinor:number) {
@@ -135,16 +156,40 @@ static startNormalsVector(builder:flatbuffers.Builder, numElems:number) {
   builder.startVector(12, numElems, 4);
 }
 
-static addUv0(builder:flatbuffers.Builder, uv0Offset:flatbuffers.Offset) {
-  builder.addFieldOffset(5, uv0Offset, 0);
+static addTangents(builder:flatbuffers.Builder, tangentsOffset:flatbuffers.Offset) {
+  builder.addFieldOffset(5, tangentsOffset, 0);
 }
 
-static startUv0Vector(builder:flatbuffers.Builder, numElems:number) {
-  builder.startVector(8, numElems, 4);
+static startTangentsVector(builder:flatbuffers.Builder, numElems:number) {
+  builder.startVector(16, numElems, 4);
+}
+
+static addColors(builder:flatbuffers.Builder, colorsOffset:flatbuffers.Offset) {
+  builder.addFieldOffset(6, colorsOffset, 0);
+}
+
+static startColorsVector(builder:flatbuffers.Builder, numElems:number) {
+  builder.startVector(16, numElems, 4);
+}
+
+static addTexcoords(builder:flatbuffers.Builder, texcoordsOffset:flatbuffers.Offset) {
+  builder.addFieldOffset(7, texcoordsOffset, 0);
+}
+
+static createTexcoordsVector(builder:flatbuffers.Builder, data:flatbuffers.Offset[]):flatbuffers.Offset {
+  builder.startVector(4, data.length, 4);
+  for (let i = data.length - 1; i >= 0; i--) {
+    builder.addOffset(data[i]!);
+  }
+  return builder.endVector();
+}
+
+static startTexcoordsVector(builder:flatbuffers.Builder, numElems:number) {
+  builder.startVector(4, numElems, 4);
 }
 
 static addIndices(builder:flatbuffers.Builder, indicesOffset:flatbuffers.Offset) {
-  builder.addFieldOffset(6, indicesOffset, 0);
+  builder.addFieldOffset(8, indicesOffset, 0);
 }
 
 static createIndicesVector(builder:flatbuffers.Builder, data:number[]|Uint32Array):flatbuffers.Offset;
@@ -165,7 +210,7 @@ static startIndicesVector(builder:flatbuffers.Builder, numElems:number) {
 }
 
 static addSubmeshes(builder:flatbuffers.Builder, submeshesOffset:flatbuffers.Offset) {
-  builder.addFieldOffset(7, submeshesOffset, 0);
+  builder.addFieldOffset(9, submeshesOffset, 0);
 }
 
 static createSubmeshesVector(builder:flatbuffers.Builder, data:flatbuffers.Offset[]):flatbuffers.Offset {
@@ -183,8 +228,8 @@ static startSubmeshesVector(builder:flatbuffers.Builder, numElems:number) {
 static endMesh(builder:flatbuffers.Builder):flatbuffers.Offset {
   const offset = builder.endObject();
   builder.requiredField(offset, 10) // positions
-  builder.requiredField(offset, 16) // indices
-  builder.requiredField(offset, 18) // submeshes
+  builder.requiredField(offset, 20) // indices
+  builder.requiredField(offset, 22) // submeshes
   return offset;
 }
 
@@ -196,14 +241,16 @@ static finishSizePrefixedMeshBuffer(builder:flatbuffers.Builder, offset:flatbuff
   builder.finish(offset, 'NOMS', true);
 }
 
-static createMesh(builder:flatbuffers.Builder, formatMajor:number, formatMinor:number, nameOffset:flatbuffers.Offset, positionsOffset:flatbuffers.Offset, normalsOffset:flatbuffers.Offset, uv0Offset:flatbuffers.Offset, indicesOffset:flatbuffers.Offset, submeshesOffset:flatbuffers.Offset):flatbuffers.Offset {
+static createMesh(builder:flatbuffers.Builder, formatMajor:number, formatMinor:number, nameOffset:flatbuffers.Offset, positionsOffset:flatbuffers.Offset, normalsOffset:flatbuffers.Offset, tangentsOffset:flatbuffers.Offset, colorsOffset:flatbuffers.Offset, texcoordsOffset:flatbuffers.Offset, indicesOffset:flatbuffers.Offset, submeshesOffset:flatbuffers.Offset):flatbuffers.Offset {
   Mesh.startMesh(builder);
   Mesh.addFormatMajor(builder, formatMajor);
   Mesh.addFormatMinor(builder, formatMinor);
   Mesh.addName(builder, nameOffset);
   Mesh.addPositions(builder, positionsOffset);
   Mesh.addNormals(builder, normalsOffset);
-  Mesh.addUv0(builder, uv0Offset);
+  Mesh.addTangents(builder, tangentsOffset);
+  Mesh.addColors(builder, colorsOffset);
+  Mesh.addTexcoords(builder, texcoordsOffset);
   Mesh.addIndices(builder, indicesOffset);
   Mesh.addSubmeshes(builder, submeshesOffset);
   return Mesh.endMesh(builder);
@@ -216,7 +263,9 @@ unpack(): MeshT {
     this.name(),
     this.bb!.createObjList<Vec3, Vec3T>(this.positions.bind(this), this.positionsLength()),
     this.bb!.createObjList<Vec3, Vec3T>(this.normals.bind(this), this.normalsLength()),
-    this.bb!.createObjList<Vec2, Vec2T>(this.uv0.bind(this), this.uv0Length()),
+    this.bb!.createObjList<Vec4, Vec4T>(this.tangents.bind(this), this.tangentsLength()),
+    this.bb!.createObjList<Vec4, Vec4T>(this.colors.bind(this), this.colorsLength()),
+    this.bb!.createObjList<TexCoord, TexCoordT>(this.texcoords.bind(this), this.texcoordsLength()),
     this.bb!.createScalarList<number>(this.indices.bind(this), this.indicesLength()),
     this.bb!.createObjList<Submesh, SubmeshT>(this.submeshes.bind(this), this.submeshesLength())
   );
@@ -229,7 +278,9 @@ unpackTo(_o: MeshT): void {
   _o.name = this.name();
   _o.positions = this.bb!.createObjList<Vec3, Vec3T>(this.positions.bind(this), this.positionsLength());
   _o.normals = this.bb!.createObjList<Vec3, Vec3T>(this.normals.bind(this), this.normalsLength());
-  _o.uv0 = this.bb!.createObjList<Vec2, Vec2T>(this.uv0.bind(this), this.uv0Length());
+  _o.tangents = this.bb!.createObjList<Vec4, Vec4T>(this.tangents.bind(this), this.tangentsLength());
+  _o.colors = this.bb!.createObjList<Vec4, Vec4T>(this.colors.bind(this), this.colorsLength());
+  _o.texcoords = this.bb!.createObjList<TexCoord, TexCoordT>(this.texcoords.bind(this), this.texcoordsLength());
   _o.indices = this.bb!.createScalarList<number>(this.indices.bind(this), this.indicesLength());
   _o.submeshes = this.bb!.createObjList<Submesh, SubmeshT>(this.submeshes.bind(this), this.submeshesLength());
 }
@@ -237,12 +288,14 @@ unpackTo(_o: MeshT): void {
 
 export class MeshT implements flatbuffers.IGeneratedObject {
 constructor(
-  public formatMajor: number = 1,
+  public formatMajor: number = 0,
   public formatMinor: number = 0,
   public name: string|Uint8Array|null = null,
   public positions: (Vec3T)[] = [],
   public normals: (Vec3T)[] = [],
-  public uv0: (Vec2T)[] = [],
+  public tangents: (Vec4T)[] = [],
+  public colors: (Vec4T)[] = [],
+  public texcoords: (TexCoordT)[] = [],
   public indices: (number)[] = [],
   public submeshes: (SubmeshT)[] = []
 ){}
@@ -252,7 +305,9 @@ pack(builder:flatbuffers.Builder): flatbuffers.Offset {
   const name = (this.name !== null ? builder.createString(this.name!) : 0);
   const positions = builder.createStructOffsetList(this.positions, Mesh.startPositionsVector);
   const normals = builder.createStructOffsetList(this.normals, Mesh.startNormalsVector);
-  const uv0 = builder.createStructOffsetList(this.uv0, Mesh.startUv0Vector);
+  const tangents = builder.createStructOffsetList(this.tangents, Mesh.startTangentsVector);
+  const colors = builder.createStructOffsetList(this.colors, Mesh.startColorsVector);
+  const texcoords = Mesh.createTexcoordsVector(builder, builder.createObjectOffsetList(this.texcoords));
   const indices = Mesh.createIndicesVector(builder, this.indices);
   const submeshes = Mesh.createSubmeshesVector(builder, builder.createObjectOffsetList(this.submeshes));
 
@@ -262,7 +317,9 @@ pack(builder:flatbuffers.Builder): flatbuffers.Offset {
     name,
     positions,
     normals,
-    uv0,
+    tangents,
+    colors,
+    texcoords,
     indices,
     submeshes
   );

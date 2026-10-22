@@ -5,8 +5,10 @@
 import * as flatbuffers from 'flatbuffers';
 
 import { Alignment } from '../../noa/ir/alignment.js';
+import { MaskInteraction } from '../../noa/ir/mask-interaction.js';
 import { MeshDistribution } from '../../noa/ir/mesh-distribution.js';
 import { ParticleSort } from '../../noa/ir/particle-sort.js';
+import { RenderEnvironment, RenderEnvironmentT } from '../../noa/ir/render-environment.js';
 import { RenderMode } from '../../noa/ir/render-mode.js';
 import { Vec3, Vec3T } from '../../noa/ir/vec3.js';
 import { VertexStream, VertexStreamT } from '../../noa/ir/vertex-stream.js';
@@ -30,176 +32,194 @@ static getSizePrefixedRootAsParticleRenderer(bb:flatbuffers.ByteBuffer, obj?:Par
   return (obj || new ParticleRenderer()).__init(bb.readInt32(bb.position()) + bb.position(), bb);
 }
 
-systemComponentId():number {
+maskInteraction():MaskInteraction {
   const offset = this.bb!.__offset(this.bb_pos, 4);
+  return offset ? this.bb!.readUint8(this.bb_pos + offset) : MaskInteraction.None;
+}
+
+environment(obj?:RenderEnvironment):RenderEnvironment|null {
+  const offset = this.bb!.__offset(this.bb_pos, 6);
+  return offset ? (obj || new RenderEnvironment()).__init(this.bb!.__indirect(this.bb_pos + offset), this.bb!) : null;
+}
+
+systemComponentId():number {
+  const offset = this.bb!.__offset(this.bb_pos, 8);
   return offset ? this.bb!.readUint32(this.bb_pos + offset) : 0;
 }
 
 materials(index: number):number|null {
-  const offset = this.bb!.__offset(this.bb_pos, 6);
+  const offset = this.bb!.__offset(this.bb_pos, 10);
   return offset ? this.bb!.readUint32(this.bb!.__vector(this.bb_pos + offset) + index * 4) : 0;
 }
 
 materialsLength():number {
-  const offset = this.bb!.__offset(this.bb_pos, 6);
+  const offset = this.bb!.__offset(this.bb_pos, 10);
   return offset ? this.bb!.__vector_len(this.bb_pos + offset) : 0;
 }
 
 materialsArray():Uint32Array|null {
-  const offset = this.bb!.__offset(this.bb_pos, 6);
+  const offset = this.bb!.__offset(this.bb_pos, 10);
   return offset ? new Uint32Array(this.bb!.bytes().buffer, this.bb!.bytes().byteOffset + this.bb!.__vector(this.bb_pos + offset), this.bb!.__vector_len(this.bb_pos + offset)) : null;
 }
 
 mode():RenderMode {
-  const offset = this.bb!.__offset(this.bb_pos, 8);
+  const offset = this.bb!.__offset(this.bb_pos, 12);
   return offset ? this.bb!.readUint8(this.bb_pos + offset) : RenderMode.Billboard;
 }
 
 alignment():Alignment {
-  const offset = this.bb!.__offset(this.bb_pos, 10);
+  const offset = this.bb!.__offset(this.bb_pos, 14);
   return offset ? this.bb!.readUint8(this.bb_pos + offset) : Alignment.View;
 }
 
 meshAssetIds(index: number):number|null {
-  const offset = this.bb!.__offset(this.bb_pos, 12);
+  const offset = this.bb!.__offset(this.bb_pos, 16);
   return offset ? this.bb!.readUint32(this.bb!.__vector(this.bb_pos + offset) + index * 4) : 0;
 }
 
 meshAssetIdsLength():number {
-  const offset = this.bb!.__offset(this.bb_pos, 12);
+  const offset = this.bb!.__offset(this.bb_pos, 16);
   return offset ? this.bb!.__vector_len(this.bb_pos + offset) : 0;
 }
 
 meshAssetIdsArray():Uint32Array|null {
-  const offset = this.bb!.__offset(this.bb_pos, 12);
+  const offset = this.bb!.__offset(this.bb_pos, 16);
   return offset ? new Uint32Array(this.bb!.bytes().buffer, this.bb!.bytes().byteOffset + this.bb!.__vector(this.bb_pos + offset), this.bb!.__vector_len(this.bb_pos + offset)) : null;
 }
 
 meshWeights(index: number):number|null {
-  const offset = this.bb!.__offset(this.bb_pos, 14);
+  const offset = this.bb!.__offset(this.bb_pos, 18);
   return offset ? this.bb!.readFloat32(this.bb!.__vector(this.bb_pos + offset) + index * 4) : 0;
 }
 
 meshWeightsLength():number {
-  const offset = this.bb!.__offset(this.bb_pos, 14);
+  const offset = this.bb!.__offset(this.bb_pos, 18);
   return offset ? this.bb!.__vector_len(this.bb_pos + offset) : 0;
 }
 
 meshWeightsArray():Float32Array|null {
-  const offset = this.bb!.__offset(this.bb_pos, 14);
+  const offset = this.bb!.__offset(this.bb_pos, 18);
   return offset ? new Float32Array(this.bb!.bytes().buffer, this.bb!.bytes().byteOffset + this.bb!.__vector(this.bb_pos + offset), this.bb!.__vector_len(this.bb_pos + offset)) : null;
 }
 
 sortingLayerRank():number {
-  const offset = this.bb!.__offset(this.bb_pos, 16);
+  const offset = this.bb!.__offset(this.bb_pos, 20);
   return offset ? this.bb!.readInt32(this.bb_pos + offset) : 0;
 }
 
 sortingOrder():number {
-  const offset = this.bb!.__offset(this.bb_pos, 18);
+  const offset = this.bb!.__offset(this.bb_pos, 22);
   return offset ? this.bb!.readInt32(this.bb_pos + offset) : 0;
 }
 
 sortingFudge():number {
-  const offset = this.bb!.__offset(this.bb_pos, 20);
+  const offset = this.bb!.__offset(this.bb_pos, 24);
   return offset ? this.bb!.readFloat32(this.bb_pos + offset) : 0.0;
 }
 
 sort():ParticleSort {
-  const offset = this.bb!.__offset(this.bb_pos, 22);
+  const offset = this.bb!.__offset(this.bb_pos, 26);
   return offset ? this.bb!.readUint8(this.bb_pos + offset) : ParticleSort.None;
 }
 
 pivot(obj?:Vec3):Vec3|null {
-  const offset = this.bb!.__offset(this.bb_pos, 24);
+  const offset = this.bb!.__offset(this.bb_pos, 28);
   return offset ? (obj || new Vec3()).__init(this.bb_pos + offset, this.bb!) : null;
 }
 
 flip(obj?:Vec3):Vec3|null {
-  const offset = this.bb!.__offset(this.bb_pos, 26);
+  const offset = this.bb!.__offset(this.bb_pos, 30);
   return offset ? (obj || new Vec3()).__init(this.bb_pos + offset, this.bb!) : null;
 }
 
 minSize():number {
-  const offset = this.bb!.__offset(this.bb_pos, 28);
-  return offset ? this.bb!.readFloat32(this.bb_pos + offset) : 0.0;
-}
-
-maxSize():number {
-  const offset = this.bb!.__offset(this.bb_pos, 30);
-  return offset ? this.bb!.readFloat32(this.bb_pos + offset) : 1.0;
-}
-
-cameraVelocityScale():number {
   const offset = this.bb!.__offset(this.bb_pos, 32);
   return offset ? this.bb!.readFloat32(this.bb_pos + offset) : 0.0;
 }
 
-velocityScale():number {
+maxSize():number {
   const offset = this.bb!.__offset(this.bb_pos, 34);
+  return offset ? this.bb!.readFloat32(this.bb_pos + offset) : 1.0;
+}
+
+cameraVelocityScale():number {
+  const offset = this.bb!.__offset(this.bb_pos, 36);
+  return offset ? this.bb!.readFloat32(this.bb_pos + offset) : 0.0;
+}
+
+velocityScale():number {
+  const offset = this.bb!.__offset(this.bb_pos, 38);
   return offset ? this.bb!.readFloat32(this.bb_pos + offset) : 0.0;
 }
 
 lengthScale():number {
-  const offset = this.bb!.__offset(this.bb_pos, 36);
+  const offset = this.bb!.__offset(this.bb_pos, 40);
   return offset ? this.bb!.readFloat32(this.bb_pos + offset) : 2.0;
 }
 
 allowRoll():boolean {
-  const offset = this.bb!.__offset(this.bb_pos, 38);
-  return offset ? !!this.bb!.readInt8(this.bb_pos + offset) : true;
-}
-
-vertexStreams(index: number, obj?:VertexStream):VertexStream|null {
-  const offset = this.bb!.__offset(this.bb_pos, 40);
-  return offset ? (obj || new VertexStream()).__init(this.bb!.__indirect(this.bb!.__vector(this.bb_pos + offset) + index * 4), this.bb!) : null;
-}
-
-vertexStreamsLength():number {
-  const offset = this.bb!.__offset(this.bb_pos, 40);
-  return offset ? this.bb!.__vector_len(this.bb_pos + offset) : 0;
-}
-
-applyActiveColorSpace():boolean {
   const offset = this.bb!.__offset(this.bb_pos, 42);
   return offset ? !!this.bb!.readInt8(this.bb_pos + offset) : true;
 }
 
-normalDirection():number {
+vertexStreams(index: number, obj?:VertexStream):VertexStream|null {
   const offset = this.bb!.__offset(this.bb_pos, 44);
+  return offset ? (obj || new VertexStream()).__init(this.bb!.__indirect(this.bb!.__vector(this.bb_pos + offset) + index * 4), this.bb!) : null;
+}
+
+vertexStreamsLength():number {
+  const offset = this.bb!.__offset(this.bb_pos, 44);
+  return offset ? this.bb!.__vector_len(this.bb_pos + offset) : 0;
+}
+
+applyActiveColorSpace():boolean {
+  const offset = this.bb!.__offset(this.bb_pos, 46);
+  return offset ? !!this.bb!.readInt8(this.bb_pos + offset) : true;
+}
+
+normalDirection():number {
+  const offset = this.bb!.__offset(this.bb_pos, 48);
   return offset ? this.bb!.readFloat32(this.bb_pos + offset) : 1.0;
 }
 
 freeformStretching():boolean {
-  const offset = this.bb!.__offset(this.bb_pos, 46);
+  const offset = this.bb!.__offset(this.bb_pos, 50);
   return offset ? !!this.bb!.readInt8(this.bb_pos + offset) : false;
 }
 
 rotateWithStretchDirection():boolean {
-  const offset = this.bb!.__offset(this.bb_pos, 48);
+  const offset = this.bb!.__offset(this.bb_pos, 52);
   return offset ? !!this.bb!.readInt8(this.bb_pos + offset) : true;
 }
 
 sourceSortingLayerId():number {
-  const offset = this.bb!.__offset(this.bb_pos, 50);
+  const offset = this.bb!.__offset(this.bb_pos, 54);
   return offset ? this.bb!.readInt32(this.bb_pos + offset) : 0;
 }
 
 meshDistribution():MeshDistribution {
-  const offset = this.bb!.__offset(this.bb_pos, 52);
+  const offset = this.bb!.__offset(this.bb_pos, 56);
   return offset ? this.bb!.readUint8(this.bb_pos + offset) : MeshDistribution.UniformRandom;
 }
 
 static startParticleRenderer(builder:flatbuffers.Builder) {
-  builder.startObject(25);
+  builder.startObject(27);
+}
+
+static addMaskInteraction(builder:flatbuffers.Builder, maskInteraction:MaskInteraction) {
+  builder.addFieldInt8(0, maskInteraction, MaskInteraction.None);
+}
+
+static addEnvironment(builder:flatbuffers.Builder, environmentOffset:flatbuffers.Offset) {
+  builder.addFieldOffset(1, environmentOffset, 0);
 }
 
 static addSystemComponentId(builder:flatbuffers.Builder, systemComponentId:number) {
-  builder.addFieldInt32(0, systemComponentId, 0);
+  builder.addFieldInt32(2, systemComponentId, 0);
 }
 
 static addMaterials(builder:flatbuffers.Builder, materialsOffset:flatbuffers.Offset) {
-  builder.addFieldOffset(1, materialsOffset, 0);
+  builder.addFieldOffset(3, materialsOffset, 0);
 }
 
 static createMaterialsVector(builder:flatbuffers.Builder, data:number[]|Uint32Array):flatbuffers.Offset;
@@ -220,15 +240,15 @@ static startMaterialsVector(builder:flatbuffers.Builder, numElems:number) {
 }
 
 static addMode(builder:flatbuffers.Builder, mode:RenderMode) {
-  builder.addFieldInt8(2, mode, RenderMode.Billboard);
+  builder.addFieldInt8(4, mode, RenderMode.Billboard);
 }
 
 static addAlignment(builder:flatbuffers.Builder, alignment:Alignment) {
-  builder.addFieldInt8(3, alignment, Alignment.View);
+  builder.addFieldInt8(5, alignment, Alignment.View);
 }
 
 static addMeshAssetIds(builder:flatbuffers.Builder, meshAssetIdsOffset:flatbuffers.Offset) {
-  builder.addFieldOffset(4, meshAssetIdsOffset, 0);
+  builder.addFieldOffset(6, meshAssetIdsOffset, 0);
 }
 
 static createMeshAssetIdsVector(builder:flatbuffers.Builder, data:number[]|Uint32Array):flatbuffers.Offset;
@@ -249,7 +269,7 @@ static startMeshAssetIdsVector(builder:flatbuffers.Builder, numElems:number) {
 }
 
 static addMeshWeights(builder:flatbuffers.Builder, meshWeightsOffset:flatbuffers.Offset) {
-  builder.addFieldOffset(5, meshWeightsOffset, 0);
+  builder.addFieldOffset(7, meshWeightsOffset, 0);
 }
 
 static createMeshWeightsVector(builder:flatbuffers.Builder, data:number[]|Float32Array):flatbuffers.Offset;
@@ -270,55 +290,55 @@ static startMeshWeightsVector(builder:flatbuffers.Builder, numElems:number) {
 }
 
 static addSortingLayerRank(builder:flatbuffers.Builder, sortingLayerRank:number) {
-  builder.addFieldInt32(6, sortingLayerRank, 0);
+  builder.addFieldInt32(8, sortingLayerRank, 0);
 }
 
 static addSortingOrder(builder:flatbuffers.Builder, sortingOrder:number) {
-  builder.addFieldInt32(7, sortingOrder, 0);
+  builder.addFieldInt32(9, sortingOrder, 0);
 }
 
 static addSortingFudge(builder:flatbuffers.Builder, sortingFudge:number) {
-  builder.addFieldFloat32(8, sortingFudge, 0.0);
+  builder.addFieldFloat32(10, sortingFudge, 0.0);
 }
 
 static addSort(builder:flatbuffers.Builder, sort:ParticleSort) {
-  builder.addFieldInt8(9, sort, ParticleSort.None);
+  builder.addFieldInt8(11, sort, ParticleSort.None);
 }
 
 static addPivot(builder:flatbuffers.Builder, pivotOffset:flatbuffers.Offset) {
-  builder.addFieldStruct(10, pivotOffset, 0);
+  builder.addFieldStruct(12, pivotOffset, 0);
 }
 
 static addFlip(builder:flatbuffers.Builder, flipOffset:flatbuffers.Offset) {
-  builder.addFieldStruct(11, flipOffset, 0);
+  builder.addFieldStruct(13, flipOffset, 0);
 }
 
 static addMinSize(builder:flatbuffers.Builder, minSize:number) {
-  builder.addFieldFloat32(12, minSize, 0.0);
+  builder.addFieldFloat32(14, minSize, 0.0);
 }
 
 static addMaxSize(builder:flatbuffers.Builder, maxSize:number) {
-  builder.addFieldFloat32(13, maxSize, 1.0);
+  builder.addFieldFloat32(15, maxSize, 1.0);
 }
 
 static addCameraVelocityScale(builder:flatbuffers.Builder, cameraVelocityScale:number) {
-  builder.addFieldFloat32(14, cameraVelocityScale, 0.0);
+  builder.addFieldFloat32(16, cameraVelocityScale, 0.0);
 }
 
 static addVelocityScale(builder:flatbuffers.Builder, velocityScale:number) {
-  builder.addFieldFloat32(15, velocityScale, 0.0);
+  builder.addFieldFloat32(17, velocityScale, 0.0);
 }
 
 static addLengthScale(builder:flatbuffers.Builder, lengthScale:number) {
-  builder.addFieldFloat32(16, lengthScale, 2.0);
+  builder.addFieldFloat32(18, lengthScale, 2.0);
 }
 
 static addAllowRoll(builder:flatbuffers.Builder, allowRoll:boolean) {
-  builder.addFieldInt8(17, +allowRoll, +true);
+  builder.addFieldInt8(19, +allowRoll, +true);
 }
 
 static addVertexStreams(builder:flatbuffers.Builder, vertexStreamsOffset:flatbuffers.Offset) {
-  builder.addFieldOffset(18, vertexStreamsOffset, 0);
+  builder.addFieldOffset(20, vertexStreamsOffset, 0);
 }
 
 static createVertexStreamsVector(builder:flatbuffers.Builder, data:flatbuffers.Offset[]):flatbuffers.Offset {
@@ -334,38 +354,40 @@ static startVertexStreamsVector(builder:flatbuffers.Builder, numElems:number) {
 }
 
 static addApplyActiveColorSpace(builder:flatbuffers.Builder, applyActiveColorSpace:boolean) {
-  builder.addFieldInt8(19, +applyActiveColorSpace, +true);
+  builder.addFieldInt8(21, +applyActiveColorSpace, +true);
 }
 
 static addNormalDirection(builder:flatbuffers.Builder, normalDirection:number) {
-  builder.addFieldFloat32(20, normalDirection, 1.0);
+  builder.addFieldFloat32(22, normalDirection, 1.0);
 }
 
 static addFreeformStretching(builder:flatbuffers.Builder, freeformStretching:boolean) {
-  builder.addFieldInt8(21, +freeformStretching, +false);
+  builder.addFieldInt8(23, +freeformStretching, +false);
 }
 
 static addRotateWithStretchDirection(builder:flatbuffers.Builder, rotateWithStretchDirection:boolean) {
-  builder.addFieldInt8(22, +rotateWithStretchDirection, +true);
+  builder.addFieldInt8(24, +rotateWithStretchDirection, +true);
 }
 
 static addSourceSortingLayerId(builder:flatbuffers.Builder, sourceSortingLayerId:number) {
-  builder.addFieldInt32(23, sourceSortingLayerId, 0);
+  builder.addFieldInt32(25, sourceSortingLayerId, 0);
 }
 
 static addMeshDistribution(builder:flatbuffers.Builder, meshDistribution:MeshDistribution) {
-  builder.addFieldInt8(24, meshDistribution, MeshDistribution.UniformRandom);
+  builder.addFieldInt8(26, meshDistribution, MeshDistribution.UniformRandom);
 }
 
 static endParticleRenderer(builder:flatbuffers.Builder):flatbuffers.Offset {
   const offset = builder.endObject();
-  builder.requiredField(offset, 6) // materials
+  builder.requiredField(offset, 10) // materials
   return offset;
 }
 
 
 unpack(): ParticleRendererT {
   return new ParticleRendererT(
+    this.maskInteraction(),
+    (this.environment() !== null ? this.environment()!.unpack() : null),
     this.systemComponentId(),
     this.bb!.createScalarList<number>(this.materials.bind(this), this.materialsLength()),
     this.mode(),
@@ -396,6 +418,8 @@ unpack(): ParticleRendererT {
 
 
 unpackTo(_o: ParticleRendererT): void {
+  _o.maskInteraction = this.maskInteraction();
+  _o.environment = (this.environment() !== null ? this.environment()!.unpack() : null);
   _o.systemComponentId = this.systemComponentId();
   _o.materials = this.bb!.createScalarList<number>(this.materials.bind(this), this.materialsLength());
   _o.mode = this.mode();
@@ -426,6 +450,8 @@ unpackTo(_o: ParticleRendererT): void {
 
 export class ParticleRendererT implements flatbuffers.IGeneratedObject {
 constructor(
+  public maskInteraction: MaskInteraction = MaskInteraction.None,
+  public environment: RenderEnvironmentT|null = null,
   public systemComponentId: number = 0,
   public materials: (number)[] = [],
   public mode: RenderMode = RenderMode.Billboard,
@@ -455,12 +481,15 @@ constructor(
 
 
 pack(builder:flatbuffers.Builder): flatbuffers.Offset {
+  const environment = (this.environment !== null ? this.environment!.pack(builder) : 0);
   const materials = ParticleRenderer.createMaterialsVector(builder, this.materials);
   const meshAssetIds = ParticleRenderer.createMeshAssetIdsVector(builder, this.meshAssetIds);
   const meshWeights = ParticleRenderer.createMeshWeightsVector(builder, this.meshWeights);
   const vertexStreams = ParticleRenderer.createVertexStreamsVector(builder, builder.createObjectOffsetList(this.vertexStreams));
 
   ParticleRenderer.startParticleRenderer(builder);
+  ParticleRenderer.addMaskInteraction(builder, this.maskInteraction);
+  ParticleRenderer.addEnvironment(builder, environment);
   ParticleRenderer.addSystemComponentId(builder, this.systemComponentId);
   ParticleRenderer.addMaterials(builder, materials);
   ParticleRenderer.addMode(builder, this.mode);

@@ -65,7 +65,7 @@ function fixture() {
       {
         format: 'noa-package',
         version: 1,
-        noir_version: [1, 0],
+        noir_version: [2, 0],
         document: 'scene.noir',
         files: [
           {
@@ -271,8 +271,15 @@ it('checks every mesh slot, weighted inputs and the largest vertex reservation',
     id === 7
       ? undefined
       : ({
+          colors: [],
           positions: new Array(100).fill({ x: 0, y: 0, z: 0 }),
-          uv0: new Array(100).fill({ x: 0, y: 0 }),
+          texcoords: [
+            {
+              channel: 0,
+              dimension: 2,
+              values: new Array(100).fill({ x: 0, y: 0 }).map((p) => ({ ...p, z: 0, w: 0 })),
+            },
+          ],
           indices: [0, 1, 2],
           submeshes: [{}],
         } as never),

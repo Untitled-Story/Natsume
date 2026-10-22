@@ -1,4 +1,5 @@
 import { validateAnimationBindings } from './animation-semantics.js';
+import { validateSceneAssets } from './scene-semantics.js';
 import { check } from '../errors.js';
 import type { DocumentT } from './generated/noa/ir/document.js';
 import type { MeshT } from './generated/noa/mesh/mesh.js';
@@ -49,7 +50,7 @@ const ordered = (values: ObjectValue[], normalized = false) => {
 const unit = (value: number, name: string) =>
   check(value >= 0 && value <= 1, 'SEMANTIC', `Invalid ${name}`);
 
-export const KNOWN_FEATURES: Readonly<Record<string, number>> = Object.freeze(
+export const SUPPORTED_FEATURES: Readonly<Record<string, number>> = Object.freeze(
   Object.fromEntries(
     [
       'scene.trs',
@@ -92,14 +93,38 @@ export const KNOWN_FEATURES: Readonly<Record<string, number>> = Object.freeze(
       'material.unity-legacy-particle-additive',
       'material.unity-legacy-particle-alpha-blend',
       'host.legacy-particle-environment',
-      'mesh.nomesh',
-    ].map((name) => [name, 1]),
+    ]
+      .map((name) => [name, 1])
+      .concat([['mesh.nomesh', 2]]),
   ),
 );
 
+/** Recognized source contracts; recognition alone does not enable playback. */
+export const KNOWN_FEATURES: Readonly<Record<string, number>> = Object.freeze({
+  ...SUPPORTED_FEATURES,
+  ...Object.fromEntries(
+    [
+      'scene.mesh-renderer',
+      'asset.sprite',
+      'scene.sprite-renderer',
+      'render.sprite-mask',
+      'ui.canvas',
+      'particle.shape.sprite',
+      'particle.shape.donut',
+      'particle.texture-sheet-sprites',
+      'particle.renderer-none',
+      'render.environment',
+      'material.unity-sprite-default',
+      'material.unity-ui-default',
+      'material.texture-vertex-color',
+      'animation.sprite',
+    ].map((name) => [name, 1]),
+  ),
+});
+
 export function validateDocument(document: DocumentT): void {
   check(
-    document.formatMajor === 1 && document.formatMinor === 0 && document.semanticsRevision === 1,
+    document.formatMajor === 2 && document.formatMinor === 0 && document.semanticsRevision === 1,
     'VERSION',
     'Unsupported NOIR version or semantics revision',
   );
@@ -222,13 +247,13 @@ export function validateDocument(document: DocumentT): void {
     );
     features.set(feature.name, feature.revision);
   }
-  const requireFeature = (name: string) =>
+  const requireFeature = (name: string, revision = 1) =>
     check(
       document.features.some(
-        (feature) => feature.name === name && feature.revision === 1 && feature.required,
+        (feature) => feature.name === name && feature.revision === revision && feature.required,
       ),
       'SEMANTIC',
-      `Missing required ${name}@1 declaration`,
+      `Missing required ${name}@${revision} declaration`,
     );
   const checkTable = (name: string, o: ObjectValue) => {
     const extent = (key: string) => {
@@ -358,6 +383,8 @@ export function validateDocument(document: DocumentT): void {
           g.hemisphere ? 'hemisphere' : 'sphere',
           g.region === 1 ? 'cone-volume' : 'cone',
           'edge',
+          'donut',
+          'sprite',
         ][Number(o.geometryType)];
         requireFeature(`particle.shape.${feature}`);
         unit(number(o, 'randomDirection'), 'random direction');
@@ -416,11 +443,14 @@ export function validateDocument(document: DocumentT): void {
         if (o.remapEnabled) present(o, 'remap');
         break;
       case 'TextureSheetModule':
-        check(
-          number(o, 'columns') > 0 && number(o, 'rows') > 0 && number(o, 'row') < number(o, 'rows'),
-          'SEMANTIC',
-          'Invalid texture sheet',
-        );
+        if (o.mode === 0)
+          check(
+            number(o, 'columns') > 0 &&
+              number(o, 'rows') > 0 &&
+              number(o, 'row') < number(o, 'rows'),
+            'SEMANTIC',
+            'Invalid texture sheet',
+          );
         break;
       case 'CustomDataModule': {
         const streams = array(o.streams);
@@ -568,6 +598,7 @@ export function validateDocument(document: DocumentT): void {
     }
   };
   visit('Document', document);
+  validateSceneAssets(document, requireFeature);
   validateAnimationBindings(document, requireFeature);
   for (const material of document.materials)
     if (material.model === 4 || material.model === 5) {
@@ -583,20 +614,53 @@ export function validateDocument(document: DocumentT): void {
 }
 
 export function validateMesh(mesh: MeshT): void {
-  check(mesh.formatMajor === 1 && mesh.formatMinor === 0, 'VERSION', 'Unsupported mesh version');
+  check(mesh.formatMajor === 2 && mesh.formatMinor === 0, 'VERSION', 'Unsupported mesh version');
   check(
     mesh.positions.length > 0 && mesh.indices.length > 0 && mesh.indices.length % 3 === 0,
     'SEMANTIC',
     'Mesh needs vertices and triangle indices',
   );
   check(
-    (mesh.normals.length === 0 || mesh.normals.length === mesh.positions.length) &&
-      (mesh.uv0.length === 0 || mesh.uv0.length === mesh.positions.length),
+    [mesh.normals, mesh.tangents, mesh.colors].every(
+      (a) => a.length === 0 || a.length === mesh.positions.length,
+    ),
     'SEMANTIC',
     'Mesh attribute count mismatch',
   );
+  for (const attribute of [mesh.positions, mesh.normals, mesh.tangents, mesh.colors])
+    check(
+      attribute.every((v) => Object.values(v).every(Number.isFinite)),
+      'SEMANTIC',
+      'Non-finite mesh attribute',
+    );
+  const channels = new Set<number>();
+  for (const uv of mesh.texcoords) {
+    check(
+      Number.isInteger(uv.channel) &&
+        uv.channel >= 0 &&
+        uv.channel <= 7 &&
+        Number.isInteger(uv.dimension) &&
+        uv.dimension >= 1 &&
+        uv.dimension <= 4 &&
+        !channels.has(uv.channel) &&
+        uv.values.length === mesh.positions.length,
+      'SEMANTIC',
+      'Invalid texcoord channel, dimension or attribute count',
+    );
+    channels.add(uv.channel);
+    check(
+      uv.values.every((v) => {
+        const values = [v.x, v.y, v.z, v.w];
+        return values.every(Number.isFinite) && values.slice(uv.dimension).every((x) => x === 0);
+      }),
+      'SEMANTIC',
+      'Invalid texcoord values',
+    );
+  }
   check(
-    mesh.indices.every((index) => index < mesh.positions.length),
+    mesh.indices.every(
+      (index) => Number.isInteger(index) && index >= 0 && index < mesh.positions.length,
+    ),
     'SEMANTIC',
     'Mesh index out of range',
   );

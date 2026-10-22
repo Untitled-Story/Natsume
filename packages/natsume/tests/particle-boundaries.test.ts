@@ -483,7 +483,7 @@ for (const fixture of native.cases.filter(
 
 it('matches native lifetime tiles using simulated ages through death', () => {
   const source = particleSource();
-  const sheet = new TextureSheetModuleT(4, 2);
+  const sheet = Object.assign(new TextureSheetModuleT(), { columns: 4, rows: 2 });
   sheet.frameOverTime = linear(0, 1);
   source.modules.push(new ParticleModuleT(M.TextureSheetModule, sheet));
   const e = new Emitter(3, scene.nodes.get(1)!, source, true, 1, []);

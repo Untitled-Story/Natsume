@@ -40,7 +40,7 @@ static bufferHasIdentifier(bb:flatbuffers.ByteBuffer):boolean {
 
 formatMajor():number {
   const offset = this.bb!.__offset(this.bb_pos, 4);
-  return offset ? this.bb!.readUint16(this.bb_pos + offset) : 1;
+  return offset ? this.bb!.readUint16(this.bb_pos + offset) : 0;
 }
 
 formatMinor():number {
@@ -158,7 +158,7 @@ static startDocument(builder:flatbuffers.Builder) {
 }
 
 static addFormatMajor(builder:flatbuffers.Builder, formatMajor:number) {
-  builder.addFieldInt16(0, formatMajor, 1);
+  builder.addFieldInt16(0, formatMajor, 0);
 }
 
 static addFormatMinor(builder:flatbuffers.Builder, formatMinor:number) {
@@ -377,7 +377,7 @@ unpackTo(_o: DocumentT): void {
 
 export class DocumentT implements flatbuffers.IGeneratedObject {
 constructor(
-  public formatMajor: number = 1,
+  public formatMajor: number = 0,
   public formatMinor: number = 0,
   public semanticsRevision: number = 1,
   public features: (FeatureRequirementT)[] = [],

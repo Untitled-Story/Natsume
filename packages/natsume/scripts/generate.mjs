@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { generateDescriptors } from './schema.mjs';
 
@@ -17,6 +17,8 @@ if (
 ) {
   throw new Error(`Expected flatc ${provenance.flatc}`);
 }
+// Remove bindings for schema types that no longer exist.
+rmSync('src/format/generated/noa', { recursive: true, force: true });
 execFileSync(
   flatc,
   [
@@ -29,4 +31,16 @@ execFileSync(
   ],
   { stdio: 'inherit' },
 );
+// flatc emits trailing spaces in union helpers. Keep regeneration diff-clean.
+function normalize(directory) {
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    const path = `${directory}/${entry.name}`;
+    if (entry.isDirectory()) normalize(path);
+    else if (entry.name.endsWith('.ts')) {
+      const source = readFileSync(path, 'utf8');
+      writeFileSync(path, source.replace(/[ \t]+$/gm, ''));
+    }
+  }
+}
+normalize('src/format/generated');
 generateDescriptors();

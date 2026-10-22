@@ -5,6 +5,7 @@
 import * as flatbuffers from 'flatbuffers';
 
 import { AssetKind } from '../../noa/ir/asset-kind.js';
+import { SpriteAsset, SpriteAssetT } from '../../noa/ir/sprite-asset.js';
 
 
 export class Asset implements flatbuffers.IUnpackableObject<AssetT> {
@@ -35,8 +36,13 @@ kind():AssetKind {
   return offset ? this.bb!.readUint8(this.bb_pos + offset) : AssetKind.Unknown;
 }
 
+sprite(obj?:SpriteAsset):SpriteAsset|null {
+  const offset = this.bb!.__offset(this.bb_pos, 8);
+  return offset ? (obj || new SpriteAsset()).__init(this.bb!.__indirect(this.bb_pos + offset), this.bb!) : null;
+}
+
 static startAsset(builder:flatbuffers.Builder) {
-  builder.startObject(2);
+  builder.startObject(3);
 }
 
 static addId(builder:flatbuffers.Builder, id:number) {
@@ -47,22 +53,21 @@ static addKind(builder:flatbuffers.Builder, kind:AssetKind) {
   builder.addFieldInt8(1, kind, AssetKind.Unknown);
 }
 
+static addSprite(builder:flatbuffers.Builder, spriteOffset:flatbuffers.Offset) {
+  builder.addFieldOffset(2, spriteOffset, 0);
+}
+
 static endAsset(builder:flatbuffers.Builder):flatbuffers.Offset {
   const offset = builder.endObject();
   return offset;
 }
 
-static createAsset(builder:flatbuffers.Builder, id:number, kind:AssetKind):flatbuffers.Offset {
-  Asset.startAsset(builder);
-  Asset.addId(builder, id);
-  Asset.addKind(builder, kind);
-  return Asset.endAsset(builder);
-}
 
 unpack(): AssetT {
   return new AssetT(
     this.id(),
-    this.kind()
+    this.kind(),
+    (this.sprite() !== null ? this.sprite()!.unpack() : null)
   );
 }
 
@@ -70,20 +75,26 @@ unpack(): AssetT {
 unpackTo(_o: AssetT): void {
   _o.id = this.id();
   _o.kind = this.kind();
+  _o.sprite = (this.sprite() !== null ? this.sprite()!.unpack() : null);
 }
 }
 
 export class AssetT implements flatbuffers.IGeneratedObject {
 constructor(
   public id: number = 0,
-  public kind: AssetKind = AssetKind.Unknown
+  public kind: AssetKind = AssetKind.Unknown,
+  public sprite: SpriteAssetT|null = null
 ){}
 
 
 pack(builder:flatbuffers.Builder): flatbuffers.Offset {
-  return Asset.createAsset(builder,
-    this.id,
-    this.kind
-  );
+  const sprite = (this.sprite !== null ? this.sprite!.pack(builder) : 0);
+
+  Asset.startAsset(builder);
+  Asset.addId(builder, this.id);
+  Asset.addKind(builder, this.kind);
+  Asset.addSprite(builder, sprite);
+
+  return Asset.endAsset(builder);
 }
 }

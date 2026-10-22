@@ -7,9 +7,11 @@ import * as flatbuffers from 'flatbuffers';
 import { BoxShape, BoxShapeT } from '../../noa/ir/box-shape.js';
 import { CircleShape, CircleShapeT } from '../../noa/ir/circle-shape.js';
 import { ConeShape, ConeShapeT } from '../../noa/ir/cone-shape.js';
+import { DonutShape, DonutShapeT } from '../../noa/ir/donut-shape.js';
 import { EdgeShape, EdgeShapeT } from '../../noa/ir/edge-shape.js';
 import { ShapeGeometry, unionToShapeGeometry, unionListToShapeGeometry } from '../../noa/ir/shape-geometry.js';
 import { SphereShape, SphereShapeT } from '../../noa/ir/sphere-shape.js';
+import { SpriteShape, SpriteShapeT } from '../../noa/ir/sprite-shape.js';
 import { Transform, TransformT } from '../../noa/ir/transform.js';
 
 
@@ -140,7 +142,7 @@ unpackTo(_o: ShapeModuleT): void {
 export class ShapeModuleT implements flatbuffers.IGeneratedObject {
 constructor(
   public geometryType: ShapeGeometry = ShapeGeometry.NONE,
-  public geometry: BoxShapeT|CircleShapeT|ConeShapeT|EdgeShapeT|SphereShapeT|null = null,
+  public geometry: BoxShapeT|CircleShapeT|ConeShapeT|DonutShapeT|EdgeShapeT|SphereShapeT|SpriteShapeT|null = null,
   public transform: TransformT|null = null,
   public alignToDirection: boolean = false,
   public randomDirection: number = 0.0,

@@ -70,7 +70,10 @@ export async function measureLegacyMaterials(nativeCases: readonly NativeLegacyC
   e.startSizes.set([16, 16, 1]);
   e.rotations.fill(0);
   e.startColors.set([1, 0, 0, 0.5]);
-  const definition = new ParticleRendererT(3, [1]);
+  const definition = Object.assign(new ParticleRendererT(), {
+    systemComponentId: 3,
+    materials: [1],
+  });
   definition.applyActiveColorSpace = false;
   definition.vertexStreams = [
     new VertexStreamT(0, 3),
@@ -115,7 +118,7 @@ export async function measureLegacyMaterials(nativeCases: readonly NativeLegacyC
     );
     if (label === 'alpha') {
       const d = minimalDocument(),
-        r = new ParticleRendererT(3, [1]);
+        r = Object.assign(new ParticleRendererT(), { systemComponentId: 3, materials: [1] });
       d.components = [new ComponentT(4, 1, true, ComponentData.ParticleRenderer, r)];
       d.materials = [Object.assign(structuredClone(material), { id: 1 })];
       const curve = new ScalarCurveT();
@@ -134,7 +137,7 @@ export async function measureLegacyMaterials(nativeCases: readonly NativeLegacyC
         {
           format: 'noa-package',
           version: 1,
-          noir_version: [1, 0],
+          noir_version: [2, 0],
           document: 'scene.noir',
           files: [],
         },

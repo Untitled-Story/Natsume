@@ -4,10 +4,20 @@
 
 import { Animator, AnimatorT } from '../../noa/ir/animator.js';
 import { Camera, CameraT } from '../../noa/ir/camera.js';
+import { Canvas, CanvasT } from '../../noa/ir/canvas.js';
+import { CanvasGroup, CanvasGroupT } from '../../noa/ir/canvas-group.js';
+import { CanvasRenderer, CanvasRendererT } from '../../noa/ir/canvas-renderer.js';
 import { CustomComponent, CustomComponentT } from '../../noa/ir/custom-component.js';
+import { MeshFilter, MeshFilterT } from '../../noa/ir/mesh-filter.js';
+import { MeshRenderer, MeshRendererT } from '../../noa/ir/mesh-renderer.js';
 import { ParticleRenderer, ParticleRendererT } from '../../noa/ir/particle-renderer.js';
 import { ParticleSystem, ParticleSystemT } from '../../noa/ir/particle-system.js';
 import { RectLayout, RectLayoutT } from '../../noa/ir/rect-layout.js';
+import { RectMask2D, RectMask2DT } from '../../noa/ir/rect-mask2-d.js';
+import { SpriteMask, SpriteMaskT } from '../../noa/ir/sprite-mask.js';
+import { SpriteRenderer, SpriteRendererT } from '../../noa/ir/sprite-renderer.js';
+import { UIImage, UIImageT } from '../../noa/ir/uiimage.js';
+import { UIMask, UIMaskT } from '../../noa/ir/uimask.js';
 
 
 export enum ComponentData {
@@ -17,38 +27,68 @@ export enum ComponentData {
   ParticleSystem = 3,
   ParticleRenderer = 4,
   CustomComponent = 5,
-  Animator = 6
+  Animator = 6,
+  MeshRenderer = 7,
+  SpriteRenderer = 8,
+  SpriteMask = 9,
+  Canvas = 10,
+  CanvasRenderer = 11,
+  MeshFilter = 12,
+  UIImage = 13,
+  UIMask = 14,
+  RectMask2D = 15,
+  CanvasGroup = 16
 }
 
 export function unionToComponentData(
   type: ComponentData,
-  accessor: (obj:Animator|Camera|CustomComponent|ParticleRenderer|ParticleSystem|RectLayout) => Animator|Camera|CustomComponent|ParticleRenderer|ParticleSystem|RectLayout|null
-): Animator|Camera|CustomComponent|ParticleRenderer|ParticleSystem|RectLayout|null {
+  accessor: (obj:Animator|Camera|Canvas|CanvasGroup|CanvasRenderer|CustomComponent|MeshFilter|MeshRenderer|ParticleRenderer|ParticleSystem|RectLayout|RectMask2D|SpriteMask|SpriteRenderer|UIImage|UIMask) => Animator|Camera|Canvas|CanvasGroup|CanvasRenderer|CustomComponent|MeshFilter|MeshRenderer|ParticleRenderer|ParticleSystem|RectLayout|RectMask2D|SpriteMask|SpriteRenderer|UIImage|UIMask|null
+): Animator|Camera|Canvas|CanvasGroup|CanvasRenderer|CustomComponent|MeshFilter|MeshRenderer|ParticleRenderer|ParticleSystem|RectLayout|RectMask2D|SpriteMask|SpriteRenderer|UIImage|UIMask|null {
   switch(ComponentData[type]) {
-    case 'NONE': return null; 
+    case 'NONE': return null;
     case 'RectLayout': return accessor(new RectLayout())! as RectLayout;
     case 'Camera': return accessor(new Camera())! as Camera;
     case 'ParticleSystem': return accessor(new ParticleSystem())! as ParticleSystem;
     case 'ParticleRenderer': return accessor(new ParticleRenderer())! as ParticleRenderer;
     case 'CustomComponent': return accessor(new CustomComponent())! as CustomComponent;
     case 'Animator': return accessor(new Animator())! as Animator;
+    case 'MeshRenderer': return accessor(new MeshRenderer())! as MeshRenderer;
+    case 'SpriteRenderer': return accessor(new SpriteRenderer())! as SpriteRenderer;
+    case 'SpriteMask': return accessor(new SpriteMask())! as SpriteMask;
+    case 'Canvas': return accessor(new Canvas())! as Canvas;
+    case 'CanvasRenderer': return accessor(new CanvasRenderer())! as CanvasRenderer;
+    case 'MeshFilter': return accessor(new MeshFilter())! as MeshFilter;
+    case 'UIImage': return accessor(new UIImage())! as UIImage;
+    case 'UIMask': return accessor(new UIMask())! as UIMask;
+    case 'RectMask2D': return accessor(new RectMask2D())! as RectMask2D;
+    case 'CanvasGroup': return accessor(new CanvasGroup())! as CanvasGroup;
     default: return null;
   }
 }
 
 export function unionListToComponentData(
-  type: ComponentData, 
-  accessor: (index: number, obj:Animator|Camera|CustomComponent|ParticleRenderer|ParticleSystem|RectLayout) => Animator|Camera|CustomComponent|ParticleRenderer|ParticleSystem|RectLayout|null, 
+  type: ComponentData,
+  accessor: (index: number, obj:Animator|Camera|Canvas|CanvasGroup|CanvasRenderer|CustomComponent|MeshFilter|MeshRenderer|ParticleRenderer|ParticleSystem|RectLayout|RectMask2D|SpriteMask|SpriteRenderer|UIImage|UIMask) => Animator|Camera|Canvas|CanvasGroup|CanvasRenderer|CustomComponent|MeshFilter|MeshRenderer|ParticleRenderer|ParticleSystem|RectLayout|RectMask2D|SpriteMask|SpriteRenderer|UIImage|UIMask|null,
   index: number
-): Animator|Camera|CustomComponent|ParticleRenderer|ParticleSystem|RectLayout|null {
+): Animator|Camera|Canvas|CanvasGroup|CanvasRenderer|CustomComponent|MeshFilter|MeshRenderer|ParticleRenderer|ParticleSystem|RectLayout|RectMask2D|SpriteMask|SpriteRenderer|UIImage|UIMask|null {
   switch(ComponentData[type]) {
-    case 'NONE': return null; 
+    case 'NONE': return null;
     case 'RectLayout': return accessor(index, new RectLayout())! as RectLayout;
     case 'Camera': return accessor(index, new Camera())! as Camera;
     case 'ParticleSystem': return accessor(index, new ParticleSystem())! as ParticleSystem;
     case 'ParticleRenderer': return accessor(index, new ParticleRenderer())! as ParticleRenderer;
     case 'CustomComponent': return accessor(index, new CustomComponent())! as CustomComponent;
     case 'Animator': return accessor(index, new Animator())! as Animator;
+    case 'MeshRenderer': return accessor(index, new MeshRenderer())! as MeshRenderer;
+    case 'SpriteRenderer': return accessor(index, new SpriteRenderer())! as SpriteRenderer;
+    case 'SpriteMask': return accessor(index, new SpriteMask())! as SpriteMask;
+    case 'Canvas': return accessor(index, new Canvas())! as Canvas;
+    case 'CanvasRenderer': return accessor(index, new CanvasRenderer())! as CanvasRenderer;
+    case 'MeshFilter': return accessor(index, new MeshFilter())! as MeshFilter;
+    case 'UIImage': return accessor(index, new UIImage())! as UIImage;
+    case 'UIMask': return accessor(index, new UIMask())! as UIMask;
+    case 'RectMask2D': return accessor(index, new RectMask2D())! as RectMask2D;
+    case 'CanvasGroup': return accessor(index, new CanvasGroup())! as CanvasGroup;
     default: return null;
   }
 }

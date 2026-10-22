@@ -164,15 +164,22 @@ export function measureLifetimeSizeRandomness(seed: number) {
   definition.meshAssetIds = [1];
   const meshPack = {
     getMesh: () => ({
+      colors: [],
       positions: [
         { x: 1, y: 0, z: 0 },
         { x: 0, y: 1, z: 0 },
         { x: 0, y: 0, z: 1 },
       ],
-      uv0: [
-        { x: 0, y: 0 },
-        { x: 1, y: 0 },
-        { x: 0, y: 1 },
+      texcoords: [
+        {
+          channel: 0,
+          dimension: 2,
+          values: [
+            { x: 0, y: 0 },
+            { x: 1, y: 0 },
+            { x: 0, y: 1 },
+          ].map((p) => ({ ...p, z: 0, w: 0 })),
+        },
       ],
       indices: [0, 1, 2],
       submeshes: [{}],
@@ -310,17 +317,24 @@ export async function measureParticleGeometry(labels?: string[]) {
     definition.meshAssetIds = [1];
     const fixturePack = {
       getMesh: () => ({
+        colors: [],
         positions: [
           { x: -0.5, y: -0.5, z: 0 },
           { x: 0.5, y: -0.5, z: 0 },
           { x: 0.5, y: 0.5, z: 0 },
           { x: -0.5, y: 0.5, z: 0 },
         ],
-        uv0: [
-          { x: 0, y: 0 },
-          { x: 1, y: 0 },
-          { x: 1, y: 1 },
-          { x: 0, y: 1 },
+        texcoords: [
+          {
+            channel: 0,
+            dimension: 2,
+            values: [
+              { x: 0, y: 0 },
+              { x: 1, y: 0 },
+              { x: 1, y: 1 },
+              { x: 0, y: 1 },
+            ].map((p) => ({ ...p, z: 0, w: 0 })),
+          },
         ],
         indices: [0, 1, 2, 0, 2, 3],
         submeshes: [{}],
@@ -385,8 +399,11 @@ export function measureParticleSorting() {
     definition.sort = sort as ParticleSort;
     const meshPack = {
       getMesh: () => ({
+        colors: [],
         positions: [{ x: 0, y: 0, z: 0 }],
-        uv0: [{ x: 0, y: 0 }],
+        texcoords: [
+          { channel: 0, dimension: 2, values: [{ x: 0, y: 0 }].map((p) => ({ ...p, z: 0, w: 0 })) },
+        ],
         indices: [0],
         submeshes: [{}],
       }),
@@ -711,7 +728,7 @@ export async function measureSheetUV() {
     getNode: (id: number) => document.nodes.find((n) => n.id === id),
   } as unknown as EffectPack;
   const source = particleSource();
-  const sheet = new TextureSheetModuleT(4, 3);
+  const sheet = Object.assign(new TextureSheetModuleT(), { columns: 4, rows: 3 });
   sheet.frameOverTime = linear(0, 1);
   sheet.startFrame = constant(0);
   source.modules.push(new ParticleModuleT(M.TextureSheetModule, sheet));
@@ -921,8 +938,17 @@ export async function measureMeshChoices() {
               { x: 0, y: 0.5, z: 0 },
             ];
       return {
+        colors: [],
         positions,
-        uv0: positions.map((p) => ({ x: p.x / id + 0.5, y: p.y + 0.5 })),
+        texcoords: [
+          {
+            channel: 0,
+            dimension: 2,
+            values: positions
+              .map((p) => ({ x: p.x / id + 0.5, y: p.y + 0.5 }))
+              .map((p) => ({ ...p, z: 0, w: 0 })),
+          },
+        ],
         indices: id === 2 ? [0, 1, 2, 0, 2, 3] : [0, 1, 2],
         submeshes: [{}],
       };
@@ -1071,7 +1097,13 @@ export async function measureMaterialPasses() {
         new Vec3T(2, 1, 0),
         new Vec3T(-2, 1, 0),
       ];
-      geometry.uv0 = geometry.positions.map(() => ({ x: 0, y: 0 })) as never;
+      geometry.texcoords = [
+        {
+          channel: 0,
+          dimension: 2,
+          values: geometry.positions.map(() => ({ x: 0, y: 0, z: 0, w: 0 })),
+        },
+      ] as never;
       geometry.indices = [0, 1, 2, 0, 2, 3];
       geometry.submeshes = [new SubmeshT(0, 6)];
       const pack = new EffectPack(
@@ -1079,7 +1111,7 @@ export async function measureMaterialPasses() {
         {
           format: 'noa-package',
           version: 1,
-          noir_version: [1, 0],
+          noir_version: [2, 0],
           document: 'scene.noir',
           files: [
             {
@@ -1214,7 +1246,7 @@ export async function measureRenderOrder(
       {
         format: 'noa-package',
         version: 1,
-        noir_version: [1, 0],
+        noir_version: [2, 0],
         document: 'scene.noir',
         files: [
           {
@@ -1314,15 +1346,22 @@ export async function measureSpeedGeometry() {
   definition.flip = null;
   const meshPack = {
     getMesh: () => ({
+      colors: [],
       positions: [
         { x: 1, y: 0, z: 0 },
         { x: 0, y: 1, z: 0 },
         { x: 0, y: 0, z: 1 },
       ],
-      uv0: [
-        { x: 0, y: 0 },
-        { x: 1, y: 0 },
-        { x: 0, y: 1 },
+      texcoords: [
+        {
+          channel: 0,
+          dimension: 2,
+          values: [
+            { x: 0, y: 0 },
+            { x: 1, y: 0 },
+            { x: 0, y: 1 },
+          ].map((p) => ({ ...p, z: 0, w: 0 })),
+        },
       ],
       indices: [0, 1, 2],
       submeshes: [{}],

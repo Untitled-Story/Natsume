@@ -10,7 +10,7 @@ export interface ManifestFile {
 export interface Manifest {
   readonly format: 'noa-package';
   readonly version: 1;
-  readonly noir_version: readonly [1, 0];
+  readonly noir_version: readonly [2, 0];
   readonly document: 'scene.noir';
   readonly files: readonly ManifestFile[];
 }
@@ -43,7 +43,7 @@ export function parseManifest(bytes: Uint8Array): Manifest {
       value.document === 'scene.noir' &&
       Array.isArray(value.noir_version) &&
       value.noir_version.length === 2 &&
-      value.noir_version[0] === 1 &&
+      value.noir_version[0] === 2 &&
       value.noir_version[1] === 0,
     'VERSION',
     'Unsupported manifest version',

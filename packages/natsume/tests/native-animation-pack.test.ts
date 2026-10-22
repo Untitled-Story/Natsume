@@ -2,7 +2,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { expect, it } from 'vitest';
 import { loadPack } from '../src/loader/load.js';
 import { Simulation } from '../src/runtime/simulation.js';
-import { KNOWN_FEATURES } from '../src/format/semantics.js';
+import { SUPPORTED_FEATURES } from '../src/format/semantics.js';
 import { Document } from '../src/format/generated/noa/ir/document.js';
 import { ByteBuffer } from 'flatbuffers';
 import { unzipSync } from 'fflate';
@@ -18,10 +18,12 @@ it.skipIf(!existsSync(source))(
       const archive = unzipSync(bytes);
       const document = Document.getRootAsDocument(new ByteBuffer(archive['scene.noir']!)).unpack();
       const unsupported = document.features
-        .filter((f) => f.required && KNOWN_FEATURES[f.name as string] !== f.revision)
+        .filter((f) => f.required && SUPPORTED_FEATURES[f.name as string] !== f.revision)
         .map((f) => f.name as string);
       if (unsupported.length) {
-        await expect(loadPack(bytes), file).rejects.toThrow(/Unknown required feature/);
+        const pack = await loadPack(bytes);
+        expect(() => new Simulation(pack), file).toThrow(/Required feature is not implemented/);
+        pack.dispose();
         results.push({ file, accepted: false, timed: 0, unsupported });
         continue;
       }

@@ -73,7 +73,7 @@ const thresholds = JSON.parse(readNativeFixture('unity-boundaries.json')) as {
   cases: { label: string; threshold: number }[];
 };
 it('matches native lifetime tile transition thresholds', () => {
-  const sheet = new TextureSheetModuleT(4, 2);
+  const sheet = Object.assign(new TextureSheetModuleT(), { columns: 4, rows: 2 });
   sheet.frameOverTime = linear(0, 1);
   for (const c of thresholds.cases.filter((c) => c.label.startsWith('sheet-search-'))) {
     const tile = Math.round(Number(c.label.slice('sheet-search-'.length)) * 8);

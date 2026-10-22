@@ -54,7 +54,7 @@ import type { DocumentT } from '../src/format/generated/noa/ir/document.js';
 export function packDocument(d: DocumentT): EffectPack {
   return new EffectPack(
     d,
-    { format: 'noa-package', version: 1, noir_version: [1, 0], document: 'scene.noir', files: [] },
+    { format: 'noa-package', version: 1, noir_version: [2, 0], document: 'scene.noir', files: [] },
     new Map(),
     new Map(),
   );

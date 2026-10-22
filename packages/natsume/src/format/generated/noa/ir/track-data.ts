@@ -27,7 +27,7 @@ export function unionToTrackData(
   accessor: (obj:BoolTrack|ColorTrack|FloatTrack|ReferenceTrack|RotationTrack|Vector3Track|Vector4Track) => BoolTrack|ColorTrack|FloatTrack|ReferenceTrack|RotationTrack|Vector3Track|Vector4Track|null
 ): BoolTrack|ColorTrack|FloatTrack|ReferenceTrack|RotationTrack|Vector3Track|Vector4Track|null {
   switch(TrackData[type]) {
-    case 'NONE': return null; 
+    case 'NONE': return null;
     case 'FloatTrack': return accessor(new FloatTrack())! as FloatTrack;
     case 'Vector3Track': return accessor(new Vector3Track())! as Vector3Track;
     case 'RotationTrack': return accessor(new RotationTrack())! as RotationTrack;
@@ -40,12 +40,12 @@ export function unionToTrackData(
 }
 
 export function unionListToTrackData(
-  type: TrackData, 
-  accessor: (index: number, obj:BoolTrack|ColorTrack|FloatTrack|ReferenceTrack|RotationTrack|Vector3Track|Vector4Track) => BoolTrack|ColorTrack|FloatTrack|ReferenceTrack|RotationTrack|Vector3Track|Vector4Track|null, 
+  type: TrackData,
+  accessor: (index: number, obj:BoolTrack|ColorTrack|FloatTrack|ReferenceTrack|RotationTrack|Vector3Track|Vector4Track) => BoolTrack|ColorTrack|FloatTrack|ReferenceTrack|RotationTrack|Vector3Track|Vector4Track|null,
   index: number
 ): BoolTrack|ColorTrack|FloatTrack|ReferenceTrack|RotationTrack|Vector3Track|Vector4Track|null {
   switch(TrackData[type]) {
-    case 'NONE': return null; 
+    case 'NONE': return null;
     case 'FloatTrack': return accessor(index, new FloatTrack())! as FloatTrack;
     case 'Vector3Track': return accessor(index, new Vector3Track())! as Vector3Track;
     case 'RotationTrack': return accessor(index, new RotationTrack())! as RotationTrack;

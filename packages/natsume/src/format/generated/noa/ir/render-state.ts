@@ -8,6 +8,8 @@ import { BlendFactor } from '../../noa/ir/blend-factor.js';
 import { BlendOp } from '../../noa/ir/blend-op.js';
 import { CompareOp } from '../../noa/ir/compare-op.js';
 import { CullMode } from '../../noa/ir/cull-mode.js';
+import { DepthTestSource } from '../../noa/ir/depth-test-source.js';
+import { StencilState, StencilStateT } from '../../noa/ir/stencil-state.js';
 
 
 export class RenderState implements flatbuffers.IUnpackableObject<RenderStateT> {
@@ -28,98 +30,116 @@ static getSizePrefixedRootAsRenderState(bb:flatbuffers.ByteBuffer, obj?:RenderSt
   return (obj || new RenderState()).__init(bb.readInt32(bb.position()) + bb.position(), bb);
 }
 
-srcRgb():BlendFactor {
+depthTestSource():DepthTestSource {
   const offset = this.bb!.__offset(this.bb_pos, 4);
+  return offset ? this.bb!.readUint8(this.bb_pos + offset) : DepthTestSource.Fixed;
+}
+
+stencil(obj?:StencilState):StencilState|null {
+  const offset = this.bb!.__offset(this.bb_pos, 6);
+  return offset ? (obj || new StencilState()).__init(this.bb!.__indirect(this.bb_pos + offset), this.bb!) : null;
+}
+
+srcRgb():BlendFactor {
+  const offset = this.bb!.__offset(this.bb_pos, 8);
   return offset ? this.bb!.readUint8(this.bb_pos + offset) : BlendFactor.SrcAlpha;
 }
 
 dstRgb():BlendFactor {
-  const offset = this.bb!.__offset(this.bb_pos, 6);
-  return offset ? this.bb!.readUint8(this.bb_pos + offset) : BlendFactor.OneMinusSrcAlpha;
-}
-
-srcAlpha():BlendFactor {
-  const offset = this.bb!.__offset(this.bb_pos, 8);
-  return offset ? this.bb!.readUint8(this.bb_pos + offset) : BlendFactor.One;
-}
-
-dstAlpha():BlendFactor {
   const offset = this.bb!.__offset(this.bb_pos, 10);
   return offset ? this.bb!.readUint8(this.bb_pos + offset) : BlendFactor.OneMinusSrcAlpha;
 }
 
-rgbOp():BlendOp {
+srcAlpha():BlendFactor {
   const offset = this.bb!.__offset(this.bb_pos, 12);
+  return offset ? this.bb!.readUint8(this.bb_pos + offset) : BlendFactor.One;
+}
+
+dstAlpha():BlendFactor {
+  const offset = this.bb!.__offset(this.bb_pos, 14);
+  return offset ? this.bb!.readUint8(this.bb_pos + offset) : BlendFactor.OneMinusSrcAlpha;
+}
+
+rgbOp():BlendOp {
+  const offset = this.bb!.__offset(this.bb_pos, 16);
   return offset ? this.bb!.readUint8(this.bb_pos + offset) : BlendOp.Add;
 }
 
 alphaOp():BlendOp {
-  const offset = this.bb!.__offset(this.bb_pos, 14);
+  const offset = this.bb!.__offset(this.bb_pos, 18);
   return offset ? this.bb!.readUint8(this.bb_pos + offset) : BlendOp.Add;
 }
 
 depthTest():CompareOp {
-  const offset = this.bb!.__offset(this.bb_pos, 16);
+  const offset = this.bb!.__offset(this.bb_pos, 20);
   return offset ? this.bb!.readUint8(this.bb_pos + offset) : CompareOp.LessEqual;
 }
 
 depthWrite():boolean {
-  const offset = this.bb!.__offset(this.bb_pos, 18);
+  const offset = this.bb!.__offset(this.bb_pos, 22);
   return offset ? !!this.bb!.readInt8(this.bb_pos + offset) : false;
 }
 
 cull():CullMode {
-  const offset = this.bb!.__offset(this.bb_pos, 20);
+  const offset = this.bb!.__offset(this.bb_pos, 24);
   return offset ? this.bb!.readUint8(this.bb_pos + offset) : CullMode.None;
 }
 
 colorWriteMask():number {
-  const offset = this.bb!.__offset(this.bb_pos, 22);
+  const offset = this.bb!.__offset(this.bb_pos, 26);
   return offset ? this.bb!.readUint8(this.bb_pos + offset) : 15;
 }
 
 static startRenderState(builder:flatbuffers.Builder) {
-  builder.startObject(10);
+  builder.startObject(12);
+}
+
+static addDepthTestSource(builder:flatbuffers.Builder, depthTestSource:DepthTestSource) {
+  builder.addFieldInt8(0, depthTestSource, DepthTestSource.Fixed);
+}
+
+static addStencil(builder:flatbuffers.Builder, stencilOffset:flatbuffers.Offset) {
+  builder.addFieldOffset(1, stencilOffset, 0);
 }
 
 static addSrcRgb(builder:flatbuffers.Builder, srcRgb:BlendFactor) {
-  builder.addFieldInt8(0, srcRgb, BlendFactor.SrcAlpha);
+  builder.addFieldInt8(2, srcRgb, BlendFactor.SrcAlpha);
 }
 
 static addDstRgb(builder:flatbuffers.Builder, dstRgb:BlendFactor) {
-  builder.addFieldInt8(1, dstRgb, BlendFactor.OneMinusSrcAlpha);
+  builder.addFieldInt8(3, dstRgb, BlendFactor.OneMinusSrcAlpha);
 }
 
 static addSrcAlpha(builder:flatbuffers.Builder, srcAlpha:BlendFactor) {
-  builder.addFieldInt8(2, srcAlpha, BlendFactor.One);
+  builder.addFieldInt8(4, srcAlpha, BlendFactor.One);
 }
 
 static addDstAlpha(builder:flatbuffers.Builder, dstAlpha:BlendFactor) {
-  builder.addFieldInt8(3, dstAlpha, BlendFactor.OneMinusSrcAlpha);
+  builder.addFieldInt8(5, dstAlpha, BlendFactor.OneMinusSrcAlpha);
 }
 
 static addRgbOp(builder:flatbuffers.Builder, rgbOp:BlendOp) {
-  builder.addFieldInt8(4, rgbOp, BlendOp.Add);
+  builder.addFieldInt8(6, rgbOp, BlendOp.Add);
 }
 
 static addAlphaOp(builder:flatbuffers.Builder, alphaOp:BlendOp) {
-  builder.addFieldInt8(5, alphaOp, BlendOp.Add);
+  builder.addFieldInt8(7, alphaOp, BlendOp.Add);
 }
 
 static addDepthTest(builder:flatbuffers.Builder, depthTest:CompareOp) {
-  builder.addFieldInt8(6, depthTest, CompareOp.LessEqual);
+  builder.addFieldInt8(8, depthTest, CompareOp.LessEqual);
 }
 
 static addDepthWrite(builder:flatbuffers.Builder, depthWrite:boolean) {
-  builder.addFieldInt8(7, +depthWrite, +false);
+  builder.addFieldInt8(9, +depthWrite, +false);
 }
 
 static addCull(builder:flatbuffers.Builder, cull:CullMode) {
-  builder.addFieldInt8(8, cull, CullMode.None);
+  builder.addFieldInt8(10, cull, CullMode.None);
 }
 
 static addColorWriteMask(builder:flatbuffers.Builder, colorWriteMask:number) {
-  builder.addFieldInt8(9, colorWriteMask, 15);
+  builder.addFieldInt8(11, colorWriteMask, 15);
 }
 
 static endRenderState(builder:flatbuffers.Builder):flatbuffers.Offset {
@@ -127,23 +147,11 @@ static endRenderState(builder:flatbuffers.Builder):flatbuffers.Offset {
   return offset;
 }
 
-static createRenderState(builder:flatbuffers.Builder, srcRgb:BlendFactor, dstRgb:BlendFactor, srcAlpha:BlendFactor, dstAlpha:BlendFactor, rgbOp:BlendOp, alphaOp:BlendOp, depthTest:CompareOp, depthWrite:boolean, cull:CullMode, colorWriteMask:number):flatbuffers.Offset {
-  RenderState.startRenderState(builder);
-  RenderState.addSrcRgb(builder, srcRgb);
-  RenderState.addDstRgb(builder, dstRgb);
-  RenderState.addSrcAlpha(builder, srcAlpha);
-  RenderState.addDstAlpha(builder, dstAlpha);
-  RenderState.addRgbOp(builder, rgbOp);
-  RenderState.addAlphaOp(builder, alphaOp);
-  RenderState.addDepthTest(builder, depthTest);
-  RenderState.addDepthWrite(builder, depthWrite);
-  RenderState.addCull(builder, cull);
-  RenderState.addColorWriteMask(builder, colorWriteMask);
-  return RenderState.endRenderState(builder);
-}
 
 unpack(): RenderStateT {
   return new RenderStateT(
+    this.depthTestSource(),
+    (this.stencil() !== null ? this.stencil()!.unpack() : null),
     this.srcRgb(),
     this.dstRgb(),
     this.srcAlpha(),
@@ -159,6 +167,8 @@ unpack(): RenderStateT {
 
 
 unpackTo(_o: RenderStateT): void {
+  _o.depthTestSource = this.depthTestSource();
+  _o.stencil = (this.stencil() !== null ? this.stencil()!.unpack() : null);
   _o.srcRgb = this.srcRgb();
   _o.dstRgb = this.dstRgb();
   _o.srcAlpha = this.srcAlpha();
@@ -174,6 +184,8 @@ unpackTo(_o: RenderStateT): void {
 
 export class RenderStateT implements flatbuffers.IGeneratedObject {
 constructor(
+  public depthTestSource: DepthTestSource = DepthTestSource.Fixed,
+  public stencil: StencilStateT|null = null,
   public srcRgb: BlendFactor = BlendFactor.SrcAlpha,
   public dstRgb: BlendFactor = BlendFactor.OneMinusSrcAlpha,
   public srcAlpha: BlendFactor = BlendFactor.One,
@@ -188,17 +200,22 @@ constructor(
 
 
 pack(builder:flatbuffers.Builder): flatbuffers.Offset {
-  return RenderState.createRenderState(builder,
-    this.srcRgb,
-    this.dstRgb,
-    this.srcAlpha,
-    this.dstAlpha,
-    this.rgbOp,
-    this.alphaOp,
-    this.depthTest,
-    this.depthWrite,
-    this.cull,
-    this.colorWriteMask
-  );
+  const stencil = (this.stencil !== null ? this.stencil!.pack(builder) : 0);
+
+  RenderState.startRenderState(builder);
+  RenderState.addDepthTestSource(builder, this.depthTestSource);
+  RenderState.addStencil(builder, stencil);
+  RenderState.addSrcRgb(builder, this.srcRgb);
+  RenderState.addDstRgb(builder, this.dstRgb);
+  RenderState.addSrcAlpha(builder, this.srcAlpha);
+  RenderState.addDstAlpha(builder, this.dstAlpha);
+  RenderState.addRgbOp(builder, this.rgbOp);
+  RenderState.addAlphaOp(builder, this.alphaOp);
+  RenderState.addDepthTest(builder, this.depthTest);
+  RenderState.addDepthWrite(builder, this.depthWrite);
+  RenderState.addCull(builder, this.cull);
+  RenderState.addColorWriteMask(builder, this.colorWriteMask);
+
+  return RenderState.endRenderState(builder);
 }
 }

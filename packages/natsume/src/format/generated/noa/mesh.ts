@@ -4,5 +4,6 @@
 
 export { Mesh, MeshT } from './mesh/mesh.js';
 export { Submesh, SubmeshT } from './mesh/submesh.js';
-export { Vec2, Vec2T } from './mesh/vec2.js';
+export { TexCoord, TexCoordT } from './mesh/tex-coord.js';
 export { Vec3, Vec3T } from './mesh/vec3.js';
+export { Vec4, Vec4T } from './mesh/vec4.js';

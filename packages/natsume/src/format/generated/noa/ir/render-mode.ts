@@ -7,5 +7,6 @@ export enum RenderMode {
   StretchedBillboard = 1,
   HorizontalBillboard = 2,
   VerticalBillboard = 3,
-  Mesh = 4
+  Mesh = 4,
+  None = 5
 }

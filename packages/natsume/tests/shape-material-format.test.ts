@@ -87,7 +87,7 @@ async function makePack(r: Record<string, unknown>, model = 4) {
   const manifest = {
     format: 'noa-package',
     version: 1,
-    noir_version: [1, 0],
+    noir_version: [2, 0],
     document: 'scene.noir',
     files: [
       { path: 'scene.noir', kind: 'noir', byte_length: scene.length, sha256: await hash(scene) },

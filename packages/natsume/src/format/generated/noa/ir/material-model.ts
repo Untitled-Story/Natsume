@@ -8,5 +8,8 @@ export enum MaterialModel {
   ParticleAddAlpha = 2,
   ParticleMultiply = 3,
   LegacyParticleAdditive = 4,
-  LegacyParticleAlphaBlend = 5
+  LegacyParticleAlphaBlend = 5,
+  SpriteDefault = 6,
+  UIDefault = 7,
+  TextureVertexColor = 8
 }

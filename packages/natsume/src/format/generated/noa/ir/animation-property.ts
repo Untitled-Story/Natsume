@@ -31,5 +31,6 @@ export enum AnimationProperty {
   ComponentEnabled = 25,
   ParticleColor = 26,
   ParticleCustomColor = 27,
-  ParticleLoop = 28
+  ParticleLoop = 28,
+  SpriteColor = 29
 }

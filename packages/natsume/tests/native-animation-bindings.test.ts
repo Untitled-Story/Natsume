@@ -286,7 +286,7 @@ function setup(c: Case) {
       {
         format: 'noa-package',
         version: 1,
-        noir_version: [1, 0],
+        noir_version: [2, 0],
         document: 'scene.noir',
         files: [],
       },
@@ -399,7 +399,7 @@ it.skipIf(!hasNativeFixture('unity-animation-bindings.json'))(
         {
           format: 'noa-package',
           version: 1,
-          noir_version: [1, 0],
+          noir_version: [2, 0],
           document: 'scene.noir',
           files: [],
         },
@@ -474,7 +474,7 @@ it.skipIf(!hasNativeFixture('unity-animation-bindings.json'))(
           {
             format: 'noa-package',
             version: 1,
-            noir_version: [1, 0],
+            noir_version: [2, 0],
             document: 'scene.noir',
             files: [],
           },
@@ -545,7 +545,7 @@ it.skipIf(!hasNativeFixture('unity-animation-bindings.json'))(
           {
             format: 'noa-package',
             version: 1,
-            noir_version: [1, 0],
+            noir_version: [2, 0],
             document: 'scene.noir',
             files: [],
           },

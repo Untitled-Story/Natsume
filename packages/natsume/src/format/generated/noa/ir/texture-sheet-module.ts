@@ -6,6 +6,7 @@ import * as flatbuffers from 'flatbuffers';
 
 import { ScalarParameter, ScalarParameterT } from '../../noa/ir/scalar-parameter.js';
 import { SheetAnimation } from '../../noa/ir/sheet-animation.js';
+import { SheetMode } from '../../noa/ir/sheet-mode.js';
 import { SheetRow } from '../../noa/ir/sheet-row.js';
 import { SheetTime } from '../../noa/ir/sheet-time.js';
 import { Vec2, Vec2T } from '../../noa/ir/vec2.js';
@@ -29,116 +30,161 @@ static getSizePrefixedRootAsTextureSheetModule(bb:flatbuffers.ByteBuffer, obj?:T
   return (obj || new TextureSheetModule()).__init(bb.readInt32(bb.position()) + bb.position(), bb);
 }
 
-columns():number {
+mode():SheetMode {
   const offset = this.bb!.__offset(this.bb_pos, 4);
+  return offset ? this.bb!.readUint8(this.bb_pos + offset) : SheetMode.Grid;
+}
+
+spriteAssetIds(index: number):number|null {
+  const offset = this.bb!.__offset(this.bb_pos, 6);
+  return offset ? this.bb!.readUint32(this.bb!.__vector(this.bb_pos + offset) + index * 4) : 0;
+}
+
+spriteAssetIdsLength():number {
+  const offset = this.bb!.__offset(this.bb_pos, 6);
+  return offset ? this.bb!.__vector_len(this.bb_pos + offset) : 0;
+}
+
+spriteAssetIdsArray():Uint32Array|null {
+  const offset = this.bb!.__offset(this.bb_pos, 6);
+  return offset ? new Uint32Array(this.bb!.bytes().buffer, this.bb!.bytes().byteOffset + this.bb!.__vector(this.bb_pos + offset), this.bb!.__vector_len(this.bb_pos + offset)) : null;
+}
+
+columns():number {
+  const offset = this.bb!.__offset(this.bb_pos, 8);
   return offset ? this.bb!.readUint32(this.bb_pos + offset) : 1;
 }
 
 rows():number {
-  const offset = this.bb!.__offset(this.bb_pos, 6);
+  const offset = this.bb!.__offset(this.bb_pos, 10);
   return offset ? this.bb!.readUint32(this.bb_pos + offset) : 1;
 }
 
 timeMode():SheetTime {
-  const offset = this.bb!.__offset(this.bb_pos, 8);
+  const offset = this.bb!.__offset(this.bb_pos, 12);
   return offset ? this.bb!.readUint8(this.bb_pos + offset) : SheetTime.Lifetime;
 }
 
 frameOverTime(obj?:ScalarParameter):ScalarParameter|null {
-  const offset = this.bb!.__offset(this.bb_pos, 10);
+  const offset = this.bb!.__offset(this.bb_pos, 14);
   return offset ? (obj || new ScalarParameter()).__init(this.bb!.__indirect(this.bb_pos + offset), this.bb!) : null;
 }
 
 startFrame(obj?:ScalarParameter):ScalarParameter|null {
-  const offset = this.bb!.__offset(this.bb_pos, 12);
+  const offset = this.bb!.__offset(this.bb_pos, 16);
   return offset ? (obj || new ScalarParameter()).__init(this.bb!.__indirect(this.bb_pos + offset), this.bb!) : null;
 }
 
 cycles():number {
-  const offset = this.bb!.__offset(this.bb_pos, 14);
+  const offset = this.bb!.__offset(this.bb_pos, 18);
   return offset ? this.bb!.readFloat32(this.bb_pos + offset) : 1.0;
 }
 
 animation():SheetAnimation {
-  const offset = this.bb!.__offset(this.bb_pos, 16);
+  const offset = this.bb!.__offset(this.bb_pos, 20);
   return offset ? this.bb!.readUint8(this.bb_pos + offset) : SheetAnimation.WholeSheet;
 }
 
 rowMode():SheetRow {
-  const offset = this.bb!.__offset(this.bb_pos, 18);
+  const offset = this.bb!.__offset(this.bb_pos, 22);
   return offset ? this.bb!.readUint8(this.bb_pos + offset) : SheetRow.Fixed;
 }
 
 row():number {
-  const offset = this.bb!.__offset(this.bb_pos, 20);
+  const offset = this.bb!.__offset(this.bb_pos, 24);
   return offset ? this.bb!.readUint32(this.bb_pos + offset) : 0;
 }
 
 fps():number {
-  const offset = this.bb!.__offset(this.bb_pos, 22);
+  const offset = this.bb!.__offset(this.bb_pos, 26);
   return offset ? this.bb!.readFloat32(this.bb_pos + offset) : 30.0;
 }
 
 speedRange(obj?:Vec2):Vec2|null {
-  const offset = this.bb!.__offset(this.bb_pos, 24);
+  const offset = this.bb!.__offset(this.bb_pos, 28);
   return offset ? (obj || new Vec2()).__init(this.bb_pos + offset, this.bb!) : null;
 }
 
 uvChannelMask():number {
-  const offset = this.bb!.__offset(this.bb_pos, 26);
+  const offset = this.bb!.__offset(this.bb_pos, 30);
   return offset ? this.bb!.readUint32(this.bb_pos + offset) : 1;
 }
 
 static startTextureSheetModule(builder:flatbuffers.Builder) {
-  builder.startObject(12);
+  builder.startObject(14);
+}
+
+static addMode(builder:flatbuffers.Builder, mode:SheetMode) {
+  builder.addFieldInt8(0, mode, SheetMode.Grid);
+}
+
+static addSpriteAssetIds(builder:flatbuffers.Builder, spriteAssetIdsOffset:flatbuffers.Offset) {
+  builder.addFieldOffset(1, spriteAssetIdsOffset, 0);
+}
+
+static createSpriteAssetIdsVector(builder:flatbuffers.Builder, data:number[]|Uint32Array):flatbuffers.Offset;
+/**
+ * @deprecated This Uint8Array overload will be removed in the future.
+ */
+static createSpriteAssetIdsVector(builder:flatbuffers.Builder, data:number[]|Uint8Array):flatbuffers.Offset;
+static createSpriteAssetIdsVector(builder:flatbuffers.Builder, data:number[]|Uint32Array|Uint8Array):flatbuffers.Offset {
+  builder.startVector(4, data.length, 4);
+  for (let i = data.length - 1; i >= 0; i--) {
+    builder.addInt32(data[i]!);
+  }
+  return builder.endVector();
+}
+
+static startSpriteAssetIdsVector(builder:flatbuffers.Builder, numElems:number) {
+  builder.startVector(4, numElems, 4);
 }
 
 static addColumns(builder:flatbuffers.Builder, columns:number) {
-  builder.addFieldInt32(0, columns, 1);
+  builder.addFieldInt32(2, columns, 1);
 }
 
 static addRows(builder:flatbuffers.Builder, rows:number) {
-  builder.addFieldInt32(1, rows, 1);
+  builder.addFieldInt32(3, rows, 1);
 }
 
 static addTimeMode(builder:flatbuffers.Builder, timeMode:SheetTime) {
-  builder.addFieldInt8(2, timeMode, SheetTime.Lifetime);
+  builder.addFieldInt8(4, timeMode, SheetTime.Lifetime);
 }
 
 static addFrameOverTime(builder:flatbuffers.Builder, frameOverTimeOffset:flatbuffers.Offset) {
-  builder.addFieldOffset(3, frameOverTimeOffset, 0);
+  builder.addFieldOffset(5, frameOverTimeOffset, 0);
 }
 
 static addStartFrame(builder:flatbuffers.Builder, startFrameOffset:flatbuffers.Offset) {
-  builder.addFieldOffset(4, startFrameOffset, 0);
+  builder.addFieldOffset(6, startFrameOffset, 0);
 }
 
 static addCycles(builder:flatbuffers.Builder, cycles:number) {
-  builder.addFieldFloat32(5, cycles, 1.0);
+  builder.addFieldFloat32(7, cycles, 1.0);
 }
 
 static addAnimation(builder:flatbuffers.Builder, animation:SheetAnimation) {
-  builder.addFieldInt8(6, animation, SheetAnimation.WholeSheet);
+  builder.addFieldInt8(8, animation, SheetAnimation.WholeSheet);
 }
 
 static addRowMode(builder:flatbuffers.Builder, rowMode:SheetRow) {
-  builder.addFieldInt8(7, rowMode, SheetRow.Fixed);
+  builder.addFieldInt8(9, rowMode, SheetRow.Fixed);
 }
 
 static addRow(builder:flatbuffers.Builder, row:number) {
-  builder.addFieldInt32(8, row, 0);
+  builder.addFieldInt32(10, row, 0);
 }
 
 static addFps(builder:flatbuffers.Builder, fps:number) {
-  builder.addFieldFloat32(9, fps, 30.0);
+  builder.addFieldFloat32(11, fps, 30.0);
 }
 
 static addSpeedRange(builder:flatbuffers.Builder, speedRangeOffset:flatbuffers.Offset) {
-  builder.addFieldStruct(10, speedRangeOffset, 0);
+  builder.addFieldStruct(12, speedRangeOffset, 0);
 }
 
 static addUvChannelMask(builder:flatbuffers.Builder, uvChannelMask:number) {
-  builder.addFieldInt32(11, uvChannelMask, 1);
+  builder.addFieldInt32(13, uvChannelMask, 1);
 }
 
 static endTextureSheetModule(builder:flatbuffers.Builder):flatbuffers.Offset {
@@ -149,6 +195,8 @@ static endTextureSheetModule(builder:flatbuffers.Builder):flatbuffers.Offset {
 
 unpack(): TextureSheetModuleT {
   return new TextureSheetModuleT(
+    this.mode(),
+    this.bb!.createScalarList<number>(this.spriteAssetIds.bind(this), this.spriteAssetIdsLength()),
     this.columns(),
     this.rows(),
     this.timeMode(),
@@ -166,6 +214,8 @@ unpack(): TextureSheetModuleT {
 
 
 unpackTo(_o: TextureSheetModuleT): void {
+  _o.mode = this.mode();
+  _o.spriteAssetIds = this.bb!.createScalarList<number>(this.spriteAssetIds.bind(this), this.spriteAssetIdsLength());
   _o.columns = this.columns();
   _o.rows = this.rows();
   _o.timeMode = this.timeMode();
@@ -183,6 +233,8 @@ unpackTo(_o: TextureSheetModuleT): void {
 
 export class TextureSheetModuleT implements flatbuffers.IGeneratedObject {
 constructor(
+  public mode: SheetMode = SheetMode.Grid,
+  public spriteAssetIds: (number)[] = [],
   public columns: number = 1,
   public rows: number = 1,
   public timeMode: SheetTime = SheetTime.Lifetime,
@@ -199,10 +251,13 @@ constructor(
 
 
 pack(builder:flatbuffers.Builder): flatbuffers.Offset {
+  const spriteAssetIds = TextureSheetModule.createSpriteAssetIdsVector(builder, this.spriteAssetIds);
   const frameOverTime = (this.frameOverTime !== null ? this.frameOverTime!.pack(builder) : 0);
   const startFrame = (this.startFrame !== null ? this.startFrame!.pack(builder) : 0);
 
   TextureSheetModule.startTextureSheetModule(builder);
+  TextureSheetModule.addMode(builder, this.mode);
+  TextureSheetModule.addSpriteAssetIds(builder, spriteAssetIds);
   TextureSheetModule.addColumns(builder, this.columns);
   TextureSheetModule.addRows(builder, this.rows);
   TextureSheetModule.addTimeMode(builder, this.timeMode);
