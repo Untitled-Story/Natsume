@@ -95,6 +95,7 @@ try {
         pack,
         {
           seed: 12345,
+          renderEnvironment: { globalMipBias: 0 },
           parentLayout: { width: 640, height: 360 },
           particleEnvironment: {
             fog: { mode: 'none' },

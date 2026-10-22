@@ -30,6 +30,7 @@ const modes = [
   'events',
   'compatibility',
   'meshes',
+  'scene-materials',
 ];
 async function run(command, args, env = process.env) {
   const child = spawn(command, args, { cwd: root, env, stdio: 'inherit' });

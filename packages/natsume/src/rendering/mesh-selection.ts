@@ -37,6 +37,6 @@ export function rendererVertexStride(definition: R<ParticleRendererT>, pack: Eff
 
 /** Slot one belongs to Trails; remaining slots render the particle geometry in order. */
 export function particleMaterialSlots(definition: R<ParticleRendererT>): readonly number[] {
-  if (definition.mode === RenderMode.None) return [];
+  if (definition.mode === RenderMode.None || definition.environment?.castShadows === 3) return [];
   return definition.materials.flatMap((id, index) => (index !== 1 && id !== 0 ? [index] : []));
 }

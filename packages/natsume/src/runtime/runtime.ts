@@ -1,7 +1,14 @@
+import { SceneMesh, sceneMaterialPasses } from '../rendering/scene-mesh.js';
+import { copyRenderEnvironment, type RenderEnvironment } from '../rendering/render-environment.js';
+import { materialSupport } from '../rendering/material-support.js';
+import { assertSupport } from './support-checks.js';
+import type { MeshRendererT } from '../format/generated/noa/ir/mesh-renderer.js';
+import type { MeshFilterT } from '../format/generated/noa/ir/mesh-filter.js';
 import type { AnimationEventHandler, NatsumeAnimationEvent } from './animation-events.js';
 import type { AnimationTarget } from './simulation.js';
 import { rendererCanPlay } from './animation.js';
 import { rendererVertexStride, particleMaterialSlots } from '../rendering/mesh-selection.js';
+import { ensureMaterialPipe } from '../rendering/material-pipe.js';
 import { Alignment } from '../format/generated/noa/ir/alignment.js';
 import { Container, ImageSource, Rectangle, Texture, type WebGLRenderer } from 'pixi.js';
 import { mat4 } from 'gl-matrix';
@@ -16,11 +23,7 @@ import { ColorSpace } from '../format/generated/noa/ir/color-space.js';
 import { AddressMode } from '../format/generated/noa/ir/address-mode.js';
 import { FilterMode } from '../format/generated/noa/ir/filter-mode.js';
 import { RenderMode } from '../format/generated/noa/ir/render-mode.js';
-import {
-  ParticleMesh,
-  ensureParticlePipe,
-  type SourceColorSpace,
-} from '../rendering/particle-mesh.js';
+import { ParticleMesh, type SourceColorSpace } from '../rendering/particle-mesh.js';
 import { Simulation, type SimulationOptions } from './simulation.js';
 import type { SceneNode } from './scene.js';
 import { copyEnvironment, type ParticleEnvironment } from '../rendering/particle-environment.js';
@@ -33,6 +36,8 @@ import {
 export interface InstanceOptions extends SimulationOptions {
   /** Host gravity, view, fog and depth inputs; required for Unity legacy particle materials. */
   readonly particleEnvironment?: ParticleEnvironment;
+  /** Inputs required by source scene material programs. */
+  readonly renderEnvironment?: RenderEnvironment;
   readonly sourceColorSpace?: SourceColorSpace;
   /** Column-major affine transform into Pixi local coordinates, including clip-depth Z. */
   readonly displayMatrix?: ArrayLike<number>;
@@ -113,8 +118,8 @@ export class NatsumeNode {
 
 export class EffectInstance {
   readonly container = new Container({ label: 'Natsume effect' });
-  private readonly meshes: ParticleMesh[] = [];
-  private readonly passOrder = new Map<ParticleMesh, number>();
+  private readonly meshes: (ParticleMesh | SceneMesh)[] = [];
+  private readonly passOrder = new Map<ParticleMesh | SceneMesh, number>();
   private readonly materialOrder: Map<number, number>;
   private readonly matrix = mat4.fromValues(1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 0.001, 0, 0, 0, 0, 1);
   private readonly nodeViews = new Map<number, NatsumeNode>();
@@ -133,6 +138,7 @@ export class EffectInstance {
   private destroying = false;
   private colorSpace: SourceColorSpace;
   private environment: ParticleEnvironment | undefined;
+  private renderEnvironment: RenderEnvironment | undefined;
   constructor(
     readonly simulation: Simulation,
     private readonly runtime: NatsumeRuntime,
@@ -142,6 +148,7 @@ export class EffectInstance {
     simulation.onAnimationEvent = (event) => this.dispatchAnimationEvent(event);
     this.materialOrder = new Map(simulation.pack.document.materials.map((m, i) => [m.id, i]));
     this.environment = copyEnvironment(options.particleEnvironment);
+    this.renderEnvironment = copyRenderEnvironment(options.renderEnvironment);
     this.colorSpace =
       options.sourceColorSpace ??
       (simulation.pack.document.colorContext?.projectColorSpace === ColorSpace.Linear
@@ -187,12 +194,10 @@ export class EffectInstance {
   get displayMatrix(): Float32Array {
     return Float32Array.from(this.matrix);
   }
-  /** Nodes with allocated particle renderers, including renderers that animations can enable; unique per node. */
+  /** Nodes with allocated renderers, including renderers that animations can enable; unique per node. */
   get renderedNodes(): readonly NatsumeNode[] {
     this.assertAlive();
-    return [...new Set(this.meshes.map((mesh) => mesh.emitter.node.id))].map(
-      (id) => this.getNode(id)!,
-    );
+    return [...new Set(this.meshes.map((mesh) => mesh.node.id))].map((id) => this.getNode(id)!);
   }
   private assertAlive(): void {
     check(!this.disposed, 'DISPOSED', 'Effect instance has been destroyed');
@@ -211,6 +216,7 @@ export class EffectInstance {
       (emitter) => [emitter, emitter.resolveGravity(next?.gravity)] as const,
     );
     for (const mesh of this.meshes) {
+      if (!(mesh instanceof ParticleMesh)) continue;
       const definition = mesh.definition;
       const requiresViewPosition =
         (definition.mode === RenderMode.StretchedBillboard && definition.freeformStretching) ||
@@ -226,6 +232,16 @@ export class EffectInstance {
     this.environment = next;
     for (const [emitter, value] of gravity) emitter.gravity = value;
     for (const mesh of this.meshes) mesh.environment = next;
+    this.render();
+  }
+  /** Replaces source material inputs; invalid or missing required values leave the instance unchanged. */
+  setRenderEnvironment(value: RenderEnvironment): void {
+    this.assertAlive();
+    const next = copyRenderEnvironment(value);
+    for (const mesh of this.meshes)
+      assertSupport(materialSupport(mesh.materialDefinition, this.simulation.pack, next));
+    this.renderEnvironment = next;
+    for (const mesh of this.meshes) mesh.renderEnvironment = next;
     this.render();
   }
   setDisplayMatrix(matrix: ArrayLike<number>): void {
@@ -431,8 +447,9 @@ export class EffectInstance {
       });
     }
   }
-  /** @internal */ addMesh(mesh: ParticleMesh): void {
+  /** @internal */ addMesh(mesh: ParticleMesh | SceneMesh): void {
     mesh.environment = this.environment;
+    mesh.renderEnvironment = this.renderEnvironment;
     this.passOrder.set(mesh, this.meshes.length);
     this.meshes.push(mesh);
     this.container.addChild(mesh);
@@ -457,7 +474,7 @@ export class EffectInstance {
       node.inheritedRenderOffsetY = node.renderOffsetY + (node.parent?.inheritedRenderOffsetY ?? 0);
     }
     for (const mesh of this.meshes) {
-      const node = mesh.emitter.node;
+      const node = mesh.node;
       mesh.position.set(node.inheritedRenderOffsetX, node.inheritedRenderOffsetY);
     }
   }
@@ -558,7 +575,7 @@ export class NatsumeRuntime {
       'Natsume requires an initialized Pixi WebGL2 renderer',
     );
     this.scriptErrors = options.scriptErrors ?? 'isolate';
-    ensureParticlePipe(renderer);
+    ensureMaterialPipe(renderer);
   }
   registerScript(identity: ScriptIdentity, factory: ScriptFactory): void {
     check(!this.disposed, 'DISPOSED', 'Runtime has been destroyed');
@@ -594,7 +611,12 @@ export class NatsumeRuntime {
     const compatibility = this.checkCompatibility(pack, options);
     if (!compatibility.compatible) throw new NatsumeCompatibilityError(compatibility);
     const environment = copyEnvironment(options.particleEnvironment);
-    options = { ...options, ...(environment ? { particleEnvironment: environment } : {}) };
+    const renderEnvironment = copyRenderEnvironment(options.renderEnvironment);
+    options = {
+      ...options,
+      ...(environment ? { particleEnvironment: environment } : {}),
+      ...(renderEnvironment ? { renderEnvironment } : {}),
+    };
     const simulation = new Simulation(pack, {
         ...options,
         ...(options.particleEnvironment?.gravity
@@ -652,8 +674,41 @@ export class NatsumeRuntime {
             texture,
             pack,
             options.particleEnvironment,
+            options.renderEnvironment,
           );
           mesh.animationEnabled = () => simulation.bindings.enabled.get(id) ?? false;
+          instance.addMesh(mesh);
+        }
+      }
+      for (const component of pack.components) {
+        if (
+          component.dataType !== ComponentData.MeshRenderer ||
+          !rendererCanPlay(pack, component.id, component.enabled)
+        )
+          continue;
+        const node = simulation.scene.nodes.get(component.nodeId);
+        if (!node) continue;
+        const definition = component.data as R<MeshRendererT>;
+        const filter = pack.getComponent(definition.meshFilterComponentId)!.data as R<MeshFilterT>;
+        const geometry = filter.meshAssetId ? pack.getMesh(filter.meshAssetId) : undefined;
+        for (const pass of sceneMaterialPasses(definition, geometry)) {
+          const material =
+            simulation.bindings.materials.get(`${component.id}:${pass.slot}`) ??
+            pack.document.materials.find((m) => m.id === definition.materials[pass.slot])!;
+          const lease = this.acquireTexture(pack, material);
+          releases.push(lease.release);
+          const texture = await lease.promise;
+          check(!this.disposed, 'DISPOSED', 'Runtime has been destroyed');
+          const mesh = new SceneMesh(
+            node,
+            definition,
+            material,
+            geometry!,
+            pass.submesh,
+            texture,
+            pack,
+          );
+          mesh.animationEnabled = () => simulation.bindings.enabled.get(component.id) ?? false;
           instance.addMesh(mesh);
         }
       }
@@ -683,6 +738,8 @@ export class NatsumeRuntime {
     pack: EffectPack,
     material: R<MaterialT>,
   ): { promise: Promise<Texture>; release: () => void } {
+    if (material.textures.length === 0)
+      return { promise: Promise.resolve(Texture.WHITE), release: () => {} };
     let cache = this.textures.get(pack);
     if (!cache) {
       cache = new Map();
@@ -705,11 +762,7 @@ export class NatsumeRuntime {
       );
       check(typeof createImageBitmap === 'function', 'HOST', 'ImageBitmap decoding is required');
       const s = binding.sampler;
-      check(
-        !s || s.minFilter !== FilterMode.Trilinear,
-        'CAPABILITY',
-        'Mipmapped sampling unsupported',
-      );
+
       const pixels = width * height;
       check(
         this.retainedPixels + pixels <= 64 * 1024 * 1024,
@@ -734,6 +787,8 @@ export class NatsumeRuntime {
             resource: bitmap,
             alphaMode: 'no-premultiply-alpha',
             format: 'rgba8unorm',
+            autoGenerateMipmaps: s?.minFilter === FilterMode.Trilinear,
+            mipmapFilter: s?.minFilter === FilterMode.Trilinear ? 'linear' : 'nearest',
             minFilter: s?.minFilter === FilterMode.Nearest ? 'nearest' : 'linear',
             magFilter: s?.magFilter === FilterMode.Nearest ? 'nearest' : 'linear',
             addressModeU: wrap(s?.wrapU),

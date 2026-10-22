@@ -1,3 +1,8 @@
+import { copyRenderEnvironment } from '../rendering/render-environment.js';
+import { materialSupport, rendererEnvironmentSupport } from '../rendering/material-support.js';
+import { sceneMaterialPasses } from '../rendering/scene-mesh.js';
+import type { MeshRendererT } from '../format/generated/noa/ir/mesh-renderer.js';
+import type { MeshFilterT } from '../format/generated/noa/ir/mesh-filter.js';
 import { bindingWrites } from './animation-bindings.js';
 import { SUPPORTED_FEATURES } from '../format/semantics.js';
 import { ActionKind } from '../format/generated/noa/ir/action-kind.js';
@@ -197,6 +202,18 @@ export function checkCompatibility(
         );
       }
     }
+  try {
+    copyRenderEnvironment(options.renderEnvironment);
+  } catch (error) {
+    if (!(error instanceof NatsumeError)) throw error;
+    global.require(
+      false,
+      error.code,
+      'renderEnvironment',
+      options.renderEnvironment,
+      error.message,
+    );
+  }
   const gravity = env?.gravity ?? options.gravity;
   global.require(
     gravity === undefined ||
@@ -352,7 +369,14 @@ export function checkCompatibility(
         );
         if (system && material) {
           rules.issues.push(
-            ...rendererSupport(definition, material, pack, system.main!.maxParticles, env),
+            ...rendererSupport(
+              definition,
+              material,
+              pack,
+              system.main!.maxParticles,
+              env,
+              options.renderEnvironment,
+            ),
           );
           vertices += system.main!.maxParticles * rendererVertexStride(definition, pack);
           if (!materials.has(material.id)) {
@@ -382,17 +406,82 @@ export function checkCompatibility(
         }
       }
     }
+    if (rendererCanPlay(pack, c.id, c.enabled) && c.dataType === C.MeshRenderer) {
+      const definition = c.data as R<MeshRendererT>;
+      const filter = pack.getComponent(definition.meshFilterComponentId)?.data as
+        | R<MeshFilterT>
+        | undefined;
+      const mesh = filter?.meshAssetId ? pack.getMesh(filter.meshAssetId) : undefined;
+      const passes = sceneMaterialPasses(definition, mesh);
+      if (passes.length) rules.issues.push(...rendererEnvironmentSupport(definition.environment));
+      for (const pass of passes) {
+        const material = pack.document.materials.find(
+          (m) => m.id === definition.materials[pass.slot],
+        );
+        if (!material) continue;
+        rules.issues.push(...materialSupport(material, pack, options.renderEnvironment));
+        if (material.model === 4 || material.model === 5)
+          rules.require(
+            env,
+            'HOST',
+            'particleEnvironment',
+            env,
+            'Legacy materials require an explicit particleEnvironment',
+          );
+        vertices += mesh!.positions.length;
+        if (!materials.has(material.id)) {
+          materials.add(material.id);
+          for (const binding of material.textures) {
+            const size = pack.getImageSize(binding.imageId);
+            rules.require(
+              size,
+              'SEMANTIC',
+              `materials.${material.id}.texture`,
+              binding.imageId,
+              'Missing texture bytes',
+            );
+            if (!size) continue;
+            rules.require(
+              size.width <= context.maxTextureSize &&
+                size.height <= context.maxTextureSize &&
+                size.width * size.height <= 16_777_216,
+              'LIMIT',
+              `materials.${material.id}.textureSize`,
+              size,
+              'Decoded texture exceeds GPU/pixel limit',
+            );
+            if (!context.cachedMaterialIds.has(material.id)) pixels += size.width * size.height;
+          }
+        }
+      }
+    }
     append(rules.issues, c.id);
   }
   const totals = new SupportChecks();
   const opaqueGroups = new Map<string, Set<number>>();
   for (const c of components) {
-    if (!c.enabled || c.dataType !== C.ParticleRenderer) continue;
-    const renderer = c.data as R<ParticleRendererT>;
-    for (const slot of particleMaterialSlots(renderer)) {
+    if (
+      !rendererCanPlay(pack, c.id, c.enabled) ||
+      ![C.ParticleRenderer, C.MeshRenderer].includes(c.dataType)
+    )
+      continue;
+    const renderer = c.data as R<ParticleRendererT> | R<MeshRendererT>;
+    const slots =
+      c.dataType === C.ParticleRenderer
+        ? particleMaterialSlots(renderer as R<ParticleRendererT>)
+        : sceneMaterialPasses(
+            renderer as R<MeshRendererT>,
+            pack.getMesh(
+              (
+                pack.getComponent((renderer as R<MeshRendererT>).meshFilterComponentId)!
+                  .data as R<MeshFilterT>
+              ).meshAssetId,
+            ),
+          ).map((p) => p.slot);
+    for (const slot of slots) {
       const material = pack.document.materials.find((m) => m.id === renderer.materials[slot]);
       if (!material || material.renderQueue > 2500) continue;
-      const key = `${renderer.sortingLayerRank}/${renderer.sortingOrder}/${material.renderQueue}`;
+      const key = `${'sortingLayerRank' in renderer ? renderer.sortingLayerRank : renderer.sortingLayerIndex}/${renderer.sortingOrder}/${material.renderQueue}`;
       const group = opaqueGroups.get(key) ?? new Set<number>();
       group.add(material.id);
       opaqueGroups.set(key, group);
@@ -421,7 +510,7 @@ export function checkCompatibility(
     'Runtime decoded texture budget exceeded',
   );
   totals.require(
-    materials.size === 0 || context.imageBitmapAvailable,
+    pixels === 0 || context.imageBitmapAvailable,
     'HOST',
     'createImageBitmap',
     context.imageBitmapAvailable,

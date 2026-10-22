@@ -1,22 +1,14 @@
+import { usesGlobalMipBias } from './material-support.js';
+import type { RenderEnvironment } from './render-environment.js';
+import { materialFragment as fragment } from './material-fragment.js';
+export { ensureMaterialPipe as ensureParticlePipe } from './material-pipe.js';
 import { meshUV } from '../format/mesh-attributes.js';
 import { speedSize } from '../runtime/speed-modules.js';
 import { selectMesh, rendererVertexStride } from './mesh-selection.js';
 import { rendererSupport } from './renderer-support.js';
 import { stretchInverseLength } from './stretch-normalization.js';
 import { assertSupport } from '../runtime/support-checks.js';
-import {
-  Buffer,
-  BufferUsage,
-  Geometry,
-  GlMeshAdaptor,
-  Mesh,
-  MeshPipe,
-  Shader,
-  GlProgram,
-  State,
-  Texture,
-  type WebGLRenderer,
-} from 'pixi.js';
+import { Buffer, BufferUsage, Geometry, Mesh, Shader, GlProgram, State, Texture } from 'pixi.js';
 import { check } from '../errors.js';
 import type { EffectPack, DeepReadonly as R } from '../pack.js';
 import type { ParticleRendererT } from '../format/generated/noa/ir/particle-renderer.js';
@@ -32,57 +24,7 @@ import { color, random, scalar, sheetFrame } from '../runtime/parameters.js';
 import type { Emitter } from '../runtime/emitter.js';
 import type { ParticleEnvironment } from './particle-environment.js';
 
-/** Dedicated pipe changes the two states Mesh's standard State cannot express,
- * and restores them so interleaved Pixi siblings/masks remain valid. */
-class ParticleAdaptor extends GlMeshAdaptor {
-  override execute(pipe: MeshPipe, mesh: Mesh): void {
-    const renderer = pipe.renderer as WebGLRenderer,
-      gl = renderer.gl;
-    const mask = gl.getParameter(gl.COLOR_WRITEMASK) as boolean[];
-    const previous = (mask[0] ? 8 : 0) | (mask[1] ? 4 : 0) | (mask[2] ? 2 : 0) | (mask[3] ? 1 : 0);
-    const depth = gl.getParameter(gl.DEPTH_FUNC) as number;
-    const write = (mesh as unknown as ParticleMesh).colorWriteMask;
-    // The shader premultiplies the sampled straight-alpha PNG itself.
-    // MeshPipe's automatic texture-alpha adjustment must not apply it again.
-    mesh.state.blendMode = 'normal';
-    const particle = mesh as unknown as ParticleMesh;
-    particle.prepareEnvironment();
-    // A parent Pixi ColorMask may narrow the material's write mask.
-    renderer.colorMask.setMask(write & previous);
-    gl.depthFunc(gl.LEQUAL);
-    try {
-      if (particle.straightAlpha) {
-        renderer.state.set(mesh.state);
-        const srcRgb = gl.getParameter(gl.BLEND_SRC_RGB),
-          dstRgb = gl.getParameter(gl.BLEND_DST_RGB),
-          srcAlpha = gl.getParameter(gl.BLEND_SRC_ALPHA),
-          dstAlpha = gl.getParameter(gl.BLEND_DST_ALPHA);
-        try {
-          gl.blendFuncSeparate(
-            gl.SRC_ALPHA,
-            particle.additive ? gl.ONE : gl.ONE_MINUS_SRC_ALPHA,
-            gl.SRC_ALPHA,
-            particle.additive ? gl.ONE : gl.ONE_MINUS_SRC_ALPHA,
-          );
-          const shader = mesh.shader!;
-          shader.groups[100] = renderer.globalUniforms.bindGroup;
-          shader.groups[101] = pipe.localUniformsBindGroup;
-          renderer.encoder.draw({ geometry: mesh.geometry, shader });
-        } finally {
-          gl.blendFuncSeparate(srcRgb, dstRgb, srcAlpha, dstAlpha);
-        }
-      } else super.execute(pipe, mesh);
-    } finally {
-      renderer.colorMask.setMask(previous);
-      gl.depthFunc(depth);
-    }
-  }
-}
-export function ensureParticlePipe(renderer: WebGLRenderer): void {
-  const pipes = renderer.renderPipes as unknown as Record<string, unknown>;
-  pipes.natsumeParticles ??= new MeshPipe(renderer, new ParticleAdaptor());
-}
-
+const EMPTY_UV = Object.freeze({ x: 0, y: 0 });
 const vertex = `#version 300 es
 in vec3 aPosition;
 in vec2 aUV;
@@ -121,55 +63,19 @@ void main(){
   vec3 tint=host.a>0.0?host.rgb/host.a:vec3(0.0);
   vUV=aUV;vColor=aColor*vec4(tint,host.a);vCustom=aCustom;
 }`;
-const fragment = `#version 300 es
-in vec2 vUV;
-in vec4 vColor;
-in float vCustom;
-in float vDepth;
-in vec2 vScreenUV;
-uniform sampler2D uTexture;
-uniform float uLinear;
-uniform float uTextureSRGB;
-uniform float uVertexSRGB;
-uniform float uModel;
-uniform vec4 uTint;
-uniform vec4 uFog;
-uniform vec3 uFogColor;
-uniform float uSoft;
-uniform float uInvFade;
-uniform sampler2D uSceneDepth;
-uniform vec4 uDepthUV;
-out vec4 finalColor;
-vec3 toLinear(vec3 c){return mix(c/12.92,pow((c+0.055)/1.055,vec3(2.4)),step(vec3(0.04045),c));}
-void main(){
-  vec4 texel=texture(uTexture,vUV);
-  vec4 color=vColor;
-  if(uLinear>0.5){if(uTextureSRGB>0.5)texel.rgb=toLinear(texel.rgb);if(uVertexSRGB>0.5)color.rgb=toLinear(color.rgb);}
-  vec4 c=texel*color;
-  if(uModel>0.5){
-    vec4 tint=uTint;
-    if(uLinear>0.5)tint.rgb=toLinear(tint.rgb);
-    c*=tint;
-    if(uModel>1.5){
-      if(uSoft>0.5)c.a*=clamp(uInvFade*(texture(uSceneDepth,vScreenUV*uDepthUV.xy+uDepthUV.zw).r-vDepth),0.0,1.0);
-      c*=2.0;c.a=clamp(c.a,0.0,1.0);
-      float f=1.0;
-      if(uFog.x>0.5&&uFog.x<1.5)f=clamp((uFog.z-vDepth)/(uFog.z-uFog.y),0.0,1.0);
-      else if(uFog.x>1.5&&uFog.x<2.5)f=exp(-uFog.w*vDepth);
-      else if(uFog.x>2.5)f=exp(-pow(uFog.w*vDepth,2.0));
-      c.rgb=mix(uModel<2.5?vec3(0.0):uFogColor,c.rgb,f);
-    }
-    finalColor=c;
-  }else finalColor=vec4(c.rgb*c.a,vCustom<=0.5?c.a:0.0);
-}`;
 
 export type SourceColorSpace = 'gamma' | 'linear';
 export class ParticleMesh extends Mesh<Geometry, Shader> {
-  override readonly renderPipeId = 'natsumeParticles';
+  override readonly renderPipeId = 'natsumeMaterials';
   readonly colorWriteMask: number;
   readonly straightAlpha: boolean;
   readonly additive: boolean;
   environment: ParticleEnvironment | undefined;
+  renderEnvironment: RenderEnvironment | undefined;
+  private readonly needsMipBias: boolean;
+  get node() {
+    return this.emitter.node;
+  }
   /** @internal View-axis bounds center in world units, before sortingFudge. */
   sortingDepth = 0;
   private readonly vertices: Float32Array;
@@ -207,16 +113,24 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
     texture: Texture,
     pack: EffectPack,
     environment?: ParticleEnvironment,
+    renderEnvironment?: RenderEnvironment,
   ) {
     const material = materialDefinition;
     const legacy =
       material.model === MaterialModel.LegacyParticleAdditive ||
       material.model === MaterialModel.LegacyParticleAlphaBlend;
-    const straight = legacy || material.model === MaterialModel.ParticleUnlit;
+    const straight = material.model !== MaterialModel.ParticleAddAlpha;
     const additive = material.model === MaterialModel.LegacyParticleAdditive;
     const state = material.renderState!;
     assertSupport(
-      rendererSupport(definition, material, pack, emitter.main.maxParticles, environment),
+      rendererSupport(
+        definition,
+        material,
+        pack,
+        emitter.main.maxParticles,
+        environment,
+        renderEnvironment,
+      ),
     );
     if (
       definition.alignment === Alignment.Velocity ||
@@ -247,7 +161,7 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
       const mesh = pack.getMesh(definition.meshAssetIds[0]!);
       check(mesh, 'SEMANTIC', 'Missing mesh');
       positions = mesh.positions;
-      uv = meshUV(mesh);
+      uv = meshUV(mesh, material.textures[0]?.uvSet ?? 0);
       meshIndices = mesh.indices;
     }
     const choices =
@@ -263,7 +177,8 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
               }
             return {
               positions: mesh.positions,
-              uv: meshUV(mesh),
+              uv: meshUV(mesh, material.textures[0]?.uvSet ?? 0),
+              colors: mesh.colors,
               indices: mesh.indices,
               pivotSize: max.map((value, axis) => value - min[axis]!),
             };
@@ -303,7 +218,23 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
         uTexture: texture.source,
         uSceneDepth: Texture.WHITE.source,
         colorUniforms: {
-          uModel: { value: legacy ? (additive ? 2 : 3) : straight ? 1 : 0, type: 'f32' },
+          uMipBias: { value: 0, type: 'f32' },
+          uModel: {
+            value: legacy
+              ? additive
+                ? 2
+                : 3
+              : material.model === MaterialModel.SpriteDefault
+                ? 4
+                : material.model === MaterialModel.UIDefault
+                  ? 5
+                  : material.model === MaterialModel.TextureVertexColor
+                    ? 6
+                    : straight
+                      ? 1
+                      : 0,
+            type: 'f32',
+          },
           uTint: {
             value: new Float32Array([
               material.tint?.r ?? 1,
@@ -334,7 +265,7 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
           },
           uLinear: { value: 0, type: 'f32' },
           uTextureSRGB: {
-            value: material.textures[0]!.colorSpace === ColorSpace.SRGB ? 1 : 0,
+            value: material.textures[0]?.colorSpace === ColorSpace.SRGB ? 1 : 0,
             type: 'f32',
           },
         },
@@ -342,9 +273,11 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
     });
     const pixiState = new State();
     pixiState.depthTest = true;
-    pixiState.depthMask = false;
-    pixiState.cullMode = state.cull === 2 ? 'back' : 'none';
+    pixiState.depthMask = state.depthWrite;
+    pixiState.cullMode = state.cull === 2 ? 'back' : state.cull === 1 ? 'front' : 'none';
     super({ geometry, shader, state: pixiState, texture });
+    this.needsMipBias = usesGlobalMipBias(pack, material);
+    this.renderEnvironment = renderEnvironment;
     this.straightAlpha = straight;
     this.additive = additive;
     this.environment = environment;
@@ -370,7 +303,7 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
         }
       this.pivotSize = max.map((value, axis) => value - min[axis]!);
     }
-    this.binding = material.textures[0]!;
+    this.binding = material.textures[0];
     this.inverseFade = material.floats.find((p) => p.name === '_InvFade');
     const mask = state.colorWriteMask;
     this.colorWriteMask =
@@ -383,6 +316,7 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
     const env = this.environment,
       fog = env?.fog,
       u = this.shader!.resources.colorUniforms.uniforms;
+    u.uMipBias = this.needsMipBias ? (this.renderEnvironment?.globalMipBias ?? 0) : 0;
     u.uDepthMode = Array.isArray(env?.depth) ? 1 : 0;
     u.uDepthConstant = typeof env?.depth === 'number' ? env.depth : (this.parent?.zIndex ?? 0);
     check(
@@ -716,7 +650,10 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
         cz = Math.cos(e.rotations[o + 2]! + roll),
         snz = Math.sin(e.rotations[o + 2]! + roll) * rotationSign;
       color(e.colorModule?.color ?? null, t, rnd(53), this.scratchColor);
-      const sheet = e.sheet && e.sheet.uvChannelMask & 1 ? e.sheet : undefined,
+      const sheet =
+          e.sheet && e.sheet.uvChannelMask & (1 << (this.binding?.uvSet ?? 0))
+            ? e.sheet
+            : undefined,
         cols = sheet?.columns ?? 1,
         rows = sheet?.rows ?? 1;
       const frame = sheetFrame(
@@ -751,7 +688,7 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
         : 0;
       for (let j = 0; j < positions.length; j++) {
         const p = positions[j]!,
-          uv = uvs[j]!;
+          uv = uvs[j] ?? EMPTY_UV;
         let x = p.x * sx,
           y = p.y * sy,
           z = p.z * sz;
@@ -847,15 +784,32 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
         const sampledU = flipX ? 1 - uv.x : uv.x;
         const sampledV = flipY ? 1 - uv.y : uv.y;
         v[k + 3] =
-          ((sampledU + col) / cols) * (this.binding.scale?.x ?? 1) + (this.binding.offset?.x ?? 0);
+          ((sampledU + col) / cols) * (this.binding?.scale?.x ?? 1) +
+          (this.binding?.offset?.x ?? 0);
         v[k + 4] =
           1 -
-          (((sampledV + (rows - 1 - row)) / rows) * (this.binding.scale?.y ?? 1) +
-            (this.binding.offset?.y ?? 0));
-        v[k + 5] = e.startColors[i * 4]! * this.scratchColor[0]! * (tint?.r ?? 1);
-        v[k + 6] = e.startColors[i * 4 + 1]! * this.scratchColor[1]! * (tint?.g ?? 1);
-        v[k + 7] = e.startColors[i * 4 + 2]! * this.scratchColor[2]! * (tint?.b ?? 1);
-        v[k + 8] = e.startColors[i * 4 + 3]! * this.scratchColor[3]! * (tint?.a ?? 1);
+          (((sampledV + (rows - 1 - row)) / rows) * (this.binding?.scale?.y ?? 1) +
+            (this.binding?.offset?.y ?? 0));
+        v[k + 5] =
+          e.startColors[i * 4]! *
+          this.scratchColor[0]! *
+          (tint?.r ?? 1) *
+          (choice?.colors[j]?.x ?? 1);
+        v[k + 6] =
+          e.startColors[i * 4 + 1]! *
+          this.scratchColor[1]! *
+          (tint?.g ?? 1) *
+          (choice?.colors[j]?.y ?? 1);
+        v[k + 7] =
+          e.startColors[i * 4 + 2]! *
+          this.scratchColor[2]! *
+          (tint?.b ?? 1) *
+          (choice?.colors[j]?.z ?? 1);
+        v[k + 8] =
+          e.startColors[i * 4 + 3]! *
+          this.scratchColor[3]! *
+          (tint?.a ?? 1) *
+          (choice?.colors[j]?.w ?? 1);
         const depth = this.environment?.depth;
         v[k + 9] =
           this.straightAlpha && Array.isArray(depth)

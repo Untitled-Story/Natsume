@@ -2,6 +2,7 @@ import { Application, Mesh, extensions } from 'pixi.js';
 import { NatsumePlugin, type NatsumeRuntime, type EffectPack, type EffectInstance } from 'natsume';
 import { log } from './console.js';
 import { OverlayView } from './overlay.js';
+import { SceneMesh } from '../../natsume/src/rendering/scene-mesh.js';
 import type { ParticleMesh } from '../../natsume/src/rendering/particle-mesh.js';
 
 extensions.add(NatsumePlugin);
@@ -115,7 +116,7 @@ function fit(): void {
   for (const child of effect.container.children) {
     if (!(child instanceof Mesh) || !child.visible) continue;
     const selected = Number(focus.value);
-    let node = (child as ParticleMesh).emitter.node;
+    let node = (child as ParticleMesh | SceneMesh).node;
     while (selected && node.id !== selected && node.parent) node = node.parent;
     if (selected && node.id !== selected) continue;
     const geometry = child.geometry;
@@ -127,8 +128,12 @@ function fit(): void {
     const offset = (attribute.offset || 0) / Float32Array.BYTES_PER_ELEMENT;
     for (let i = 0; i < geometry.indexCount; i++) {
       const index = indices[i]! * stride + offset;
-      const x = vertices[index]! + child.position.x,
-        y = vertices[index + 1]! + child.position.y;
+      const m = child instanceof SceneMesh ? child.transform : undefined;
+      const vx = vertices[index]!,
+        vy = vertices[index + 1]!,
+        vz = vertices[index + 2]!;
+      const x = (m ? m[0]! * vx + m[4]! * vy + m[8]! * vz + m[12]! : vx) + child.position.x,
+        y = (m ? m[1]! * vx + m[5]! * vy + m[9]! * vz + m[13]! : vy) + child.position.y;
       if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
       minX = Math.min(minX, x);
       maxX = Math.max(maxX, x);
@@ -196,6 +201,7 @@ export async function showPreview(pack: EffectPack, signal: AbortSignal): Promis
   if (signal.aborted) return;
   const created = await runtime!.instantiate(pack, {
     seed: 12345,
+    renderEnvironment: { globalMipBias: 0 },
     particleEnvironment: {
       fog: { mode: 'none' },
       viewPosition: [0, 0, -1000],

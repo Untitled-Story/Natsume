@@ -1,4 +1,5 @@
-import { meshUV } from '../format/mesh-attributes.js';
+import { materialSupport, rendererEnvironmentSupport } from './material-support.js';
+import type { RenderEnvironment } from './render-environment.js';
 import { MeshDistribution } from '../format/generated/noa/ir/mesh-distribution.js';
 import { rendererVertexStride } from './mesh-selection.js';
 import type { DeepReadonly as R, EffectPack } from '../pack.js';
@@ -8,10 +9,6 @@ import { MaterialModel } from '../format/generated/noa/ir/material-model.js';
 import { RenderMode } from '../format/generated/noa/ir/render-mode.js';
 import { Alignment } from '../format/generated/noa/ir/alignment.js';
 import { VertexSemantic } from '../format/generated/noa/ir/vertex-semantic.js';
-import { BlendFactor as B } from '../format/generated/noa/ir/blend-factor.js';
-import { CompareOp } from '../format/generated/noa/ir/compare-op.js';
-import { ColorSpace } from '../format/generated/noa/ir/color-space.js';
-import { FilterMode } from '../format/generated/noa/ir/filter-mode.js';
 import type { ParticleEnvironment } from './particle-environment.js';
 import { SupportChecks, type SupportIssue } from '../runtime/support-checks.js';
 
@@ -21,19 +18,15 @@ export function rendererSupport(
   pack: EffectPack,
   capacity: number,
   environment?: ParticleEnvironment,
+  renderEnvironment?: RenderEnvironment,
 ): readonly SupportIssue[] {
   const r = new SupportChecks();
   const legacy =
     material.model === MaterialModel.LegacyParticleAdditive ||
     material.model === MaterialModel.LegacyParticleAlphaBlend;
-  const straight = legacy || material.model === MaterialModel.ParticleUnlit;
-  const additive = material.model === MaterialModel.LegacyParticleAdditive;
-  r.require(
-    material.model === MaterialModel.ParticleAddAlpha || straight,
-    'CAPABILITY',
-    `materials.${material.id}.model`,
-    material.model,
-    'Unsupported particle material model',
+  r.issues.push(
+    ...materialSupport(material, pack, renderEnvironment),
+    ...rendererEnvironmentSupport(definition.environment),
   );
   r.require(
     !legacy || environment,
@@ -153,57 +146,11 @@ export function rendererSupport(
     'Unsupported particle vertex stream',
   );
   r.require(
-    material.textures.length === 1 && material.textures[0]?.uvSet === 0,
+    definition.mode === RenderMode.Mesh || (material.textures[0]?.uvSet ?? 0) === 0,
     'CAPABILITY',
-    `materials.${material.id}.textures`,
-    material.textures,
-    'Only one UV0 texture is supported',
-  );
-  if (material.textures[0]) {
-    const texture = material.textures[0];
-    r.require(
-      texture.colorSpace !== ColorSpace.Unspecified,
-      'CAPABILITY',
-      `materials.${material.id}.textures.0.colorSpace`,
-      texture.colorSpace,
-      'Texture encoding must be explicit',
-    );
-    r.require(
-      texture.sampler?.minFilter !== FilterMode.Trilinear,
-      'CAPABILITY',
-      `materials.${material.id}.textures.0.sampler.minFilter`,
-      texture.sampler?.minFilter,
-      'Mipmapped sampling unsupported',
-    );
-  }
-  const state = material.renderState;
-  const neutralStencil =
-    !state?.stencil ||
-    [state.stencil.front, state.stencil.back].every(
-      (face) =>
-        face &&
-        face.compare === CompareOp.Always &&
-        face.pass === 0 &&
-        face.fail === 0 &&
-        face.depthFail === 0,
-    );
-  r.require(
-    state &&
-      neutralStencil &&
-      state.depthTestSource === 0 &&
-      state.srcRgb === (straight ? B.SrcAlpha : B.One) &&
-      state.dstRgb === (additive ? B.One : B.OneMinusSrcAlpha) &&
-      state.srcAlpha === (straight ? B.SrcAlpha : B.One) &&
-      state.dstAlpha === (additive ? B.One : B.OneMinusSrcAlpha) &&
-      state.rgbOp === 0 &&
-      state.alphaOp === 0 &&
-      state.depthTest === CompareOp.LessEqual &&
-      !state.depthWrite &&
-      (state.cull === 0 || (material.model === MaterialModel.ParticleUnlit && state.cull === 2)),
-    'CAPABILITY',
-    `materials.${material.id}.renderState`,
-    state,
-    'Unsupported material render state',
+    'textures.uvSet',
+    material.textures[0]?.uvSet,
+    'Billboards provide UV0 only',
   );
   let count = 4;
   if (definition.mode === RenderMode.Mesh) {
@@ -235,18 +182,11 @@ export function rendererSupport(
     for (const [index, id] of definition.meshAssetIds.entries()) {
       const mesh = pack.getMesh(id);
       r.require(
-        mesh && meshUV(mesh).length === mesh.positions.length && mesh.submeshes.length === 1,
+        mesh && mesh.submeshes.length === 1,
         'CAPABILITY',
         `meshAssetIds.${index}`,
         id,
         'Mesh requires UV0 and one submesh',
-      );
-      r.require(
-        !mesh || mesh.colors.every((c) => c.x === 1 && c.y === 1 && c.z === 1 && c.w === 1),
-        'CAPABILITY',
-        `meshAssetIds.${index}.colors`,
-        id,
-        'Authored mesh vertex colors are not implemented',
       );
     }
     count = rendererVertexStride(definition, pack);

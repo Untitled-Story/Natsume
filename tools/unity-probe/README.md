@@ -33,6 +33,7 @@ pnpm probe:unity --sweeps       # Shape 时间扫描、量化与方向对齐
 pnpm probe:unity --spaces       # 模拟空间、世界重力与线性速度
 pnpm probe:unity --stretch      # 拉伸长度、粒子速度与移动视图
 pnpm probe:unity --meshes       # 多 Mesh、队列 / 系统排序、原生雾效 / 场景深度像素与 submesh 限制
+pnpm probe:unity --scene-materials # 普通 Mesh、submesh 槽、Pass 状态、UV 与 mip 偏移
 pnpm probe:unity --sorting      # 透明粒子索引顺序
 pnpm probe:unity --compatibility # 加权曲线、渐变、限速与序列帧
 pnpm probe:unity --noise-fit    # 执行本地提供的 Noise 采样输入
@@ -42,6 +43,13 @@ pnpm probe:unity --prefab-layout # 原始 prefab 布局
 脚本将 `project/` 模板复制到仓库的 `data/unity-probe/` 后运行。该目录是专用临时工程，请勿放入业务工程。测量结果和 Editor 日志写入 `data/unity-baselines/`，均由 Git 忽略。部分模式需要图形设备。
 
 `--noise-fit` 需要先准备 `data/unity-baselines/noise-fit-input.json`。`--prefab-layout` 默认使用相邻 Noa 项目的 `data/scenario/effect/kirakira_01_rip/`；可通过 `NATSUME_PREFAB_SOURCE` 指定其他同结构资源目录。
+
+`--scene-materials` 另外生成受控多 submesh Prefab。用相邻 Noa 编译后，浏览器测试检查真实导出几何、材质动画与实例生命周期：
+
+```sh
+../Noa/target/debug/noa compile data/unity-probe/Assets/SceneMaterialProbe/scene.prefab --output data/scene-mesh.noap --json
+pnpm exec playwright test scene-materials.spec.ts
+```
 
 ## 扩展 Noise 采样
 
@@ -82,6 +90,7 @@ pnpm probe:unity --custom-data --update-fixtures
 pnpm probe:unity --sweeps --update-fixtures
 pnpm probe:unity --spaces --update-fixtures
 pnpm probe:unity --meshes --update-fixtures
+pnpm probe:unity --scene-materials --update-fixtures
 pnpm probe:unity --sorting --update-fixtures
 pnpm probe:unity --stretch --update-fixtures
 pnpm probe:unity --compatibility --update-fixtures

@@ -53,6 +53,10 @@ const unit = (value: number, name: string) =>
 export const SUPPORTED_FEATURES: Readonly<Record<string, number>> = Object.freeze(
   Object.fromEntries(
     [
+      'scene.mesh-renderer',
+      'material.unity-sprite-default',
+      'material.texture-vertex-color',
+      'render.environment',
       'scene.trs',
       'layout.rect',
       'camera.host',
@@ -105,18 +109,14 @@ export const KNOWN_FEATURES: Readonly<Record<string, number>> = Object.freeze({
   ...SUPPORTED_FEATURES,
   ...Object.fromEntries(
     [
-      'scene.mesh-renderer',
       'asset.sprite',
       'scene.sprite-renderer',
       'render.sprite-mask',
+      'material.unity-ui-default',
       'ui.canvas',
       'particle.shape.sprite',
       'particle.shape.donut',
       'particle.texture-sheet-sprites',
-      'render.environment',
-      'material.unity-sprite-default',
-      'material.unity-ui-default',
-      'material.texture-vertex-color',
       'animation.sprite',
     ].map((name) => [name, 1]),
   ),
@@ -472,6 +472,9 @@ export function validateDocument(document: DocumentT): void {
             'SEMANTIC',
             'Custom vector count mismatch',
           );
+        break;
+      case 'StencilState':
+        present(o, 'front', 'back');
         break;
       case 'RenderState':
         check(number(o, 'colorWriteMask') <= 15, 'SEMANTIC', 'Invalid color mask');

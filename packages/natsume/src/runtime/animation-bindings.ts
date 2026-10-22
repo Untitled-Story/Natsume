@@ -50,7 +50,8 @@ export class AnimationBindings {
           this.resets.push(() => restore(state, c.data!));
         }
         if (
-          c?.dataType === C.ParticleRenderer &&
+          c &&
+          [C.ParticleRenderer, C.MeshRenderer, C.SpriteRenderer].includes(c.dataType) &&
           [P.RendererMaterialTint, P.RendererMaterialFloat, P.RendererTextureST].includes(
             b.property,
           )

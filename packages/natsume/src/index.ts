@@ -29,3 +29,5 @@ export {
   type NatsumeAnimationEvent,
   type AnimationEventHandler,
 } from './runtime/animation-events.js';
+
+export { type RenderEnvironment } from './rendering/render-environment.js';
