@@ -95,7 +95,7 @@ export const SUPPORTED_FEATURES: Readonly<Record<string, number>> = Object.freez
       'host.legacy-particle-environment',
     ]
       .map((name) => [name, 1])
-      .concat([['mesh.nomesh', 2]]),
+      .concat([['mesh.noms', 2]]),
   ),
 );
 

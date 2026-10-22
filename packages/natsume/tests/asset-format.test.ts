@@ -53,7 +53,7 @@ function spriteDocument() {
   s.border = new Vec4T();
   s.sampler = new SamplerT();
   d.assets = [new AssetT(703, A.Sprite, s), new AssetT(91, A.Image), new AssetT(42, A.Mesh)];
-  d.features = [new Feature('asset.sprite'), new Feature('mesh.nomesh', 2)];
+  d.features = [new Feature('asset.sprite'), new Feature('mesh.noms', 2)];
   return d;
 }
 async function packBytes(d: DocumentT, assets: Record<string, Uint8Array>) {
@@ -63,7 +63,7 @@ async function packBytes(d: DocumentT, assets: Record<string, Uint8Array>) {
     const id = /^assets\/(\d+)\./.exec(path)?.[1];
     entries.push({
       path,
-      kind: path.endsWith('noir') ? 'noir' : path.endsWith('nomesh') ? 'mesh' : 'image',
+      kind: path.endsWith('noir') ? 'noir' : path.endsWith('noms') ? 'mesh' : 'image',
       ...(id ? { asset_id: Number(id) } : {}),
       byte_length: bytes.length,
       sha256: Buffer.from(await crypto.subtle.digest('SHA-256', Uint8Array.from(bytes))).toString(
@@ -215,7 +215,7 @@ it('loads forward Sprite dependencies by ID without inventing a Sprite file or c
   const d = spriteDocument();
   const p = await loadPack(
     await packBytes(d, {
-      'assets/42.nomesh': encodeMesh(triangle()),
+      'assets/42.noms': encodeMesh(triangle()),
       'assets/91.png': pngHeader(),
     }),
   );
@@ -243,6 +243,20 @@ it('loads forward Sprite dependencies by ID without inventing a Sprite file or c
   p.dispose();
 });
 
+it('rejects the former mesh extension and required capability name', async () => {
+  await expect(
+    loadPack(
+      await packBytes(spriteDocument(), {
+        'assets/42.nomesh': encodeMesh(triangle()),
+        'assets/91.png': pngHeader(),
+      }),
+    ),
+  ).rejects.toMatchObject({ code: 'ZIP' });
+  const d = spriteDocument();
+  d.features[1]!.name = 'mesh.nomesh';
+  expect(() => validateDocument(d)).toThrow(/Unknown required feature/);
+});
+
 it('rejects missing or mismatched Sprite dependencies and external files for inline assets', async () => {
   for (const kind of [A.Mesh, A.ShaderData]) {
     const d = spriteDocument();
@@ -253,7 +267,7 @@ it('rejects missing or mismatched Sprite dependencies and external files for inl
   await expect(
     loadPack(
       await packBytes(d, {
-        'assets/42.nomesh': encodeMesh(triangle()),
+        'assets/42.noms': encodeMesh(triangle()),
         'assets/91.png': pngHeader(),
         'assets/703.png': pngHeader(),
       }),
@@ -276,7 +290,7 @@ it('requires explicit mesh revision and keeps legitimate empty geometry distinct
   expect(() => validateDocument(d)).toThrow(/asset kind/);
   const s = spriteDocument();
   s.features[1]!.revision = 1;
-  expect(() => validateDocument(s)).toThrow(/mesh.nomesh@1/);
+  expect(() => validateDocument(s)).toThrow(/mesh.noms@1/);
 });
 
 it('keeps an empty UI mask valid and rejects unrelated Graphic component IDs', () => {

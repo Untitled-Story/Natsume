@@ -1,11 +1,11 @@
 {
   "repository": "https://github.com/Untitled-Story/Noa",
-  "commit": "8e4853d8fcb9d5a959ea1a9ccc2f0b5045a0660f",
+  "commit": "c2fdb50f93c4db0c4ae48478510ca86153ad4eca",
   "flatc": "25.12.19",
   "sha256": {
-    "noir.fbs": "37b5fab8619dd5966d1802f4fe9299f5883ebbbf7247c9172f4abea0dd21e5ba",
-    "mesh.fbs": "1c720b38e8ee4b607d59029a7cf4d8963f8ac90e1cf3f09cba5ae554c491187d",
-    "noap.schema.json": "794c919b28711323337065e59c1f733fa0d8fe00d7346f9883200cacf5dd9898",
+    "noir.fbs": "8eeea200085000ad3ad65c5b30dcacb6074930369c76d00b3cfe2cd3d1501752",
+    "mesh.fbs": "0b7bd3b6ab52b4faa918c4b2dac3981e65fb93371e334ef9b72b3515e69c332d",
+    "noap.schema.json": "64baf9aacbb9591939ebc4b588a2123a78e2feb604b7096e9e20807f86ccaa15",
     "shader-data.schema.json": "cbb726f654bce66b7ef312a27907b0fe223944d264f09b55c6fb6d12682d08ef"
   }
 }

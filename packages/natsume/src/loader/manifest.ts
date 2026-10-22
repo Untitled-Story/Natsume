@@ -86,7 +86,7 @@ export function parseManifest(bytes: Uint8Array): Manifest {
         'Invalid or duplicate asset ID',
       );
       ids.add(id);
-      const extension = { image: 'png', mesh: 'nomesh', shader_data: 'shader.json' }[
+      const extension = { image: 'png', mesh: 'noms', shader_data: 'shader.json' }[
         String(file.kind)
       ];
       check(

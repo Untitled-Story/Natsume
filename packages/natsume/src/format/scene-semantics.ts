@@ -61,7 +61,7 @@ export function validateSceneAssets(
     d.components.some((c) => c.nodeId === nodeId && c.dataType === kind);
   for (const a of d.assets) {
     check(a.kind !== A.Unknown, 'SEMANTIC', 'Unknown asset kind');
-    if (a.kind === A.Mesh) required('mesh.nomesh', 2);
+    if (a.kind === A.Mesh) required('mesh.noms', 2);
     if (a.kind !== A.Sprite) {
       check(!a.sprite, 'SEMANTIC', 'Sprite descriptor on wrong asset kind');
       continue;
