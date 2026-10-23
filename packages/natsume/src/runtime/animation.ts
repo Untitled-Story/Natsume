@@ -68,6 +68,7 @@ export function animationSupport(animation: R<AnimationT>): readonly SupportIssu
     AnimationProperty.RendererMaterialTint,
     AnimationProperty.RendererMaterialFloat,
     AnimationProperty.RendererTextureST,
+    AnimationProperty.SpriteColor,
   ]);
   for (const [index, track] of animation.tracks.entries())
     rules.require(

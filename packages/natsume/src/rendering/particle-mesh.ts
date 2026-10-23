@@ -1,3 +1,5 @@
+import { spriteUVTransform } from './sprite-geometry.js';
+import { Vec3T } from '../format/generated/noa/mesh/vec3.js';
 import { usesGlobalMipBias } from './material-support.js';
 import type { RenderEnvironment } from './render-environment.js';
 import { materialFragment as fragment } from './material-fragment.js';
@@ -8,7 +10,17 @@ import { selectMesh, rendererVertexStride } from './mesh-selection.js';
 import { rendererSupport } from './renderer-support.js';
 import { stretchInverseLength } from './stretch-normalization.js';
 import { assertSupport } from '../runtime/support-checks.js';
-import { Buffer, BufferUsage, Geometry, Mesh, Shader, GlProgram, State, Texture } from 'pixi.js';
+import {
+  Buffer,
+  BufferUsage,
+  Geometry,
+  Mesh,
+  Shader,
+  GlProgram,
+  State,
+  Texture,
+  type WebGLRenderer,
+} from 'pixi.js';
 import { check } from '../errors.js';
 import type { EffectPack, DeepReadonly as R } from '../pack.js';
 import type { ParticleRendererT } from '../format/generated/noa/ir/particle-renderer.js';
@@ -94,6 +106,14 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
   private readonly pivotSize: readonly number[];
   private readonly meshChoices;
   private readonly meshSelections: Uint32Array;
+  private readonly frameSelections: Uint32Array;
+  private readonly sheetTextures: readonly Texture[];
+  private readonly runStarts: Uint32Array;
+  private readonly runSizes: Uint32Array;
+  private readonly runFrames: Uint32Array;
+  private runCount = 0;
+  private readonly frameSRGB: readonly number[];
+  private readonly frameUV: readonly (readonly number[])[];
   private readonly vertexStride: number;
   private readonly scratchColor = new Float32Array(4);
   private readonly rotationMatrix = mat4.create();
@@ -114,6 +134,7 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
     pack: EffectPack,
     environment?: ParticleEnvironment,
     renderEnvironment?: RenderEnvironment,
+    sheetTextures: readonly Texture[] = [],
   ) {
     const material = materialDefinition;
     const legacy =
@@ -164,7 +185,7 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
       uv = meshUV(mesh, material.textures[0]?.uvSet ?? 0);
       meshIndices = mesh.indices;
     }
-    const choices =
+    let choices =
       definition.mode === RenderMode.Mesh
         ? definition.meshAssetIds.map((id) => {
             const mesh = pack.getMesh(id)!;
@@ -184,7 +205,27 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
             };
           })
         : [];
-    const stride = rendererVertexStride(definition, pack);
+    if (emitter.sheet?.mode === 1 && definition.mode !== RenderMode.Mesh) {
+      const first = pack.document.assets.find(
+        (a) => a.id === emitter.sheet!.spriteAssetIds[0],
+      )!.sprite!;
+      const scale = first.pixelsPerUnit / Math.max(first.rect!.z, first.rect!.w);
+      choices = emitter.sheet.spriteAssetIds.map((id) => {
+        const sprite = pack.document.assets.find((a) => a.id === id)!.sprite!;
+        const mesh = pack.getMesh(sprite.meshAssetId)!;
+        return {
+          positions: mesh.positions.map((p) => new Vec3T(p.x * scale, p.y * scale, p.z * scale)),
+          uv: meshUV(mesh),
+          colors: mesh.colors,
+          indices: mesh.indices,
+          pivotSize: [1, 1, 1],
+        };
+      });
+    }
+    const stride = Math.max(
+      rendererVertexStride(definition, pack),
+      ...choices.map((m) => m.positions.length),
+    );
     const vertices = new Float32Array(stride * emitter.ages.length * 16);
     const indices = new Uint32Array(
       Math.max(meshIndices.length, ...choices.map((m) => m.indices.length)) * emitter.ages.length,
@@ -288,6 +329,23 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
     this.sortKeys = new Float64Array(emitter.ages.length);
     this.meshChoices = choices;
     this.meshSelections = new Uint32Array(emitter.ages.length);
+    this.frameSelections = new Uint32Array(emitter.ages.length);
+    this.sheetTextures = sheetTextures;
+    this.frameUV =
+      emitter.sheet?.mode === 1 && definition.mode === RenderMode.Mesh
+        ? emitter.sheet.spriteAssetIds.map((id) =>
+            spriteUVTransform(pack, pack.document.assets.find((a) => a.id === id)!.sprite!),
+          )
+        : [];
+    this.frameSRGB =
+      emitter.sheet?.mode === 1
+        ? emitter.sheet.spriteAssetIds.map((id) =>
+            pack.document.assets.find((a) => a.id === id)!.sprite!.colorSpace === 1 ? 1 : 0,
+          )
+        : [];
+    this.runStarts = new Uint32Array(emitter.ages.length);
+    this.runSizes = new Uint32Array(emitter.ages.length);
+    this.runFrames = new Uint32Array(emitter.ages.length);
     this.vertexStride = stride;
     this.basePositions = positions;
     this.baseUV = uv;
@@ -405,7 +463,26 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
         rnd = (c: number) => random(e.seed, serial, c),
         o = i * 3,
         t = e.ages[i]! / e.lifetimes[i]!;
-      const meshIndex = selectMesh(this.definition, rnd(70), rnd(71));
+      const frameIndex =
+        e.sheet?.mode === 1 && !!(e.sheet.uvChannelMask & (1 << (this.binding?.uvSet ?? 0)))
+          ? sheetFrame(
+              e.sheet,
+              t,
+              rnd(54),
+              rnd(55),
+              e.ages[i]!,
+              Math.hypot(
+                (e.renderVelocities ?? e.velocities)[o]!,
+                (e.renderVelocities ?? e.velocities)[o + 1]!,
+                (e.renderVelocities ?? e.velocities)[o + 2]!,
+              ),
+            )
+          : 0;
+      this.frameSelections[i] = frameIndex;
+      const meshIndex =
+        e.sheet?.mode === 1 && this.definition.mode !== RenderMode.Mesh
+          ? frameIndex
+          : selectMesh(this.definition, rnd(70), rnd(71));
       this.meshSelections[i] = meshIndex;
       const choice = this.meshChoices[meshIndex];
       const positions = choice?.positions ?? this.basePositions;
@@ -651,7 +728,7 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
         snz = Math.sin(e.rotations[o + 2]! + roll) * rotationSign;
       color(e.colorModule?.color ?? null, t, rnd(53), this.scratchColor);
       const sheet =
-          e.sheet && e.sheet.uvChannelMask & (1 << (this.binding?.uvSet ?? 0))
+          e.sheet?.mode === 0 && e.sheet.uvChannelMask & (1 << (this.binding?.uvSet ?? 0))
             ? e.sheet
             : undefined,
         cols = sheet?.columns ?? 1,
@@ -781,8 +858,14 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
         v[k + 1] = (matrix[1]! * wx + matrix[5]! * wy + matrix[9]! * wz + matrix[13]!) / w;
         v[k + 2] = (matrix[2]! * wx + matrix[6]! * wy + matrix[10]! * wz + matrix[14]!) / w;
         // No bitmap upload flip: authored bottom-left Unity UVs are flipped here once.
-        const sampledU = flipX ? 1 - uv.x : uv.x;
-        const sampledV = flipY ? 1 - uv.y : uv.y;
+        const su = flipX ? 1 - uv.x : uv.x;
+        const sv = flipY ? 1 - uv.y : uv.y;
+        const map =
+          e.sheet?.mode === 1 && !!(e.sheet.uvChannelMask & (1 << (this.binding?.uvSet ?? 0)))
+            ? this.frameUV[frameIndex]
+            : undefined;
+        const sampledU = map ? map[0]! * su + map[1]! * sv + map[2]! : su;
+        const sampledV = map ? map[3]! * su + map[4]! * sv + map[5]! : sv;
         v[k + 3] =
           ((sampledU + col) / cols) * (this.binding?.scale?.x ?? 1) +
           (this.binding?.offset?.x ?? 0);
@@ -863,11 +946,23 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
       }
       order.sort((a, b) => keys[b]! - keys[a]! || a - b);
     }
-    if (sort !== ParticleSort.None || this.meshChoices.length > 1) {
+    this.runCount = 0;
+    if (sort !== ParticleSort.None || this.meshChoices.length > 1 || this.sheetTextures.length) {
       let offset = 0;
       for (let i = 0; i < n; i++) {
         const source = sort === ParticleSort.None ? i : this.particleOrder[i]!;
         const indices = this.meshChoices[this.meshSelections[source]!]?.indices ?? this.baseIndices;
+        const frame = this.frameSelections[source]!;
+        if (this.sheetTextures.length) {
+          const run = this.runCount - 1;
+          if (run >= 0 && this.sheetTextures[this.runFrames[run]!] === this.sheetTextures[frame])
+            this.runSizes[run] = this.runSizes[run]! + indices.length;
+          else {
+            this.runStarts[this.runCount] = offset;
+            this.runSizes[this.runCount] = indices.length;
+            this.runFrames[this.runCount++] = frame;
+          }
+        }
         for (const index of indices) this.indexData[offset++] = source * stride + index;
       }
       this.indexBuffer.update(offset * 4);
@@ -876,6 +971,25 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
     this.vertexBuffer.update(n * stride * 64);
     // Invalidate local bounds after vertex changes (needed for masks/culling).
     this.onViewUpdate();
+  }
+  /** Ordered texture runs preserve transparent particle sorting across Sprite images. */
+  drawMaterialPasses(renderer: WebGLRenderer): void {
+    const shader = this.shader!;
+    if (!this.sheetTextures.length) {
+      renderer.encoder.draw({ geometry: this.geometry, shader });
+      return;
+    }
+    for (let i = 0; i < this.runCount; i++) {
+      const texture = this.sheetTextures[this.runFrames[i]!]!;
+      shader.resources.uTexture = texture.source;
+      shader.resources.colorUniforms.uniforms.uTextureSRGB = this.frameSRGB[this.runFrames[i]!]!;
+      renderer.encoder.draw({
+        geometry: this.geometry,
+        shader,
+        start: this.runStarts[i]!,
+        size: this.runSizes[i]!,
+      });
+    }
   }
   override destroy(): void {
     const geometry = this.geometry,

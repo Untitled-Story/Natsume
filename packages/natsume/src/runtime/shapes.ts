@@ -1,3 +1,4 @@
+import type { SpriteShapeSampler } from './sprite-shape.js';
 import { check } from '../errors.js';
 import type { DeepReadonly as R } from '../pack.js';
 import type { ShapeModuleT } from '../format/generated/noa/ir/shape-module.js';
@@ -6,13 +7,14 @@ import type { ConeShapeT } from '../format/generated/noa/ir/cone-shape.js';
 import type { SphereShapeT } from '../format/generated/noa/ir/sphere-shape.js';
 import type { BoxShapeT } from '../format/generated/noa/ir/box-shape.js';
 import type { EdgeShapeT } from '../format/generated/noa/ir/edge-shape.js';
+import type { DonutShapeT } from '../format/generated/noa/ir/donut-shape.js';
 import { ShapeGeometry as G } from '../format/generated/noa/ir/shape-geometry.js';
 import { scalar, random } from './parameters.js';
 
 export function validateShape(s: R<ShapeModuleT>): void {
   const c = s.geometry;
   check(
-    c && s.geometryType >= G.CircleShape && s.geometryType <= G.EdgeShape,
+    c && s.geometryType >= G.CircleShape && s.geometryType <= G.SpriteShape,
     'CAPABILITY',
     'Unsupported shape',
   );
@@ -60,6 +62,7 @@ export function sampleShape(
   out: Float64Array,
   seconds = phase,
   duration = 1,
+  sprite?: SpriteShapeSampler,
 ): void {
   const rnd = (ch: number) => random(seed, serial, ch);
   let x = 0,
@@ -68,7 +71,48 @@ export function sampleShape(
     dx = 0,
     dy = 0,
     dz = 1;
+  if (out.length >= 10) out.fill(1, 6, 10);
   switch (s.geometryType) {
+    case G.SpriteShape: {
+      check(sprite, 'CAPABILITY', 'Sprite emission geometry is unavailable');
+      const d = sprite.definition;
+      const progress = sweep(
+        d.spawnMode === 1 ? 1 : 2,
+        travel(d.spawnSpeed, seconds, duration, random(seed, 0, 74)),
+        0,
+        0,
+        d.spawnSpread,
+      );
+      sprite.sample(rnd(1), rnd(2), rnd(3), serial, out, progress);
+      [x, y, z, dx, dy, dz] = out as unknown as [number, number, number, number, number, number];
+      break;
+    }
+    case G.DonutShape: {
+      const c = s.geometry as R<DonutShapeT>;
+      const divisor = Math.max(1, count - (Math.abs(c.arcRadians - Math.PI * 2) < 1e-6 ? 0 : 1));
+      const angle =
+        sweep(
+          c.arcMode,
+          c.arcRadians > 0
+            ? (travel(c.arcSpeed, seconds, duration, random(seed, 0, 71)) * Math.PI * 2) /
+                c.arcRadians
+            : 0,
+          rnd(1),
+          index / divisor,
+          c.arcSpread,
+        ) * c.arcRadians;
+      const tubeAngle = rnd(2) * Math.PI * 2;
+      // Unity samples tube radius linearly, rather than uniformly by cross-section area.
+      const tube = c.tubeRadius * (1 - c.radiusThickness * rnd(3));
+      const radial = Math.cos(tubeAngle);
+      dx = Math.cos(angle) * radial;
+      dy = Math.sin(angle) * radial;
+      dz = Math.sin(tubeAngle);
+      x = Math.cos(angle) * (c.radius + tube * radial);
+      y = Math.sin(angle) * (c.radius + tube * radial);
+      z = tube * dz;
+      break;
+    }
     case G.CircleShape:
     case G.ConeShape: {
       const c = s.geometry as R<CircleShapeT | ConeShapeT>;

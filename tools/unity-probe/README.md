@@ -33,6 +33,9 @@ pnpm probe:unity --sweeps       # Shape 时间扫描、量化与方向对齐
 pnpm probe:unity --spaces       # 模拟空间、世界重力与线性速度
 pnpm probe:unity --stretch      # 拉伸长度、粒子速度与移动视图
 pnpm probe:unity --meshes       # 多 Mesh、队列 / 系统排序、原生雾效 / 场景深度像素与 submesh 限制
+pnpm probe:unity --sprite-shapes # Sprite placement、空引用、Donut 分布与扫描
+pnpm probe:unity --sprite-rendering # Sprite 翻转、pivot、九宫格、连续 / Adaptive 平铺
+pnpm probe:unity --sprite-sheets # Sprite 序列帧时间边界、几何缩放与 UV
 pnpm probe:unity --scene-materials # 普通 Mesh、submesh 槽、Pass 状态、UV 与 mip 偏移
 pnpm probe:unity --sorting      # 透明粒子索引顺序
 pnpm probe:unity --compatibility # 加权曲线、渐变、限速与序列帧
@@ -90,6 +93,9 @@ pnpm probe:unity --custom-data --update-fixtures
 pnpm probe:unity --sweeps --update-fixtures
 pnpm probe:unity --spaces --update-fixtures
 pnpm probe:unity --meshes --update-fixtures
+pnpm probe:unity --sprite-shapes # Sprite placement、空引用、Donut 分布与扫描
+pnpm probe:unity --sprite-rendering # Sprite 翻转、pivot、九宫格、连续 / Adaptive 平铺
+pnpm probe:unity --sprite-sheets # Sprite 序列帧时间边界、几何缩放与 UV
 pnpm probe:unity --scene-materials --update-fixtures
 pnpm probe:unity --sorting --update-fixtures
 pnpm probe:unity --stretch --update-fixtures

@@ -84,7 +84,7 @@ export function emitterSupport(
       rules.require(
         shape.geometry &&
           shape.geometryType >= ShapeGeometry.CircleShape &&
-          shape.geometryType <= ShapeGeometry.EdgeShape,
+          shape.geometryType <= ShapeGeometry.SpriteShape,
         'CAPABILITY',
         `${path}.geometryType`,
         shape.geometryType,

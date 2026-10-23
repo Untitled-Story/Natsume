@@ -149,6 +149,7 @@ export class Simulation {
           this.diagnostics,
           options.gravity,
           this.scene.nodes.get((c.data as R<ParticleSystemT>).main!.customSpaceNodeId),
+          pack,
         ),
       );
     for (const animation of pack.document.animations)

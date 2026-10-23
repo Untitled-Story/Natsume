@@ -1,6 +1,9 @@
 import { mat4, quat, vec3 } from 'gl-matrix';
 import { check } from '../errors.js';
-import type { DeepReadonly as R } from '../pack.js';
+import { SpriteShapeSampler } from './sprite-shape.js';
+import { ShapeGeometry } from '../format/generated/noa/ir/shape-geometry.js';
+import type { SpriteShapeT } from '../format/generated/noa/ir/sprite-shape.js';
+import type { EffectPack, DeepReadonly as R } from '../pack.js';
 import type { ParticleSystemT } from '../format/generated/noa/ir/particle-system.js';
 import type { EmissionModuleT } from '../format/generated/noa/ir/emission-module.js';
 import type { ShapeModuleT } from '../format/generated/noa/ir/shape-module.js';
@@ -88,7 +91,8 @@ export class Emitter {
   gravity: readonly [number, number, number] = [0, 0, 0];
   private readonly scratch = new Float64Array(3);
   private readonly direction = vec3.create();
-  private readonly birth = new Float64Array(6);
+  private readonly birth = new Float64Array(10);
+  private readonly spriteShape: SpriteShapeSampler | undefined;
   private nextSerial = 0;
   private time = 0;
   private burstTime = 0;
@@ -117,6 +121,7 @@ export class Emitter {
     diagnostics: Diagnostic[],
     gravity?: readonly [number, number, number],
     readonly customSpaceNode?: SceneNode,
+    pack?: EffectPack,
   ) {
     const main = source.main!;
     this.main = main;
@@ -215,6 +220,10 @@ export class Emitter {
     this.positions = new Float32Array(cap * 3);
     this.velocities = new Float32Array(cap * 3);
     if (this.sizeBySpeed || this.rotationBySpeed) this.moduleSpeeds = new Float32Array(cap);
+    if (this.shape?.geometryType === ShapeGeometry.SpriteShape) {
+      check(pack, 'CAPABILITY', 'Sprite emission requires source assets');
+      this.spriteShape = new SpriteShapeSampler(pack, this.shape.geometry as R<SpriteShapeT>);
+    }
     if (this.sheet?.timeMode === SheetTime.Speed) this.renderVelocities = new Float32Array(cap * 3);
     this.startSizes = new Float32Array(cap * 3);
     this.rotations = new Float32Array(cap * 3);
@@ -598,6 +607,7 @@ export class Emitter {
           this.birth,
           seconds,
           this.main.durationSeconds,
+          this.spriteShape,
         );
         const [px, py, pz, bx, by, bz] = this.birth;
         const m = this.shapeMatrix;
@@ -675,6 +685,9 @@ export class Emitter {
           this.rotations[o + 1]! + (Math.hypot(dx, dz) < 1e-8 ? -Math.PI / 2 : Math.atan2(dx, dz));
       }
       color(this.main.color, t, rnd(11), this.startColors, i * 4);
+      if (this.spriteShape)
+        for (let channel = 0; channel < 4; channel++)
+          this.startColors[i * 4 + channel]! *= this.birth[6 + channel]!;
       this.updateCustom(i, 0);
       const age = (amount - n - 1 + remainder) * spacing;
       if (age > 0) this.advanceParticles(age, i);

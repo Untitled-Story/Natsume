@@ -43,8 +43,12 @@ export function sheetFrame(
         )
       : (progress % 1) * 0.9999;
   const start = Math.max(0, Math.min(1, scalar(sheet.startFrame, 0, startRandom)));
-  const singleRow = sheet.animation === SheetAnimation.SingleRow;
-  const count = sheet.columns * (singleRow ? 1 : sheet.rows);
+  const sprites = sheet.mode === 1;
+  const singleRow = !sprites && sheet.animation === SheetAnimation.SingleRow;
+  const count = sprites
+    ? sheet.spriteAssetIds.length
+    : sheet.columns * (singleRow ? 1 : sheet.rows);
+  if (!count) return 0;
   let value =
     (sheet.timeMode === SheetTime.FPS
       ? (seconds * sheet.fps) / count

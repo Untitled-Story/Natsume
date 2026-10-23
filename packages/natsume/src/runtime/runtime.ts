@@ -1,3 +1,9 @@
+import { spriteTextureKey } from '../rendering/sprite-texture.js';
+import { spriteGeometry } from '../rendering/sprite-geometry.js';
+import { MeshRendererT as MeshRendererDefinition } from '../format/generated/noa/ir/mesh-renderer.js';
+import type { SpriteRendererT } from '../format/generated/noa/ir/sprite-renderer.js';
+import { TextureBindingT } from '../format/generated/noa/ir/texture-binding.js';
+import { MaterialT as MaterialDefinition } from '../format/generated/noa/ir/material.js';
 import { SceneMesh, sceneMaterialPasses } from '../rendering/scene-mesh.js';
 import { copyRenderEnvironment, type RenderEnvironment } from '../rendering/render-environment.js';
 import { materialSupport } from '../rendering/material-support.js';
@@ -560,7 +566,7 @@ export class EffectInstance {
 
 export class NatsumeRuntime {
   private readonly instances = new Set<EffectInstance>();
-  private readonly textures = new Map<EffectPack, Map<number, TextureLease>>();
+  private readonly textures = new Map<EffectPack, Map<number | string, TextureLease>>();
   private readonly scripts = new Map<string, ScriptFactory>();
   private disposed = false;
   readonly scriptErrors: 'isolate' | 'throw';
@@ -663,9 +669,21 @@ export class NatsumeRuntime {
             simulation.bindings.materials.get(`${id}:${slot}`) ??
             pack.document.materials.find((m) => m.id === data.materials[slot]);
           check(material, 'SEMANTIC', 'Missing material');
-          const lease = this.acquireTexture(pack, material);
-          releases.push(lease.release);
-          const texture = await lease.promise;
+          const frames = emitter.sheet?.mode === 1 ? emitter.sheet.spriteAssetIds : [];
+          const sheetTextures: Texture[] = [];
+          for (const frame of frames) {
+            const sprite = pack.document.assets.find((a) => a.id === frame)!.sprite!;
+            const lease = this.acquireTexture(
+              pack,
+              spriteMaterial(material, sprite),
+              spriteTextureKey(sprite),
+            );
+            releases.push(lease.release);
+            sheetTextures.push(await lease.promise);
+          }
+          const lease = frames.length ? undefined : this.acquireTexture(pack, material);
+          if (lease) releases.push(lease.release);
+          const texture = sheetTextures[0] ?? (await lease!.promise);
           check(!this.disposed, 'DISPOSED', 'Runtime was destroyed during instantiation');
           const mesh = new ParticleMesh(
             emitter,
@@ -675,6 +693,7 @@ export class NatsumeRuntime {
             pack,
             options.particleEnvironment,
             options.renderEnvironment,
+            sheetTextures,
           );
           mesh.animationEnabled = () => simulation.bindings.enabled.get(id) ?? false;
           instance.addMesh(mesh);
@@ -712,6 +731,44 @@ export class NatsumeRuntime {
           instance.addMesh(mesh);
         }
       }
+      for (const component of pack.components) {
+        if (
+          component.dataType !== ComponentData.SpriteRenderer ||
+          !rendererCanPlay(pack, component.id, component.enabled)
+        )
+          continue;
+        const node = simulation.scene.nodes.get(component.nodeId);
+        if (!node) continue;
+        const definition = component.data as R<SpriteRendererT>;
+        if (!definition.spriteAssetId) continue;
+        const sprite = pack.document.assets.find((a) => a.id === definition.spriteAssetId)!.sprite!;
+        const geometry = spriteGeometry(pack, sprite, definition);
+        if (!geometry.indices.length) continue;
+        for (const [slot, id] of definition.materials.entries()) {
+          if (!id) continue;
+          const original =
+            simulation.bindings.materials.get(`${component.id}:${slot}`) ??
+            pack.document.materials.find((m) => m.id === id)!;
+          const material = spriteMaterial(original, sprite);
+          const lease = this.acquireTexture(pack, material, spriteTextureKey(sprite));
+          releases.push(lease.release);
+          const texture = await lease.promise;
+          check(!this.disposed, 'DISPOSED', 'Runtime has been destroyed');
+          const renderer = new MeshRendererDefinition(
+            0,
+            [id],
+            definition.sortingLayerId,
+            definition.sortingLayerIndex,
+            definition.sortingOrder,
+          );
+          const mesh = new SceneMesh(node, renderer, material, geometry, 0, texture, pack);
+          mesh.animationEnabled = () => simulation.bindings.enabled.get(component.id) ?? false;
+          mesh.rendererColor = () =>
+            simulation.bindings.spriteColors.get(component.id) ?? definition.color!;
+          mesh.sortAtPivot = definition.sortPoint === 1;
+          instance.addMesh(mesh);
+        }
+      }
       instance.initializeScripts();
       for (const issue of compatibility.issues)
         if (
@@ -737,6 +794,7 @@ export class NatsumeRuntime {
   private acquireTexture(
     pack: EffectPack,
     material: R<MaterialT>,
+    cacheKey: number | string = material.id,
   ): { promise: Promise<Texture>; release: () => void } {
     if (material.textures.length === 0)
       return { promise: Promise.resolve(Texture.WHITE), release: () => {} };
@@ -745,7 +803,7 @@ export class NatsumeRuntime {
       cache = new Map();
       this.textures.set(pack, cache);
     }
-    let lease = cache.get(material.id);
+    let lease = cache.get(cacheKey);
     if (!lease) {
       const binding = material.textures[0];
       check(binding, 'CAPABILITY', 'Material requires a texture');
@@ -797,7 +855,7 @@ export class NatsumeRuntime {
         });
       });
       lease = record;
-      cache.set(material.id, record);
+      cache.set(cacheKey, record);
     }
     lease.refs++;
     const record = lease,
@@ -810,7 +868,7 @@ export class NatsumeRuntime {
         released = true;
         if (--record.refs === 0) {
           this.retainedPixels -= record.pixels;
-          activeCache.delete(material.id);
+          activeCache.delete(cacheKey);
           if (activeCache.size === 0) this.textures.delete(pack);
           void record.promise.then(
             (texture) => {
@@ -836,4 +894,18 @@ export class NatsumeRuntime {
     this.scripts.clear();
     if (failure) throw failure;
   }
+}
+
+/** Sprite image selection changes only the resource; animated material values remain live. */
+function spriteMaterial(
+  original: R<MaterialT>,
+  sprite: R<import('../format/generated/noa/ir/sprite-asset.js').SpriteAssetT>,
+): MaterialDefinition {
+  const material = Object.assign(new MaterialDefinition(), original);
+  const binding = Object.assign(new TextureBindingT(), original.textures[0]);
+  binding.imageId = sprite.imageAssetId;
+  binding.sampler = sprite.sampler as import('../format/generated/noa/ir/sampler.js').SamplerT;
+  binding.colorSpace = sprite.colorSpace;
+  material.textures = [binding];
+  return material;
 }

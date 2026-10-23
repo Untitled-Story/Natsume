@@ -53,6 +53,12 @@ const unit = (value: number, name: string) =>
 export const SUPPORTED_FEATURES: Readonly<Record<string, number>> = Object.freeze(
   Object.fromEntries(
     [
+      'asset.sprite',
+      'scene.sprite-renderer',
+      'animation.sprite',
+      'particle.texture-sheet-sprites',
+      'particle.shape.sprite',
+      'particle.shape.donut',
       'scene.mesh-renderer',
       'material.unity-sprite-default',
       'material.texture-vertex-color',
@@ -108,17 +114,7 @@ export const SUPPORTED_FEATURES: Readonly<Record<string, number>> = Object.freez
 export const KNOWN_FEATURES: Readonly<Record<string, number>> = Object.freeze({
   ...SUPPORTED_FEATURES,
   ...Object.fromEntries(
-    [
-      'asset.sprite',
-      'scene.sprite-renderer',
-      'render.sprite-mask',
-      'material.unity-ui-default',
-      'ui.canvas',
-      'particle.shape.sprite',
-      'particle.shape.donut',
-      'particle.texture-sheet-sprites',
-      'animation.sprite',
-    ].map((name) => [name, 1]),
+    ['render.sprite-mask', 'material.unity-ui-default', 'ui.canvas'].map((name) => [name, 1]),
   ),
 });
 

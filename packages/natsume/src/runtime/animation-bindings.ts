@@ -33,6 +33,7 @@ export interface CompiledBinding {
 export class AnimationBindings {
   readonly systems = new Map<number, ParticleSystemT>();
   readonly materials = new Map<string, MaterialT>();
+  readonly spriteColors = new Map<number, import('../format/generated/noa/ir/color.js').ColorT>();
   readonly enabled = new Map<number, boolean>();
   private readonly resets: (() => void)[] = [];
   constructor(
@@ -48,6 +49,20 @@ export class AnimationBindings {
           const state = structuredClone(c.data) as ParticleSystemT;
           this.systems.set(c.id, state);
           this.resets.push(() => restore(state, c.data!));
+        }
+        if (
+          c?.dataType === C.SpriteRenderer &&
+          b.property === P.SpriteColor &&
+          !this.spriteColors.has(c.id)
+        ) {
+          const original = (
+            c.data as R<import('../format/generated/noa/ir/sprite-renderer.js').SpriteRendererT>
+          ).color!;
+          const state = structuredClone(
+            original,
+          ) as import('../format/generated/noa/ir/color.js').ColorT;
+          this.spriteColors.set(c.id, state);
+          this.resets.push(() => Object.assign(state, original));
         }
         if (
           c &&
@@ -231,6 +246,15 @@ export class AnimationBindings {
             main.size!.y![field] = v[0]!;
             main.size!.z![field] = v[0]!;
           }
+        };
+        break;
+      }
+      case P.SpriteColor: {
+        const c = this.spriteColors.get(b.targetId);
+        check(c, 'SEMANTIC', 'Missing animated Sprite color');
+        read = () => [c.r, c.g, c.b, c.a];
+        write = (v) => {
+          [c.r, c.g, c.b, c.a] = v as [number, number, number, number];
         };
         break;
       }

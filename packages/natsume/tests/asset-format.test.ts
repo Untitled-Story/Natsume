@@ -236,10 +236,8 @@ it('loads forward Sprite dependencies by ID without inventing a Sprite file or c
       disposed: false,
     },
   );
-  expect(report.issues).toContainEqual(
-    expect.objectContaining({ code: 'CAPABILITY', field: 'features.asset.sprite' }),
-  );
-  expect(() => new Simulation(p)).toThrow(/not implemented/);
+  expect(report.compatible).toBe(true);
+  expect(() => new Simulation(p)).not.toThrow();
   p.dispose();
 });
 

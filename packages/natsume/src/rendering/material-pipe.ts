@@ -6,6 +6,7 @@ import { check } from '../errors.js';
 export interface MaterialDraw extends Mesh {
   readonly materialDefinition: { readonly renderState: R<RenderStateT> | null };
   prepareEnvironment(): void;
+  drawMaterialPasses?(renderer: WebGLRenderer): void;
 }
 
 /** Executes source pass state, restoring GL values that Pixi does not track. */
@@ -157,7 +158,8 @@ class MaterialAdaptor extends GlMeshAdaptor {
       const shader = mesh.shader!;
       shader.groups[100] = renderer.globalUniforms.bindGroup;
       shader.groups[101] = pipe.localUniformsBindGroup;
-      renderer.encoder.draw({ geometry: mesh.geometry, shader });
+      if (draw.drawMaterialPasses) draw.drawMaterialPasses(renderer);
+      else renderer.encoder.draw({ geometry: mesh.geometry, shader });
     } finally {
       renderer.colorMask.setMask(previousMask);
       gl.depthFunc(depth);

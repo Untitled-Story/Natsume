@@ -21,6 +21,9 @@ async function saveJson(path, contents) {
 const tool = dirname(fileURLToPath(import.meta.url));
 const root = resolve(tool, '../..');
 const version = '2022.3.21f1';
+const spriteSheets = process.argv.includes('--sprite-sheets');
+const spriteRendering = process.argv.includes('--sprite-rendering');
+const spriteShapes = process.argv.includes('--sprite-shapes');
 const sceneMaterials = process.argv.includes('--scene-materials');
 const events = process.argv.includes('--events');
 const bySpeed = process.argv.includes('--by-speed');
@@ -44,7 +47,10 @@ const customData = process.argv.includes('--custom-data');
 const stretch = process.argv.includes('--stretch');
 const rectLayout = process.argv.includes('--rect-layout');
 assert(
-  Number(sceneMaterials) +
+  Number(spriteSheets) +
+    Number(spriteRendering) +
+    Number(spriteShapes) +
+    Number(sceneMaterials) +
     Number(events) +
     Number(bySpeed) +
     Number(bindings) +
@@ -80,51 +86,57 @@ const project = resolve(root, 'data/unity-probe');
 const output = resolve(
   root,
   'data/unity-baselines',
-  sceneMaterials
-    ? 'scene-materials'
-    : events
-      ? 'events'
-      : bySpeed
-        ? 'by-speed'
-        : bindings
-          ? 'animation-bindings'
-          : animation
-            ? 'animation'
-            : meshes
-              ? 'meshes'
-              : compatibility
-                ? 'compatibility'
-                : noiseStatistics
-                  ? process.env.NATSUME_NOISE_STATISTICS_INPUT
-                    ? 'noise-statistics-custom'
-                    : 'noise-statistics'
-                  : customData
-                    ? 'custom-data'
-                    : stretch
-                      ? 'stretch'
-                      : rectLayout
-                        ? 'layout'
-                        : noiseOptions
-                          ? 'noise-options'
-                          : sweeps
-                            ? 'sweeps'
-                            : spaces
-                              ? 'spaces'
-                              : sorting
-                                ? 'sorting'
-                                : basicShapes
-                                  ? 'basic-shapes'
-                                  : rotationPrewarm
-                                    ? 'rotation-prewarm'
-                                    : layout
-                                      ? 'prefab-layout'
-                                      : boundaries
-                                        ? 'boundaries'
-                                        : distributions
-                                          ? 'random'
-                                          : shape
-                                            ? 'shape'
-                                            : '.',
+  spriteSheets
+    ? 'sprite-sheets'
+    : spriteRendering
+      ? 'sprite-rendering'
+      : spriteShapes
+        ? 'sprite-shapes'
+        : sceneMaterials
+          ? 'scene-materials'
+          : events
+            ? 'events'
+            : bySpeed
+              ? 'by-speed'
+              : bindings
+                ? 'animation-bindings'
+                : animation
+                  ? 'animation'
+                  : meshes
+                    ? 'meshes'
+                    : compatibility
+                      ? 'compatibility'
+                      : noiseStatistics
+                        ? process.env.NATSUME_NOISE_STATISTICS_INPUT
+                          ? 'noise-statistics-custom'
+                          : 'noise-statistics'
+                        : customData
+                          ? 'custom-data'
+                          : stretch
+                            ? 'stretch'
+                            : rectLayout
+                              ? 'layout'
+                              : noiseOptions
+                                ? 'noise-options'
+                                : sweeps
+                                  ? 'sweeps'
+                                  : spaces
+                                    ? 'spaces'
+                                    : sorting
+                                      ? 'sorting'
+                                      : basicShapes
+                                        ? 'basic-shapes'
+                                        : rotationPrewarm
+                                          ? 'rotation-prewarm'
+                                          : layout
+                                            ? 'prefab-layout'
+                                            : boundaries
+                                              ? 'boundaries'
+                                              : distributions
+                                                ? 'random'
+                                                : shape
+                                                  ? 'shape'
+                                                  : '.',
 );
 const baseline = resolve(output, fitting ? 'noise-fit-output.json' : `unity-${version}.json`);
 await mkdir(output, { recursive: true });
@@ -159,7 +171,10 @@ const child = spawn(
   editor,
   [
     '-batchmode',
-    ...(sceneMaterials ||
+    ...(spriteSheets ||
+    spriteRendering ||
+    spriteShapes ||
+    sceneMaterials ||
     meshes ||
     compatibility ||
     layout ||
@@ -175,51 +190,57 @@ const child = spawn(
     '-projectPath',
     project,
     '-executeMethod',
-    sceneMaterials
-      ? 'NatsumeSceneMaterialProbe.Run'
-      : events
-        ? 'NatsumeEventProbe.Run'
-        : bySpeed
-          ? 'NatsumeBySpeedProbe.Run'
-          : bindings
-            ? 'NatsumeBindingProbe.Run'
-            : animation
-              ? 'NatsumeAnimationProbe.Run'
-              : meshes
-                ? 'NatsumeMeshProbe.Run'
-                : compatibility
-                  ? 'NatsumeCompatibilityProbe.Run'
-                  : noiseStatistics
-                    ? 'NatsumeNoiseStatisticsProbe.Run'
-                    : customData
-                      ? 'NatsumeCustomDataProbe.Run'
-                      : stretch
-                        ? 'NatsumeStretchProbe.Run'
-                        : rectLayout
-                          ? 'NatsumeLayoutProbe.Run'
-                          : noiseOptions
-                            ? 'NatsumeNoiseOptionsProbe.Run'
-                            : sweeps
-                              ? 'NatsumeSweepProbe.Run'
-                              : spaces
-                                ? 'NatsumeSpaceProbe.Run'
-                                : sorting
-                                  ? 'NatsumeSortingProbe.Run'
-                                  : basicShapes
-                                    ? 'NatsumeBasicShapeProbe.Run'
-                                    : rotationPrewarm
-                                      ? 'NatsumeRotationPrewarmProbe.Run'
-                                      : shape
-                                        ? 'NatsumeShapeProbe.Run'
-                                        : distributions
-                                          ? 'NatsumeRandomProbe.Run'
-                                          : layout
-                                            ? 'NatsumePrefabLayoutProbe.Run'
-                                            : boundaries
-                                              ? 'NatsumeBoundaryProbe.Run'
-                                              : fitting
-                                                ? 'NatsumeNoiseFitProbe.Run'
-                                                : 'NatsumeProbe.Run',
+    spriteSheets
+      ? 'NatsumeSpriteSheetProbe.Run'
+      : spriteRendering
+        ? 'NatsumeSpriteRenderProbe.Run'
+        : spriteShapes
+          ? 'NatsumeSpriteShapeProbe.Run'
+          : sceneMaterials
+            ? 'NatsumeSceneMaterialProbe.Run'
+            : events
+              ? 'NatsumeEventProbe.Run'
+              : bySpeed
+                ? 'NatsumeBySpeedProbe.Run'
+                : bindings
+                  ? 'NatsumeBindingProbe.Run'
+                  : animation
+                    ? 'NatsumeAnimationProbe.Run'
+                    : meshes
+                      ? 'NatsumeMeshProbe.Run'
+                      : compatibility
+                        ? 'NatsumeCompatibilityProbe.Run'
+                        : noiseStatistics
+                          ? 'NatsumeNoiseStatisticsProbe.Run'
+                          : customData
+                            ? 'NatsumeCustomDataProbe.Run'
+                            : stretch
+                              ? 'NatsumeStretchProbe.Run'
+                              : rectLayout
+                                ? 'NatsumeLayoutProbe.Run'
+                                : noiseOptions
+                                  ? 'NatsumeNoiseOptionsProbe.Run'
+                                  : sweeps
+                                    ? 'NatsumeSweepProbe.Run'
+                                    : spaces
+                                      ? 'NatsumeSpaceProbe.Run'
+                                      : sorting
+                                        ? 'NatsumeSortingProbe.Run'
+                                        : basicShapes
+                                          ? 'NatsumeBasicShapeProbe.Run'
+                                          : rotationPrewarm
+                                            ? 'NatsumeRotationPrewarmProbe.Run'
+                                            : shape
+                                              ? 'NatsumeShapeProbe.Run'
+                                              : distributions
+                                                ? 'NatsumeRandomProbe.Run'
+                                                : layout
+                                                  ? 'NatsumePrefabLayoutProbe.Run'
+                                                  : boundaries
+                                                    ? 'NatsumeBoundaryProbe.Run'
+                                                    : fitting
+                                                      ? 'NatsumeNoiseFitProbe.Run'
+                                                      : 'NatsumeProbe.Run',
     ...(stretch || bindings ? [] : ['-quit']),
     '-logFile',
     log,
@@ -236,6 +257,36 @@ await new Promise((accept, reject) => {
 });
 const current = JSON.parse(await readFile(baseline, 'utf8'));
 assert.equal(current.unityVersion, version);
+if (spriteSheets) {
+  assert.equal(current.cases.length, 7);
+  if (process.argv.includes('--update-fixtures'))
+    await saveJson(
+      resolve(root, 'data/unity-baselines/fixtures/unity-sprite-sheets.json'),
+      JSON.stringify(current, null, 2) + '\n',
+    );
+  console.log('Sprite sheet geometry: ' + current.cases.length);
+  process.exit(0);
+}
+if (spriteRendering) {
+  assert.equal(current.cases.length, 32);
+  if (process.argv.includes('--update-fixtures'))
+    await saveJson(
+      resolve(root, 'data/unity-baselines/fixtures/unity-sprite-rendering.json'),
+      JSON.stringify(current, null, 2) + '\n',
+    );
+  console.log('Sprite rendering: ' + current.cases.length);
+  process.exit(0);
+}
+if (spriteShapes) {
+  assert.equal(current.cases.length, 52);
+  if (process.argv.includes('--update-fixtures'))
+    await saveJson(
+      resolve(root, 'data/unity-baselines/fixtures/unity-sprite-shapes.json'),
+      JSON.stringify(current, null, 2) + '\n',
+    );
+  console.log('Sprite/torus measurements: ' + current.cases.length);
+  process.exit(0);
+}
 if (sceneMaterials) {
   assert.equal(current.cases.length, 12);
   assert.equal(current.states.length, 63);

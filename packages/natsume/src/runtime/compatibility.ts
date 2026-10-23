@@ -1,3 +1,11 @@
+import { spriteTextureKey } from '../rendering/sprite-texture.js';
+import { spriteGeometry } from '../rendering/sprite-geometry.js';
+import { ParticleModuleData } from '../format/generated/noa/ir/particle-module-data.js';
+import type { TextureSheetModuleT } from '../format/generated/noa/ir/texture-sheet-module.js';
+import type { ShapeModuleT } from '../format/generated/noa/ir/shape-module.js';
+import { ShapeGeometry } from '../format/generated/noa/ir/shape-geometry.js';
+import type { SpriteShapeT } from '../format/generated/noa/ir/sprite-shape.js';
+import type { SpriteRendererT } from '../format/generated/noa/ir/sprite-renderer.js';
 import { copyRenderEnvironment } from '../rendering/render-environment.js';
 import { materialSupport, rendererEnvironmentSupport } from '../rendering/material-support.js';
 import { sceneMaterialPasses } from '../rendering/scene-mesh.js';
@@ -69,7 +77,7 @@ export class NatsumeCompatibilityError extends NatsumeError {
 export interface CompatibilityContext {
   readonly maxTextureSize: number;
   readonly availableTexturePixels: number;
-  readonly cachedMaterialIds: ReadonlySet<number>;
+  readonly cachedMaterialIds: ReadonlySet<number | string>;
   readonly imageBitmapAvailable: boolean;
   readonly hasScript: (identity: ScriptIdentity) => boolean;
   readonly disposed: boolean;
@@ -300,7 +308,7 @@ export function checkCompatibility(
   append(global.issues);
   let vertices = 0,
     pixels = 0;
-  const materials = new Set<number>();
+  const materials = new Set<number | string>();
   for (const c of components) {
     const rules = new SupportChecks();
     if (c.dataType === C.ParticleSystem) {
@@ -323,6 +331,21 @@ export function checkCompatibility(
       rules.issues.push(
         ...emitterSupport(source, gravity, nodeIds.has(source.main!.customSpaceNodeId)),
       );
+      for (const [index, module] of source.modules.entries()) {
+        if (module.dataType !== ParticleModuleData.ShapeModule) continue;
+        const shape = module.data as R<ShapeModuleT>;
+        if (shape.geometryType !== ShapeGeometry.SpriteShape) continue;
+        const id = (shape.geometry as R<SpriteShapeT>).spriteAssetId;
+        const sprite = pack.document.assets.find((a) => a.id === id)?.sprite;
+        const mesh = sprite && pack.getMesh(sprite.meshAssetId);
+        rules.require(
+          !id || (mesh?.positions.length && mesh.indices.length),
+          'CAPABILITY',
+          `modules.${index}.geometry.spriteAssetId`,
+          id,
+          'Sprite emission requires nonempty source geometry',
+        );
+      }
     }
     if (c.dataType === C.RectLayout && entry.roots.includes(c.nodeId)) {
       const rect = c.data as R<RectLayoutT>;
@@ -379,7 +402,28 @@ export function checkCompatibility(
             ),
           );
           vertices += system.main!.maxParticles * rendererVertexStride(definition, pack);
-          if (!materials.has(material.id)) {
+          const sheet = system.modules.find(
+            (m) => m.dataType === ParticleModuleData.TextureSheetModule,
+          )?.data as R<TextureSheetModuleT> | undefined;
+          if (sheet?.mode === 1)
+            for (const frame of sheet.spriteAssetIds) {
+              const sprite = pack.document.assets.find((a) => a.id === frame)!.sprite!;
+              const key = spriteTextureKey(sprite);
+              if (materials.has(key)) continue;
+              materials.add(key);
+              const size = pack.getImageSize(sprite.imageAssetId)!;
+              rules.require(
+                size.width <= context.maxTextureSize &&
+                  size.height <= context.maxTextureSize &&
+                  size.width * size.height <= 16_777_216,
+                'LIMIT',
+                'sprite.textureSize',
+                size,
+                'Sprite texture exceeds GPU/pixel limit',
+              );
+              if (!context.cachedMaterialIds.has(key)) pixels += size.width * size.height;
+            }
+          if (sheet?.mode !== 1 && !materials.has(material.id)) {
             materials.add(material.id);
             for (const [index, binding] of material.textures.entries()) {
               const size = pack.getImageSize(binding.imageId);
@@ -403,6 +447,56 @@ export function checkCompatibility(
               if (!context.cachedMaterialIds.has(material.id)) pixels += size.width * size.height;
             }
           }
+        }
+      }
+    }
+    if (rendererCanPlay(pack, c.id, c.enabled) && c.dataType === C.SpriteRenderer) {
+      const d = c.data as R<SpriteRendererT>;
+      const sprite = pack.document.assets.find((a) => a.id === d.spriteAssetId)?.sprite;
+      if (sprite && d.materials.some(Boolean)) {
+        const geometry = pack.getMesh(sprite.meshAssetId)!;
+        let count = geometry.positions.length;
+        try {
+          count = spriteGeometry(pack, sprite, d).positions.length;
+        } catch (error) {
+          if (!(error instanceof NatsumeError)) throw error;
+          rules.require(false, error.code, 'sprite.geometry', d.spriteAssetId, error.message);
+        }
+        rules.require(
+          count <= 1_000_000,
+          'LIMIT',
+          'sprite.geometry',
+          count,
+          'Sprite geometry exceeds vertex budget',
+        );
+        for (const id of d.materials) {
+          if (!id) continue;
+          const m = pack.document.materials.find((m) => m.id === id)!;
+          rules.issues.push(...materialSupport(m, pack, options.renderEnvironment));
+          if (m.model === 4 || m.model === 5)
+            rules.require(
+              env,
+              'HOST',
+              'particleEnvironment',
+              env,
+              'Legacy materials require an explicit particleEnvironment',
+            );
+          vertices += count;
+        }
+        const key = spriteTextureKey(sprite);
+        if (!materials.has(key)) {
+          materials.add(key);
+          const size = pack.getImageSize(sprite.imageAssetId)!;
+          rules.require(
+            size.width <= context.maxTextureSize &&
+              size.height <= context.maxTextureSize &&
+              size.width * size.height <= 16_777_216,
+            'LIMIT',
+            'sprite.textureSize',
+            size,
+            'Sprite texture exceeds GPU/pixel limit',
+          );
+          if (!context.cachedMaterialIds.has(key)) pixels += size.width * size.height;
         }
       }
     }

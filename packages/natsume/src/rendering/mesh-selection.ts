@@ -1,5 +1,6 @@
 import type { DeepReadonly as R, EffectPack } from '../pack.js';
 import type { ParticleRendererT } from '../format/generated/noa/ir/particle-renderer.js';
+import { ParticleModuleData } from '../format/generated/noa/ir/particle-module-data.js';
 import { MeshDistribution } from '../format/generated/noa/ir/mesh-distribution.js';
 import { RenderMode } from '../format/generated/noa/ir/render-mode.js';
 
@@ -28,11 +29,29 @@ export function selectMesh(
 
 /** Per-particle vertex reservation; all mesh choices share one fixed stride. */
 export function rendererVertexStride(definition: R<ParticleRendererT>, pack: EffectPack): number {
+  const system = pack.components?.find((c) => c.id === definition.systemComponentId)?.data as
+    | import('../pack.js').DeepReadonly<
+        import('../format/generated/noa/ir/particle-system.js').ParticleSystemT
+      >
+    | undefined;
+  const sheet = system?.modules.find((m) => m.dataType === ParticleModuleData.TextureSheetModule)
+    ?.data as
+    | import('../pack.js').DeepReadonly<
+        import('../format/generated/noa/ir/texture-sheet-module.js').TextureSheetModuleT
+      >
+    | undefined;
+  const spriteVertices =
+    sheet?.mode === 1
+      ? sheet.spriteAssetIds.map((id) => {
+          const sprite = pack.document.assets.find((a) => a.id === id)?.sprite;
+          return sprite ? (pack.getMesh(sprite.meshAssetId)?.positions.length ?? 0) : 0;
+        })
+      : [];
   return definition.mode === RenderMode.None
     ? 0
     : definition.mode === RenderMode.Mesh
       ? Math.max(0, ...definition.meshAssetIds.map((id) => pack.getMesh(id)?.positions.length ?? 0))
-      : 4;
+      : Math.max(4, ...spriteVertices);
 }
 
 /** Slot one belongs to Trails; remaining slots render the particle geometry in order. */

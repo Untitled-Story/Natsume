@@ -1,3 +1,4 @@
+import { SpriteRendererT } from '../src/format/generated/noa/ir/sprite-renderer.js';
 import { ActionT } from '../src/format/generated/noa/ir/action.js';
 import { ActionKind } from '../src/format/generated/noa/ir/action-kind.js';
 import { FeatureRequirementT } from '../src/format/generated/noa/ir/feature-requirement.js';
@@ -478,4 +479,38 @@ it('loads executable transform capabilities and rejects missing capability decla
   expect(s.scene.nodes.get(3)!.localScale.x).toBeCloseTo(1 / 60);
   d.features = [];
   await expect(loadPack(await archive(encode(d)))).rejects.toThrow('animation.transform');
+});
+
+it('isolates Sprite color channels and restores source values on restart', () => {
+  const doc = minimalDocument();
+  const renderer = new SpriteRendererT();
+  renderer.color = new ColorT(0.2, 0.3, 0.4, 0.5);
+  doc.components.push(new ComponentT(10, 1, true, C.SpriteRenderer, renderer));
+  const binding = new BindingT();
+  binding.targetId = 10;
+  binding.property = P.SpriteColor;
+  const track = new TrackT(
+    binding,
+    D.ColorTrack,
+    new ColorTrackT(animationCurve(0.2, 0.8), null, null, animationCurve(0.5, 1)),
+  );
+  const clip = new AnimationT();
+  clip.tracks = [track];
+  doc.animations = [clip];
+  const pack = new EffectPack(
+    doc,
+    { format: 'noa-package', version: 1, noir_version: [2, 0], document: 'scene.noir', files: [] },
+    new Map(),
+    new Map(),
+  );
+  const a = new AnimationBindings(pack, new Scene(pack, [1])),
+    b = new AnimationBindings(pack, new Scene(pack, [1]));
+  a.compile(track)!.sample(0.5);
+  expect(a.spriteColors.get(10)!.r).toBeCloseTo(0.5);
+  expect(a.spriteColors.get(10)!.a).toBeCloseTo(0.75);
+  expect(a.spriteColors.get(10)!.g).toBe(0.3);
+  expect(b.spriteColors.get(10)!.r).toBe(0.2);
+  a.reset();
+  expect(a.spriteColors.get(10)).toEqual(renderer.color);
+  pack.dispose();
 });

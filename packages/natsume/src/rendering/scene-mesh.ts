@@ -7,6 +7,7 @@ import type { DeepReadonly as R, EffectPack } from '../pack.js';
 import type { MeshT } from '../format/generated/noa/mesh/mesh.js';
 import type { MeshRendererT } from '../format/generated/noa/ir/mesh-renderer.js';
 import type { MaterialT } from '../format/generated/noa/ir/material.js';
+import type { ColorT } from '../format/generated/noa/ir/color.js';
 import type { SceneNode } from '../runtime/scene.js';
 import { MaterialModel as M } from '../format/generated/noa/ir/material-model.js';
 import { meshUV } from '../format/mesh-attributes.js';
@@ -28,6 +29,7 @@ uniform mat3 uWorldTransformMatrix;
 uniform mat3 uTransformMatrix;
 uniform vec4 uWorldColorAlpha;
 uniform vec4 uColor;
+uniform vec4 uRendererColor;
 out vec2 vUV;
 out vec4 vColor;
 out float vCustom;
@@ -38,7 +40,7 @@ void main(){
   vec3 p=uProjectionMatrix*uWorldTransformMatrix*uTransformMatrix*vec3(world.xy,1.0);
   gl_Position=vec4(p.xy,world.z,1.0);
   vec4 host=uColor*uWorldColorAlpha;
-  vColor=aColor*vec4(host.a>0.0?host.rgb/host.a:vec3(0.0),host.a);
+  vColor=aColor*uRendererColor*vec4(host.a>0.0?host.rgb/host.a:vec3(0.0),host.a);
   vUV=aUV*uTextureST.xy+uTextureST.zw;vUV.y=1.0-vUV.y;vCustom=0.0;vDepth=max(0.0,dot(uDepth,uSourceWorld*vec4(aPosition,1.0)));vScreenUV=vec2(p.x*.5+.5,.5-p.y*.5);
 }`;
 
@@ -66,6 +68,8 @@ export class SceneMesh extends Mesh<Geometry, Shader> {
   renderEnvironment: RenderEnvironment | undefined;
   environment: ParticleEnvironment | undefined;
   animationEnabled = () => true;
+  rendererColor: (() => R<ColorT>) | undefined;
+  sortAtPivot = false;
   private readonly buffers: Buffer[];
   private readonly needsMipBias: boolean;
   private readonly boundsCenter: readonly number[];
@@ -138,6 +142,7 @@ export class SceneMesh extends Mesh<Geometry, Shader> {
           uModel: { value: code, type: 'f32' },
           uMipBias: { value: 0, type: 'f32' },
           uTint: { value: new Float32Array([1, 1, 1, 1]), type: 'vec4<f32>' },
+          uRendererColor: { value: new Float32Array([1, 1, 1, 1]), type: 'vec4<f32>' },
           uLinear: { value: 0, type: 'f32' },
           uTextureSRGB: { value: binding?.colorSpace === 1 ? 1 : 0, type: 'f32' },
           uVertexSRGB: { value: 0, type: 'f32' },
@@ -202,6 +207,8 @@ export class SceneMesh extends Mesh<Geometry, Shader> {
     u.uInvFade = this.materialDefinition.floats.find((f) => f.name === '_InvFade')?.value ?? 1;
     const c = this.materialDefinition.tint;
     (u.uTint as Float32Array).set(c ? [c.r, c.g, c.b, c.a] : [1, 1, 1, 1]);
+    const r = this.rendererColor?.();
+    (u.uRendererColor as Float32Array).set(r ? [r.r, r.g, r.b, r.a] : [1, 1, 1, 1]);
   }
   sync(matrix: ArrayLike<number>, colorSpace: SourceColorSpace): void {
     this.visible = this.animationEnabled() && this.node.activeInHierarchy;
@@ -215,11 +222,12 @@ export class SceneMesh extends Mesh<Geometry, Shader> {
     (u.uDisplayWorld as Float32Array).set(this.transform);
     (u.uSourceWorld as Float32Array).set(this.node.worldMatrix);
     u.uLinear = colorSpace === 'linear' ? 1 : 0;
-    this.sortingDepth =
-      this.transform[2]! * this.boundsCenter[0]! +
-      this.transform[6]! * this.boundsCenter[1]! +
-      this.transform[10]! * this.boundsCenter[2]! +
-      this.transform[14]!;
+    this.sortingDepth = this.sortAtPivot
+      ? this.transform[14]!
+      : this.transform[2]! * this.boundsCenter[0]! +
+        this.transform[6]! * this.boundsCenter[1]! +
+        this.transform[10]! * this.boundsCenter[2]! +
+        this.transform[14]!;
     this.prepareEnvironment();
   }
   override destroy(): void {
