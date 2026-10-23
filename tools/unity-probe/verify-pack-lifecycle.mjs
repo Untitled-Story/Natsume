@@ -65,6 +65,31 @@ try {
                 effect = await runtime.instantiate(pack, {
                   entryId: entry.id,
                   seed: 12345,
+                  renderEnvironment: { globalMipBias: 0 },
+                  canvasEnvironment: {
+                    displays: { 0: { width: 640, height: 360 } },
+                    mainCamera: {
+                      viewMatrix: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, -1, 0, 0, 0, -1000, 1],
+                      projectionMatrix: [
+                        2 / 640,
+                        0,
+                        0,
+                        0,
+                        0,
+                        2 / 360,
+                        0,
+                        0,
+                        0,
+                        0,
+                        -2 / 1999.9,
+                        0,
+                        0,
+                        0,
+                        -2000.1 / 1999.9,
+                        1,
+                      ],
+                    },
+                  },
                   parentLayout: { width: 640, height: 360 },
                   particleEnvironment: {
                     gravity: [0, -9.81, 0],

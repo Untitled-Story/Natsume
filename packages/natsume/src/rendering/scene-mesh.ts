@@ -1,3 +1,4 @@
+import type { StencilStateT } from '../format/generated/noa/ir/stencil-state.js';
 import { check } from '../errors.js';
 import { applyMaterialEnvironment } from './material-environment.js';
 import type { ParticleEnvironment } from './particle-environment.js';
@@ -30,18 +31,23 @@ uniform mat3 uTransformMatrix;
 uniform vec4 uWorldColorAlpha;
 uniform vec4 uColor;
 uniform vec4 uRendererColor;
+uniform mat4 uUIClipMatrix;
 out vec2 vUV;
 out vec4 vColor;
 out float vCustom;
 out float vDepth;
 out vec2 vScreenUV;
+out vec2 vUIPosition;
+out vec3 vCanvasPosition;
 void main(){
   vec4 world=uDisplayWorld*vec4(aPosition,1.0);
-  vec3 p=uProjectionMatrix*uWorldTransformMatrix*uTransformMatrix*vec3(world.xy,1.0);
-  gl_Position=vec4(p.xy,world.z,1.0);
+  vCanvasPosition=vec3(world.xy,world.w);
+  vUIPosition=(uUIClipMatrix*uSourceWorld*vec4(aPosition,1.0)).xy;
+  vec3 p=uProjectionMatrix*uWorldTransformMatrix*uTransformMatrix*vec3(world.xy,world.w);
+  gl_Position=vec4(p.xy,world.z,world.w);
   vec4 host=uColor*uWorldColorAlpha;
   vColor=aColor*uRendererColor*vec4(host.a>0.0?host.rgb/host.a:vec3(0.0),host.a);
-  vUV=aUV*uTextureST.xy+uTextureST.zw;vUV.y=1.0-vUV.y;vCustom=0.0;vDepth=max(0.0,dot(uDepth,uSourceWorld*vec4(aPosition,1.0)));vScreenUV=vec2(p.x*.5+.5,.5-p.y*.5);
+  vUV=aUV*uTextureST.xy+uTextureST.zw;vUV.y=1.0-vUV.y;vCustom=0.0;vDepth=max(0.0,dot(uDepth,uSourceWorld*vec4(aPosition,1.0)));vScreenUV=vec2(p.x/world.w*.5+.5,.5-p.y/world.w*.5);
 }`;
 
 /** Ordinary renderers map material slots to submeshes; surplus slots repeat the final submesh. */
@@ -58,6 +64,10 @@ export function sceneMaterialPasses(
 
 export class SceneMesh extends Mesh<Geometry, Shader> {
   override readonly renderPipeId = 'natsumeMaterials';
+  canvasViewport: readonly number[] | undefined;
+  spriteMaskPasses: readonly SceneMesh[] | undefined;
+  maskStencil: R<StencilStateT> | undefined;
+  alphaCutoff = -1;
   sortingDepth = 0;
   readonly definition: {
     readonly sortingLayerRank: number;
@@ -68,11 +78,24 @@ export class SceneMesh extends Mesh<Geometry, Shader> {
   renderEnvironment: RenderEnvironment | undefined;
   environment: ParticleEnvironment | undefined;
   animationEnabled = () => true;
-  rendererColor: (() => R<ColorT>) | undefined;
+  rendererColor: (() => R<Pick<ColorT, 'r' | 'g' | 'b' | 'a'>>) | undefined;
   sortAtPivot = false;
   private readonly buffers: Buffer[];
   private readonly needsMipBias: boolean;
-  private readonly boundsCenter: readonly number[];
+  private boundsCenter: readonly number[];
+  geometryProvider: (() => R<MeshT> | undefined) | undefined;
+  uiSortGroup: number | undefined;
+  uiSequence = 0;
+  uiOverlay = false;
+  sortAtNode: SceneNode | undefined;
+  uiStencil = false;
+  clipContext:
+    | (() =>
+        | { matrix: ArrayLike<number>; rect: ArrayLike<number>; softness: ArrayLike<number> }
+        | undefined)
+    | undefined;
+  beforeSync: (() => void) | undefined;
+  uiContext: (() => { gamma: boolean; alphaClip: boolean }) | undefined;
   constructor(
     readonly node: SceneNode,
     definition: R<MeshRendererT>,
@@ -141,6 +164,15 @@ export class SceneMesh extends Mesh<Geometry, Shader> {
           uDepth: { value: new Float32Array(4), type: 'vec4<f32>' },
           uModel: { value: code, type: 'f32' },
           uMipBias: { value: 0, type: 'f32' },
+          uUIAlphaClip: { value: 0, type: 'f32' },
+          uMaskCutoff: { value: -1, type: 'f32' },
+          uCanvasClip: { value: 0, type: 'f32' },
+          uCanvasRect: { value: new Float32Array(4), type: 'vec4<f32>' },
+          uUIClipMatrix: { value: mat4.create(), type: 'mat4x4<f32>' },
+          uUIClip: { value: 0, type: 'f32' },
+          uUIRect: { value: new Float32Array(4), type: 'vec4<f32>' },
+          uUISoftness: { value: new Float32Array(2), type: 'vec2<f32>' },
+          uTextureSampleAdd: { value: new Float32Array(4), type: 'vec4<f32>' },
           uTint: { value: new Float32Array([1, 1, 1, 1]), type: 'vec4<f32>' },
           uRendererColor: { value: new Float32Array([1, 1, 1, 1]), type: 'vec4<f32>' },
           uLinear: { value: 0, type: 'f32' },
@@ -171,7 +203,7 @@ export class SceneMesh extends Mesh<Geometry, Shader> {
         min[i] = Math.min(min[i]!, p[k]);
         max[i] = Math.max(max[i]!, p[k]);
       }
-    this.boundsCenter = min.map((v, i) => (v + max[i]!) * 0.5);
+    this.boundsCenter = min.map((v, i) => (Number.isFinite(v) ? (v + max[i]!) * 0.5 : 0));
     this.buffers = [vb, ib];
     this.needsMipBias = usesGlobalMipBias(pack, materialDefinition);
     this.definition = {
@@ -181,6 +213,31 @@ export class SceneMesh extends Mesh<Geometry, Shader> {
     };
     this.label = `Natsume mesh ${node.id}`;
     // Preserve source geometry; ST and origin conversion are applied to UV once.
+  }
+  private updateGeometry(mesh: R<MeshT>): void {
+    const uv = meshUV(mesh, this.materialDefinition.textures[0]?.uvSet ?? 0),
+      data = new Float32Array(mesh.positions.length * 9);
+    for (let i = 0; i < mesh.positions.length; i++) {
+      const p = mesh.positions[i]!,
+        t = uv[i],
+        c = mesh.colors[i];
+      data.set(
+        [p.x, p.y, p.z, t?.x ?? 0, t?.y ?? 0, c?.x ?? 1, c?.y ?? 1, c?.z ?? 1, c?.w ?? 1],
+        i * 9,
+      );
+    }
+    this.buffers[0]!.data = data;
+    this.buffers[1]!.data = Uint32Array.from(mesh.indices);
+    this.geometry.indexCount = mesh.indices.length;
+    const min = [Infinity, Infinity, Infinity],
+      max = [-Infinity, -Infinity, -Infinity];
+    for (const p of mesh.positions)
+      for (const [i, k] of (['x', 'y', 'z'] as const).entries()) {
+        min[i] = Math.min(min[i]!, p[k]);
+        max[i] = Math.max(max[i]!, p[k]);
+      }
+    this.boundsCenter = min.map((v, i) => (Number.isFinite(v) ? (v + max[i]!) * 0.5 : 0));
+    this.onViewUpdate();
   }
   prepareEnvironment(): void {
     const u = this.shader!.resources.colorUniforms.uniforms;
@@ -207,12 +264,31 @@ export class SceneMesh extends Mesh<Geometry, Shader> {
     u.uInvFade = this.materialDefinition.floats.find((f) => f.name === '_InvFade')?.value ?? 1;
     const c = this.materialDefinition.tint;
     (u.uTint as Float32Array).set(c ? [c.r, c.g, c.b, c.a] : [1, 1, 1, 1]);
+    u.uCanvasClip = this.canvasViewport ? 1 : 0;
+    if (this.canvasViewport) (u.uCanvasRect as Float32Array).set(this.canvasViewport);
+    const clip = this.clipContext?.();
+    u.uUIClip = clip ? 1 : 0;
+    if (clip) {
+      (u.uUIClipMatrix as Float32Array).set(clip.matrix);
+      (u.uUIRect as Float32Array).set(clip.rect);
+      (u.uUISoftness as Float32Array).set(clip.softness);
+    }
+    const ui = this.uiContext?.();
+    u.uVertexSRGB = ui?.gamma ? 1 : 0;
+    u.uUIAlphaClip = ui?.alphaClip ? 1 : 0;
+    u.uMaskCutoff = this.alphaCutoff;
+    const add = this.materialDefinition.vectors.find((v) => v.name === '_TextureSampleAdd')?.value;
+    (u.uTextureSampleAdd as Float32Array).set(add ? [add.x, add.y, add.z, add.w] : [0, 0, 0, 0]);
     const r = this.rendererColor?.();
     (u.uRendererColor as Float32Array).set(r ? [r.r, r.g, r.b, r.a] : [1, 1, 1, 1]);
   }
   sync(matrix: ArrayLike<number>, colorSpace: SourceColorSpace): void {
     this.visible = this.animationEnabled() && this.node.activeInHierarchy;
     if (!this.visible) return;
+    this.beforeSync?.();
+    if (!this.visible) return;
+    const geometry = this.geometryProvider?.();
+    if (geometry) this.updateGeometry(geometry);
     // Unity compensates odd negative object scale when classifying triangle faces.
     const cull = this.materialDefinition.renderState!.cull;
     if (cull !== 0)
@@ -228,6 +304,11 @@ export class SceneMesh extends Mesh<Geometry, Shader> {
         this.transform[6]! * this.boundsCenter[1]! +
         this.transform[10]! * this.boundsCenter[2]! +
         this.transform[14]!;
+    if (this.sortAtNode) {
+      const w = this.sortAtNode.worldMatrix;
+      this.sortingDepth =
+        matrix[2]! * w[12]! + matrix[6]! * w[13]! + matrix[10]! * w[14]! + matrix[14]!;
+    }
     this.prepareEnvironment();
   }
   override destroy(): void {

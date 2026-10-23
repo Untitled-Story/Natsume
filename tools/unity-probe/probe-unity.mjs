@@ -21,6 +21,10 @@ async function saveJson(path, contents) {
 const tool = dirname(fileURLToPath(import.meta.url));
 const root = resolve(tool, '../..');
 const version = '2022.3.21f1';
+const spriteMasks = process.argv.includes('--sprite-masks');
+const uiMasks = process.argv.includes('--ui-masks');
+const images = process.argv.includes('--images');
+const canvas = process.argv.includes('--canvas');
 const spriteSheets = process.argv.includes('--sprite-sheets');
 const spriteRendering = process.argv.includes('--sprite-rendering');
 const spriteShapes = process.argv.includes('--sprite-shapes');
@@ -47,7 +51,11 @@ const customData = process.argv.includes('--custom-data');
 const stretch = process.argv.includes('--stretch');
 const rectLayout = process.argv.includes('--rect-layout');
 assert(
-  Number(spriteSheets) +
+  Number(spriteMasks) +
+    Number(uiMasks) +
+    Number(images) +
+    Number(canvas) +
+    Number(spriteSheets) +
     Number(spriteRendering) +
     Number(spriteShapes) +
     Number(sceneMaterials) +
@@ -86,61 +94,76 @@ const project = resolve(root, 'data/unity-probe');
 const output = resolve(
   root,
   'data/unity-baselines',
-  spriteSheets
-    ? 'sprite-sheets'
-    : spriteRendering
-      ? 'sprite-rendering'
-      : spriteShapes
-        ? 'sprite-shapes'
-        : sceneMaterials
-          ? 'scene-materials'
-          : events
-            ? 'events'
-            : bySpeed
-              ? 'by-speed'
-              : bindings
-                ? 'animation-bindings'
-                : animation
-                  ? 'animation'
-                  : meshes
-                    ? 'meshes'
-                    : compatibility
-                      ? 'compatibility'
-                      : noiseStatistics
-                        ? process.env.NATSUME_NOISE_STATISTICS_INPUT
-                          ? 'noise-statistics-custom'
-                          : 'noise-statistics'
-                        : customData
-                          ? 'custom-data'
-                          : stretch
-                            ? 'stretch'
-                            : rectLayout
-                              ? 'layout'
-                              : noiseOptions
-                                ? 'noise-options'
-                                : sweeps
-                                  ? 'sweeps'
-                                  : spaces
-                                    ? 'spaces'
-                                    : sorting
-                                      ? 'sorting'
-                                      : basicShapes
-                                        ? 'basic-shapes'
-                                        : rotationPrewarm
-                                          ? 'rotation-prewarm'
-                                          : layout
-                                            ? 'prefab-layout'
-                                            : boundaries
-                                              ? 'boundaries'
-                                              : distributions
-                                                ? 'random'
-                                                : shape
-                                                  ? 'shape'
-                                                  : '.',
+  spriteMasks
+    ? 'sprite-masks'
+    : uiMasks
+      ? 'ui-masks'
+      : images
+        ? 'images'
+        : canvas
+          ? 'canvas'
+          : spriteSheets
+            ? 'sprite-sheets'
+            : spriteRendering
+              ? 'sprite-rendering'
+              : spriteShapes
+                ? 'sprite-shapes'
+                : sceneMaterials
+                  ? 'scene-materials'
+                  : events
+                    ? 'events'
+                    : bySpeed
+                      ? 'by-speed'
+                      : bindings
+                        ? 'animation-bindings'
+                        : animation
+                          ? 'animation'
+                          : meshes
+                            ? 'meshes'
+                            : compatibility
+                              ? 'compatibility'
+                              : noiseStatistics
+                                ? process.env.NATSUME_NOISE_STATISTICS_INPUT
+                                  ? 'noise-statistics-custom'
+                                  : 'noise-statistics'
+                                : customData
+                                  ? 'custom-data'
+                                  : stretch
+                                    ? 'stretch'
+                                    : rectLayout
+                                      ? 'layout'
+                                      : noiseOptions
+                                        ? 'noise-options'
+                                        : sweeps
+                                          ? 'sweeps'
+                                          : spaces
+                                            ? 'spaces'
+                                            : sorting
+                                              ? 'sorting'
+                                              : basicShapes
+                                                ? 'basic-shapes'
+                                                : rotationPrewarm
+                                                  ? 'rotation-prewarm'
+                                                  : layout
+                                                    ? 'prefab-layout'
+                                                    : boundaries
+                                                      ? 'boundaries'
+                                                      : distributions
+                                                        ? 'random'
+                                                        : shape
+                                                          ? 'shape'
+                                                          : '.',
 );
 const baseline = resolve(output, fitting ? 'noise-fit-output.json' : `unity-${version}.json`);
 await mkdir(output, { recursive: true });
 await cp(resolve(tool, 'project'), project, { recursive: true });
+// Use the Editor-bundled UI assembly in the ignored probe project; no package download is required.
+await cp(
+  resolve(dirname(editor), '../Resources/PackageManager/BuiltInPackages/com.unity.ugui/Runtime'),
+  resolve(project, 'Assets/UnityUI'),
+  { recursive: true },
+);
+
 const prefabSource = resolve(
   process.env.NATSUME_PREFAB_SOURCE ?? resolve(root, '../Noa/data/scenario/effect/kirakira_01_rip'),
 );
@@ -171,7 +194,12 @@ const child = spawn(
   editor,
   [
     '-batchmode',
-    ...(spriteSheets ||
+    '-noUpm',
+    ...(spriteMasks ||
+    uiMasks ||
+    images ||
+    canvas ||
+    spriteSheets ||
     spriteRendering ||
     spriteShapes ||
     sceneMaterials ||
@@ -186,61 +214,68 @@ const child = spawn(
     noiseStatistics
       ? []
       : ['-nographics']),
-    '-noUpm',
     '-projectPath',
     project,
     '-executeMethod',
-    spriteSheets
-      ? 'NatsumeSpriteSheetProbe.Run'
-      : spriteRendering
-        ? 'NatsumeSpriteRenderProbe.Run'
-        : spriteShapes
-          ? 'NatsumeSpriteShapeProbe.Run'
-          : sceneMaterials
-            ? 'NatsumeSceneMaterialProbe.Run'
-            : events
-              ? 'NatsumeEventProbe.Run'
-              : bySpeed
-                ? 'NatsumeBySpeedProbe.Run'
-                : bindings
-                  ? 'NatsumeBindingProbe.Run'
-                  : animation
-                    ? 'NatsumeAnimationProbe.Run'
-                    : meshes
-                      ? 'NatsumeMeshProbe.Run'
-                      : compatibility
-                        ? 'NatsumeCompatibilityProbe.Run'
-                        : noiseStatistics
-                          ? 'NatsumeNoiseStatisticsProbe.Run'
-                          : customData
-                            ? 'NatsumeCustomDataProbe.Run'
-                            : stretch
-                              ? 'NatsumeStretchProbe.Run'
-                              : rectLayout
-                                ? 'NatsumeLayoutProbe.Run'
-                                : noiseOptions
-                                  ? 'NatsumeNoiseOptionsProbe.Run'
-                                  : sweeps
-                                    ? 'NatsumeSweepProbe.Run'
-                                    : spaces
-                                      ? 'NatsumeSpaceProbe.Run'
-                                      : sorting
-                                        ? 'NatsumeSortingProbe.Run'
-                                        : basicShapes
-                                          ? 'NatsumeBasicShapeProbe.Run'
-                                          : rotationPrewarm
-                                            ? 'NatsumeRotationPrewarmProbe.Run'
-                                            : shape
-                                              ? 'NatsumeShapeProbe.Run'
-                                              : distributions
-                                                ? 'NatsumeRandomProbe.Run'
-                                                : layout
-                                                  ? 'NatsumePrefabLayoutProbe.Run'
-                                                  : boundaries
-                                                    ? 'NatsumeBoundaryProbe.Run'
-                                                    : fitting
-                                                      ? 'NatsumeNoiseFitProbe.Run'
-                                                      : 'NatsumeProbe.Run',
+    spriteMasks
+      ? 'NatsumeSpriteMaskProbe.Run'
+      : uiMasks
+        ? 'NatsumeUIMaskProbe.Run'
+        : images
+          ? 'NatsumeImageProbe.Run'
+          : canvas
+            ? 'NatsumeCanvasProbe.Run'
+            : spriteSheets
+              ? 'NatsumeSpriteSheetProbe.Run'
+              : spriteRendering
+                ? 'NatsumeSpriteRenderProbe.Run'
+                : spriteShapes
+                  ? 'NatsumeSpriteShapeProbe.Run'
+                  : sceneMaterials
+                    ? 'NatsumeSceneMaterialProbe.Run'
+                    : events
+                      ? 'NatsumeEventProbe.Run'
+                      : bySpeed
+                        ? 'NatsumeBySpeedProbe.Run'
+                        : bindings
+                          ? 'NatsumeBindingProbe.Run'
+                          : animation
+                            ? 'NatsumeAnimationProbe.Run'
+                            : meshes
+                              ? 'NatsumeMeshProbe.Run'
+                              : compatibility
+                                ? 'NatsumeCompatibilityProbe.Run'
+                                : noiseStatistics
+                                  ? 'NatsumeNoiseStatisticsProbe.Run'
+                                  : customData
+                                    ? 'NatsumeCustomDataProbe.Run'
+                                    : stretch
+                                      ? 'NatsumeStretchProbe.Run'
+                                      : rectLayout
+                                        ? 'NatsumeLayoutProbe.Run'
+                                        : noiseOptions
+                                          ? 'NatsumeNoiseOptionsProbe.Run'
+                                          : sweeps
+                                            ? 'NatsumeSweepProbe.Run'
+                                            : spaces
+                                              ? 'NatsumeSpaceProbe.Run'
+                                              : sorting
+                                                ? 'NatsumeSortingProbe.Run'
+                                                : basicShapes
+                                                  ? 'NatsumeBasicShapeProbe.Run'
+                                                  : rotationPrewarm
+                                                    ? 'NatsumeRotationPrewarmProbe.Run'
+                                                    : shape
+                                                      ? 'NatsumeShapeProbe.Run'
+                                                      : distributions
+                                                        ? 'NatsumeRandomProbe.Run'
+                                                        : layout
+                                                          ? 'NatsumePrefabLayoutProbe.Run'
+                                                          : boundaries
+                                                            ? 'NatsumeBoundaryProbe.Run'
+                                                            : fitting
+                                                              ? 'NatsumeNoiseFitProbe.Run'
+                                                              : 'NatsumeProbe.Run',
     ...(stretch || bindings ? [] : ['-quit']),
     '-logFile',
     log,
@@ -257,6 +292,46 @@ await new Promise((accept, reject) => {
 });
 const current = JSON.parse(await readFile(baseline, 'utf8'));
 assert.equal(current.unityVersion, version);
+if (spriteMasks) {
+  assert.equal(current.cases.length, 365);
+  if (process.argv.includes('--update-fixtures'))
+    await saveJson(
+      resolve(root, 'data/unity-baselines/fixtures/unity-sprite-masks.json'),
+      JSON.stringify(current, null, 2) + '\n',
+    );
+  console.log('Sprite mask observations: ' + current.cases.length);
+  process.exit(0);
+}
+if (uiMasks) {
+  assert.equal(current.cases.length, 59);
+  if (process.argv.includes('--update-fixtures'))
+    await saveJson(
+      resolve(root, 'data/unity-baselines/fixtures/unity-ui-masks.json'),
+      JSON.stringify(current, null, 2) + '\n',
+    );
+  console.log('UI mask observations: ' + current.cases.length);
+  process.exit(0);
+}
+if (images) {
+  assert.equal(current.cases.length, 176);
+  if (process.argv.includes('--update-fixtures'))
+    await saveJson(
+      resolve(root, 'data/unity-baselines/fixtures/unity-images.json'),
+      JSON.stringify(current, null, 2) + '\n',
+    );
+  console.log('Image observations: ' + current.cases.length);
+  process.exit(0);
+}
+if (canvas) {
+  assert.equal(current.cases.length, 24);
+  if (process.argv.includes('--update-fixtures'))
+    await saveJson(
+      resolve(root, 'data/unity-baselines/fixtures/unity-canvas.json'),
+      JSON.stringify(current, null, 2) + '\n',
+    );
+  console.log('Canvas observations: ' + current.cases.length);
+  process.exit(0);
+}
 if (spriteSheets) {
   assert.equal(current.cases.length, 7);
   if (process.argv.includes('--update-fixtures'))

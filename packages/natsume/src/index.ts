@@ -31,3 +31,9 @@ export {
 } from './runtime/animation-events.js';
 
 export { type RenderEnvironment } from './rendering/render-environment.js';
+
+export {
+  type CanvasDisplay,
+  type CanvasView,
+  type CanvasEnvironment,
+} from './rendering/canvas-environment.js';

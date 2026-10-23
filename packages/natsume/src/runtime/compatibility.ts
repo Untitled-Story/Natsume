@@ -1,3 +1,12 @@
+import { MaterialModel as M } from '../format/generated/noa/ir/material-model.js';
+import { canvasSortingRank } from '../rendering/canvas-sorting.js';
+import { imageGeometry } from '../rendering/image-geometry.js';
+import type { UIImageT } from '../format/generated/noa/ir/uiimage.js';
+import { Scene } from './scene.js';
+import type { SpriteMaskT } from '../format/generated/noa/ir/sprite-mask.js';
+import { copyCanvasEnvironment } from '../rendering/canvas-environment.js';
+import { canvasEnvironmentSupport } from '../rendering/canvas-layout.js';
+import type { CanvasT } from '../format/generated/noa/ir/canvas.js';
 import { spriteTextureKey } from '../rendering/sprite-texture.js';
 import { spriteGeometry } from '../rendering/sprite-geometry.js';
 import { ParticleModuleData } from '../format/generated/noa/ir/particle-module-data.js';
@@ -222,6 +231,13 @@ export function checkCompatibility(
       error.message,
     );
   }
+  let canvasEnvironment;
+  try {
+    canvasEnvironment = copyCanvasEnvironment(options.canvasEnvironment);
+  } catch (error) {
+    if (!(error instanceof NatsumeError)) throw error;
+    global.require(false, error.code, 'canvasEnvironment', undefined, error.message);
+  }
   const gravity = env?.gravity ?? options.gravity;
   global.require(
     gravity === undefined ||
@@ -309,6 +325,7 @@ export function checkCompatibility(
   let vertices = 0,
     pixels = 0;
   const materials = new Set<number | string>();
+  let uiScene: Scene | undefined;
   for (const c of components) {
     const rules = new SupportChecks();
     if (c.dataType === C.ParticleSystem) {
@@ -357,6 +374,129 @@ export function checkCompatibility(
         undefined,
         `Node ${c.nodeId} requires an external parent layout size`,
       );
+    }
+    if (c.dataType === C.Canvas && c.enabled) {
+      const canvas = c.data as R<CanvasT>;
+      rules.issues.push(...canvasEnvironmentSupport(canvas, canvasEnvironment));
+      rules.require(
+        canvasSortingRank(pack, canvas.sortingLayerId) !== undefined,
+        'HOST',
+        'sortingLayerId',
+        canvas.sortingLayerId,
+        'Canvas sorting layer rank is absent from package renderer records',
+      );
+    }
+    if (c.dataType === C.UIImage) {
+      const image = c.data as R<UIImageT>;
+      try {
+        const scene = (uiScene ??= new Scene(pack, entry.roots, layout, canvasEnvironment)),
+          node = scene.nodes.get(c.nodeId)!;
+        rules.require(
+          node.rect && node.layout,
+          'SEMANTIC',
+          'rectLayout',
+          undefined,
+          'UIImage requires RectLayout',
+        );
+        if (node.rect && node.layout)
+          vertices +=
+            (components.some((m) => m.dataType === C.UIMask && m.nodeId === c.nodeId) ? 2 : 1) *
+            imageGeometry(pack, image, node.layout.width, node.layout.height, node.rect.pivot!)
+              .positions.length;
+        let depth = 0;
+        for (let parent = node; parent.parent; parent = parent.parent) {
+          if (scene.canvases.get(parent.id)?.overrideSorting) break;
+          depth += components.filter(
+            (m) =>
+              m.nodeId === parent.parent!.id &&
+              m.dataType === C.UIMask &&
+              m.enabled &&
+              (m.data as { graphicComponentId: number }).graphicComponentId !== 0,
+          ).length;
+        }
+        const capacity = components.some((m) => m.dataType === C.SpriteMask) ? 7 : 8;
+        rules.require(
+          depth <= capacity &&
+            (depth < capacity ||
+              !components.some(
+                (m) => m.nodeId === c.nodeId && m.dataType === C.UIMask && m.enabled,
+              )),
+          'LIMIT',
+          'stencil.depth',
+          depth,
+          'Combined source masks exceed eight stencil bits',
+        );
+      } catch (error) {
+        if (!(error instanceof NatsumeError)) throw error;
+        rules.require(false, error.code, 'geometry', undefined, error.message);
+      }
+      const material = pack.document.materials.find((m) => m.id === image.materialId);
+      if (material) {
+        rules.issues.push(...materialSupport(material, pack, options.renderEnvironment, true));
+        if (
+          material.model === M.LegacyParticleAdditive ||
+          material.model === M.LegacyParticleAlphaBlend
+        )
+          rules.require(
+            env,
+            'CAPABILITY',
+            'particleEnvironment',
+            env,
+            'Legacy materials require an explicit particleEnvironment',
+          );
+      }
+      const sprite = pack.document.assets.find(
+        (a) => a.id === (image.overrideSpriteAssetId || image.spriteAssetId),
+      )?.sprite;
+      const textures = sprite
+        ? [{ id: sprite.imageAssetId, key: spriteTextureKey(sprite) }]
+        : (material?.textures ?? []).map((t) => ({ id: t.imageId, key: material!.id }));
+      for (const texture of textures) {
+        if (materials.has(texture.key)) continue;
+        materials.add(texture.key);
+        const size = pack.getImageSize(texture.id);
+        rules.require(size, 'SEMANTIC', 'texture', texture.id, 'Missing UI texture bytes');
+        if (!size) continue;
+        rules.require(
+          size.width <= context.maxTextureSize &&
+            size.height <= context.maxTextureSize &&
+            size.width * size.height <= 16_777_216,
+          'LIMIT',
+          'textureSize',
+          size,
+          'UI texture exceeds GPU/pixel limit',
+        );
+        if (!context.cachedMaterialIds.has(texture.key)) pixels += size.width * size.height;
+      }
+    }
+    if (c.dataType === C.SpriteMask) {
+      const definition = c.data as R<SpriteMaskT>,
+        sprite = pack.document.assets.find((a) => a.id === definition.spriteAssetId)?.sprite;
+      if (sprite) {
+        vertices += pack.getMesh(sprite.meshAssetId)!.positions.length;
+        const key = spriteTextureKey(sprite),
+          size = pack.getImageSize(sprite.imageAssetId);
+        rules.require(
+          size,
+          'SEMANTIC',
+          'spriteMask.texture',
+          sprite.imageAssetId,
+          'Missing Sprite Mask texture bytes',
+        );
+        if (size && !materials.has(key)) {
+          materials.add(key);
+          rules.require(
+            size.width <= context.maxTextureSize &&
+              size.height <= context.maxTextureSize &&
+              size.width * size.height <= 16_777_216,
+            'LIMIT',
+            'spriteMask.textureSize',
+            size,
+            'Sprite Mask texture exceeds GPU/pixel limit',
+          );
+          if (!context.cachedMaterialIds.has(key)) pixels += size.width * size.height;
+        }
+      }
     }
     if (c.dataType === C.Animator)
       rules.issues.push(...animatorSupport(c.data as R<AnimatorT>, c.id));

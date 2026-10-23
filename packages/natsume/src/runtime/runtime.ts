@@ -1,9 +1,12 @@
+import { createSpriteMasks } from './sprite-masks.js';
+import { createUIRenderers } from './ui-renderers.js';
+import { spriteMaterial } from '../rendering/sprite-material.js';
+import { copyCanvasEnvironment, type CanvasEnvironment } from '../rendering/canvas-environment.js';
+import { canvasEnvironmentSupport } from '../rendering/canvas-layout.js';
 import { spriteTextureKey } from '../rendering/sprite-texture.js';
 import { spriteGeometry } from '../rendering/sprite-geometry.js';
 import { MeshRendererT as MeshRendererDefinition } from '../format/generated/noa/ir/mesh-renderer.js';
 import type { SpriteRendererT } from '../format/generated/noa/ir/sprite-renderer.js';
-import { TextureBindingT } from '../format/generated/noa/ir/texture-binding.js';
-import { MaterialT as MaterialDefinition } from '../format/generated/noa/ir/material.js';
 import { SceneMesh, sceneMaterialPasses } from '../rendering/scene-mesh.js';
 import { copyRenderEnvironment, type RenderEnvironment } from '../rendering/render-environment.js';
 import { materialSupport } from '../rendering/material-support.js';
@@ -124,6 +127,8 @@ export class NatsumeNode {
 
 export class EffectInstance {
   readonly container = new Container({ label: 'Natsume effect' });
+  private readonly canvasPassOrder = new Map<number, number>();
+  private readonly auxiliaryMeshes: SceneMesh[] = [];
   private readonly meshes: (ParticleMesh | SceneMesh)[] = [];
   private readonly passOrder = new Map<ParticleMesh | SceneMesh, number>();
   private readonly materialOrder: Map<number, number>;
@@ -145,6 +150,7 @@ export class EffectInstance {
   private colorSpace: SourceColorSpace;
   private environment: ParticleEnvironment | undefined;
   private renderEnvironment: RenderEnvironment | undefined;
+  private canvasEnvironment: CanvasEnvironment | undefined;
   constructor(
     readonly simulation: Simulation,
     private readonly runtime: NatsumeRuntime,
@@ -155,6 +161,7 @@ export class EffectInstance {
     this.materialOrder = new Map(simulation.pack.document.materials.map((m, i) => [m.id, i]));
     this.environment = copyEnvironment(options.particleEnvironment);
     this.renderEnvironment = copyRenderEnvironment(options.renderEnvironment);
+    this.canvasEnvironment = copyCanvasEnvironment(options.canvasEnvironment);
     this.colorSpace =
       options.sourceColorSpace ??
       (simulation.pack.document.colorContext?.projectColorSpace === ColorSpace.Linear
@@ -245,9 +252,26 @@ export class EffectInstance {
     this.assertAlive();
     const next = copyRenderEnvironment(value);
     for (const mesh of this.meshes)
-      assertSupport(materialSupport(mesh.materialDefinition, this.simulation.pack, next));
+      assertSupport(
+        materialSupport(
+          mesh.materialDefinition,
+          this.simulation.pack,
+          next,
+          mesh instanceof SceneMesh && mesh.uiSortGroup !== undefined,
+        ),
+      );
     this.renderEnvironment = next;
     for (const mesh of this.meshes) mesh.renderEnvironment = next;
+    this.render();
+  }
+  /** Replaces display sizes and view matrices; invalid inputs preserve the current environment. */
+  setCanvasEnvironment(value: CanvasEnvironment): void {
+    this.assertAlive();
+    const next = copyCanvasEnvironment(value)!;
+    for (const canvas of this.simulation.scene.canvases.values())
+      assertSupport(canvasEnvironmentSupport(canvas, next));
+    this.simulation.scene.setCanvasEnvironment(next);
+    this.canvasEnvironment = next;
     this.render();
   }
   setDisplayMatrix(matrix: ArrayLike<number>): void {
@@ -453,10 +477,19 @@ export class EffectInstance {
       });
     }
   }
+  /** @internal */ addAuxiliaryMesh(mesh: SceneMesh): void {
+    this.auxiliaryMeshes.push(mesh);
+  }
   /** @internal */ addMesh(mesh: ParticleMesh | SceneMesh): void {
     mesh.environment = this.environment;
     mesh.renderEnvironment = this.renderEnvironment;
     this.passOrder.set(mesh, this.meshes.length);
+    if (
+      mesh instanceof SceneMesh &&
+      mesh.uiSortGroup !== undefined &&
+      !this.canvasPassOrder.has(mesh.uiSortGroup)
+    )
+      this.canvasPassOrder.set(mesh.uiSortGroup, this.meshes.length);
     this.meshes.push(mesh);
     this.container.addChild(mesh);
   }
@@ -479,10 +512,11 @@ export class EffectInstance {
       node.inheritedRenderOffsetX = node.renderOffsetX + (node.parent?.inheritedRenderOffsetX ?? 0);
       node.inheritedRenderOffsetY = node.renderOffsetY + (node.parent?.inheritedRenderOffsetY ?? 0);
     }
-    for (const mesh of this.meshes) {
-      const node = mesh.node;
-      mesh.position.set(node.inheritedRenderOffsetX, node.inheritedRenderOffsetY);
-    }
+    for (let pass = 0; pass < 2; pass++)
+      for (const mesh of pass === 0 ? this.auxiliaryMeshes : this.meshes) {
+        const node = mesh.node;
+        mesh.position.set(node.inheritedRenderOffsetX, node.inheritedRenderOffsetY);
+      }
   }
   private syncLayoutBounds(): void {
     const size = this.simulation.scene.layoutSize;
@@ -499,11 +533,25 @@ export class EffectInstance {
   }
   private render(): void {
     this.syncLayoutBounds();
-    for (const mesh of this.meshes) mesh.sync(this.matrix, this.colorSpace);
+    const scene = this.simulation.scene;
+    for (let pass = 0; pass < 2; pass++)
+      for (const mesh of pass === 0 ? this.auxiliaryMeshes : this.meshes) {
+        const root = scene.rootCanvases.get(mesh.node.id);
+        const layout = root === undefined ? undefined : scene.canvasLayouts.get(root);
+        if (mesh instanceof ParticleMesh && layout && scene.canvases.get(root!)?.mode === 1) {
+          mesh.observationMatrix = this.canvasEnvironment!.mainCamera!.viewMatrix;
+        }
+        mesh.canvasViewport = layout?.viewport;
+        mesh.sync(layout?.display ?? this.matrix, this.colorSpace);
+      }
     this.meshes.sort((a, b) => {
       const stage =
-        Number(a.materialDefinition.renderQueue > 2500) -
-        Number(b.materialDefinition.renderQueue > 2500);
+        (a instanceof SceneMesh && a.uiOverlay
+          ? 2
+          : Number(a.materialDefinition.renderQueue > 2500)) -
+        (b instanceof SceneMesh && b.uiOverlay
+          ? 2
+          : Number(b.materialDefinition.renderQueue > 2500));
       if (stage) return stage;
       const layer = a.definition.sortingLayerRank - b.definition.sortingLayerRank;
       const order = a.definition.sortingOrder - b.definition.sortingOrder;
@@ -519,10 +567,19 @@ export class EffectInstance {
       }
       const depth =
         a.sortingDepth + a.definition.sortingFudge - (b.sortingDepth + b.definition.sortingFudge);
-      return (
-        (a.materialDefinition.renderQueue <= 2500 ? depth : -depth) ||
-        this.passOrder.get(a)! - this.passOrder.get(b)!
-      );
+      const distance = a.materialDefinition.renderQueue <= 2500 ? depth : -depth;
+      if (distance) return distance;
+      // Keep a Canvas group contiguous before applying hierarchy enter/exit order.
+      const groupA = a instanceof SceneMesh ? a.uiSortGroup : undefined;
+      const groupB = b instanceof SceneMesh ? b.uiSortGroup : undefined;
+      if (groupA !== undefined && groupA === groupB)
+        return (a as SceneMesh).uiSequence - (b as SceneMesh).uiSequence;
+      if (groupA !== undefined || groupB !== undefined) {
+        const first = (group: number | undefined, mesh: ParticleMesh | SceneMesh) =>
+          group === undefined ? this.passOrder.get(mesh)! : this.canvasPassOrder.get(group)!;
+        return first(groupA, a) - first(groupB, b);
+      }
+      return this.passOrder.get(a)! - this.passOrder.get(b)!;
     });
     for (let i = 0; i < this.meshes.length; i++) {
       const mesh = this.meshes[i]!;
@@ -549,8 +606,11 @@ export class EffectInstance {
     }
     this.destroying = false;
     for (const mesh of this.meshes) mesh.destroy();
+    for (const mesh of this.auxiliaryMeshes) mesh.destroy();
     this.meshes.length = 0;
     this.passOrder.clear();
+    this.canvasPassOrder.clear();
+    this.auxiliaryMeshes.length = 0;
     this.simulation.stop('clear');
     this.simulation.emitters.clear();
     this.nodeViews.clear();
@@ -639,6 +699,14 @@ export class NatsumeRuntime {
       options,
     );
     try {
+      const masks = await createSpriteMasks(pack, simulation, async (material, key) => {
+        const lease = this.acquireTexture(pack, material, key);
+        releases.push(lease.release);
+        const texture = await lease.promise;
+        return texture;
+      });
+      for (const mesh of masks.meshes) instance.addAuxiliaryMesh(mesh);
+      check(!this.disposed, 'DISPOSED', 'Runtime has been destroyed');
       const renderers = pack.components
         .filter(
           (c) =>
@@ -695,6 +763,7 @@ export class NatsumeRuntime {
             options.renderEnvironment,
             sheetTextures,
           );
+          masks.attach(mesh, data);
           mesh.animationEnabled = () => simulation.bindings.enabled.get(id) ?? false;
           instance.addMesh(mesh);
         }
@@ -766,9 +835,18 @@ export class NatsumeRuntime {
           mesh.rendererColor = () =>
             simulation.bindings.spriteColors.get(component.id) ?? definition.color!;
           mesh.sortAtPivot = definition.sortPoint === 1;
+          masks.attach(mesh, definition);
           instance.addMesh(mesh);
         }
       }
+      const ui = await createUIRenderers(pack, simulation, async (material, key) => {
+        const lease = this.acquireTexture(pack, material, key);
+        releases.push(lease.release);
+        const texture = await lease.promise;
+        return texture;
+      });
+      for (const mesh of ui) instance.addMesh(mesh);
+      check(!this.disposed, 'DISPOSED', 'Runtime has been destroyed');
       instance.initializeScripts();
       for (const issue of compatibility.issues)
         if (
@@ -894,18 +972,4 @@ export class NatsumeRuntime {
     this.scripts.clear();
     if (failure) throw failure;
   }
-}
-
-/** Sprite image selection changes only the resource; animated material values remain live. */
-function spriteMaterial(
-  original: R<MaterialT>,
-  sprite: R<import('../format/generated/noa/ir/sprite-asset.js').SpriteAssetT>,
-): MaterialDefinition {
-  const material = Object.assign(new MaterialDefinition(), original);
-  const binding = Object.assign(new TextureBindingT(), original.textures[0]);
-  binding.imageId = sprite.imageAssetId;
-  binding.sampler = sprite.sampler as import('../format/generated/noa/ir/sampler.js').SamplerT;
-  binding.colorSpace = sprite.colorSpace;
-  material.textures = [binding];
-  return material;
 }

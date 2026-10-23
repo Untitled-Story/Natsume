@@ -16,6 +16,7 @@ export function materialSupport(
   material: R<MaterialT>,
   pack: EffectPack,
   environment?: RenderEnvironment,
+  canvasContext = false,
 ): readonly SupportIssue[] {
   const r = new SupportChecks();
   r.require(
@@ -47,7 +48,8 @@ export function materialSupport(
       'Independent stencil faces need a verified source pass',
     );
   r.require(
-    material.renderState?.depthTestSource === 0,
+    material.renderState?.depthTestSource === 0 ||
+      (canvasContext && material.renderState?.depthTestSource === 1),
     'CAPABILITY',
     `materials.${material.id}.renderState.depthTestSource`,
     material.renderState?.depthTestSource,

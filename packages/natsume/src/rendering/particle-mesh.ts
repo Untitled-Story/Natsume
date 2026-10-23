@@ -1,3 +1,5 @@
+import type { SceneMesh } from './scene-mesh.js';
+import type { StencilStateT } from '../format/generated/noa/ir/stencil-state.js';
 import { spriteUVTransform } from './sprite-geometry.js';
 import { Vec3T } from '../format/generated/noa/mesh/vec3.js';
 import { usesGlobalMipBias } from './material-support.js';
@@ -39,6 +41,7 @@ import type { ParticleEnvironment } from './particle-environment.js';
 const EMPTY_UV = Object.freeze({ x: 0, y: 0 });
 const vertex = `#version 300 es
 in vec3 aPosition;
+in float aClipW;
 in vec2 aUV;
 in vec4 aColor;
 in float aCustom;
@@ -60,6 +63,8 @@ out vec4 vColor;
 out float vCustom;
 out float vDepth;
 out vec2 vScreenUV;
+out vec2 vUIPosition;
+out vec3 vCanvasPosition;
 void main(){
   mat3 transform=uProjectionMatrix*uWorldTransformMatrix*uTransformMatrix;
   vec3 p=transform*vec3(aPosition.xy,1.0);
@@ -68,7 +73,9 @@ void main(){
   float size=max(max(extent.x,extent.y)*0.5,0.000001);
   float factor=clamp(uMaxSize/size,uMinSize/size,1.0);
   p.xy=center+(p.xy-center)*factor;
-  gl_Position=vec4(p.xy,aPosition.z,1.0);
+  gl_Position=vec4(p.xy*aClipW,aPosition.z*aClipW,aClipW);
+  vUIPosition=vec2(0.0);
+  vCanvasPosition=vec3(aPosition.xy*aClipW,aClipW);
   vScreenUV=vec2(p.x*0.5+0.5,0.5-p.y*0.5);
   vDepth=max(0.0,uDepthMode>0.5?aCustom:uDepthConstant);
   vec4 host=uColor*uWorldColorAlpha;
@@ -79,11 +86,19 @@ void main(){
 export type SourceColorSpace = 'gamma' | 'linear';
 export class ParticleMesh extends Mesh<Geometry, Shader> {
   override readonly renderPipeId = 'natsumeMaterials';
+  canvasViewport: readonly number[] | undefined;
+  spriteMaskPasses: readonly SceneMesh[] | undefined;
+  maskStencil: R<StencilStateT> | undefined;
+  uiStencil = false;
   readonly colorWriteMask: number;
   readonly straightAlpha: boolean;
   readonly additive: boolean;
   environment: ParticleEnvironment | undefined;
   renderEnvironment: RenderEnvironment | undefined;
+  observationMatrix: ArrayLike<number> | undefined;
+  private readonly clipWeights: Float32Array;
+  private readonly clipBuffer: Buffer;
+  private perspectiveActive = false;
   private readonly needsMipBias: boolean;
   get node() {
     return this.emitter.node;
@@ -119,6 +134,7 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
   private readonly rotationMatrix = mat4.create();
   private readonly viewForward = vec3.create();
   private readonly stretchView = new Float32Array(9);
+  private readonly observation = mat4.create();
   private readonly viewUp = vec3.create();
   private readonly basisRight = vec3.create();
   private readonly basisUp = vec3.create();
@@ -241,8 +257,14 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
       data: indices,
       usage: BufferUsage.INDEX | BufferUsage.COPY_DST,
     });
+    const clipWeights = new Float32Array(stride * emitter.ages.length).fill(1);
+    const clipBuffer = new Buffer({
+      data: clipWeights,
+      usage: BufferUsage.VERTEX | BufferUsage.COPY_DST,
+    });
     const geometry = new Geometry({
       attributes: {
+        aClipW: { buffer: clipBuffer, format: 'float32' },
         aPosition: { buffer: vertexBuffer, format: 'float32x3', stride: 64, offset: 0 },
         aUV: { buffer: vertexBuffer, format: 'float32x2', stride: 64, offset: 12 },
         aColor: { buffer: vertexBuffer, format: 'float32x4', stride: 64, offset: 20 },
@@ -260,6 +282,14 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
         uSceneDepth: Texture.WHITE.source,
         colorUniforms: {
           uMipBias: { value: 0, type: 'f32' },
+          uUIAlphaClip: { value: 0, type: 'f32' },
+          uMaskCutoff: { value: -1, type: 'f32' },
+          uCanvasClip: { value: 0, type: 'f32' },
+          uCanvasRect: { value: new Float32Array(4), type: 'vec4<f32>' },
+          uUIClip: { value: 0, type: 'f32' },
+          uUIRect: { value: new Float32Array(4), type: 'vec4<f32>' },
+          uUISoftness: { value: new Float32Array(2), type: 'vec2<f32>' },
+          uTextureSampleAdd: { value: new Float32Array(4), type: 'vec4<f32>' },
           uModel: {
             value: legacy
               ? additive
@@ -324,6 +354,8 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
     this.environment = environment;
     this.vertices = vertices;
     this.vertexBuffer = vertexBuffer;
+    this.clipWeights = clipWeights;
+    this.clipBuffer = clipBuffer;
     this.indexBuffer = indexBuffer;
     this.indexData = indices;
     this.sortKeys = new Float64Array(emitter.ages.length);
@@ -371,6 +403,9 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
   }
   /** @internal Refreshes host inputs immediately before each draw, including paused instances. */
   prepareEnvironment(): void {
+    const canvasUniforms = this.shader!.resources.colorUniforms.uniforms;
+    canvasUniforms.uCanvasClip = this.canvasViewport ? 1 : 0;
+    if (this.canvasViewport) (canvasUniforms.uCanvasRect as Float32Array).set(this.canvasViewport);
     const env = this.environment,
       fog = env?.fog,
       u = this.shader!.resources.colorUniforms.uniforms;
@@ -418,7 +453,16 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
     if (this.definition.alignment === Alignment.Local)
       mat4.fromQuat(this.rotationMatrix, e.node.worldRotation);
     else mat4.identity(this.rotationMatrix);
-    vec3.set(this.viewForward, matrix[2]!, matrix[6]!, matrix[10]!);
+    let observation = matrix;
+    if (this.observationMatrix) {
+      mat4.copy(this.observation, this.observationMatrix as mat4);
+      for (let c = 0; c < 4; c++) {
+        this.observation[1 + c * 4] = -this.observation[1 + c * 4]!;
+        this.observation[2 + c * 4] = -this.observation[2 + c * 4]!;
+      }
+      observation = this.observation;
+    }
+    vec3.set(this.viewForward, observation[2]!, observation[6]!, observation[10]!);
     if (vec3.length(this.viewForward) < 1e-8) vec3.set(this.viewForward, 0, 0, 1);
     vec3.normalize(this.viewForward, this.viewForward);
     let minimumX = Infinity,
@@ -427,7 +471,7 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
       maximumX = -Infinity,
       maximumY = -Infinity,
       maximumZ = -Infinity;
-    vec3.set(this.basisRight, matrix[0]!, matrix[4]!, matrix[8]!);
+    vec3.set(this.basisRight, observation[0]!, observation[4]!, observation[8]!);
     vec3.cross(this.viewUp, this.viewForward, this.basisRight);
     if (vec3.length(this.viewUp) < 1e-8) vec3.set(this.viewUp, 0, 1, 0);
     vec3.normalize(this.viewUp, this.viewUp);
@@ -442,9 +486,11 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
     if (normalizeStretch) {
       for (let axis = 0; axis < 3; axis++) {
         const scale =
-          Math.fround(Math.hypot(matrix[axis]!, matrix[axis + 4]!, matrix[axis + 8]!)) || 1;
+          Math.fround(
+            Math.hypot(observation[axis]!, observation[axis + 4]!, observation[axis + 8]!),
+          ) || 1;
         for (let column = 0; column < 3; column++)
-          stretchView[axis + column * 3] = matrix[axis + column * 4]! / scale;
+          stretchView[axis + column * 3] = observation[axis + column * 4]! / scale;
       }
     }
     if (this.definition.alignment === Alignment.View) {
@@ -852,7 +898,9 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
         maximumX = Math.max(maximumX, wx);
         maximumY = Math.max(maximumY, wy);
         maximumZ = Math.max(maximumZ, wz);
-        const w = matrix[3]! * wx + matrix[7]! * wy + matrix[11]! * wz + matrix[15]!;
+        const rawW = matrix[3]! * wx + matrix[7]! * wy + matrix[11]! * wz + matrix[15]!;
+        const w = Math.abs(rawW) > 1e-12 ? rawW : rawW < 0 ? -1e-12 : 1e-12;
+        this.clipWeights[i * stride + j] = w;
         const k = (i * stride + j) * 16;
         v[k] = (matrix[0]! * wx + matrix[4]! * wy + matrix[8]! * wz + matrix[12]!) / w;
         v[k + 1] = (matrix[1]! * wx + matrix[5]! * wy + matrix[9]! * wz + matrix[13]!) / w;
@@ -968,6 +1016,10 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
       this.indexBuffer.update(offset * 4);
       this.geometry.indexCount = offset;
     } else this.geometry.indexCount = n * this.baseIndices.length;
+    if (this.perspectiveActive || matrix[3] !== 0 || matrix[7] !== 0 || matrix[11] !== 0) {
+      this.clipBuffer.update(n * stride * 4);
+      this.perspectiveActive = matrix[3] !== 0 || matrix[7] !== 0 || matrix[11] !== 0;
+    }
     this.vertexBuffer.update(n * stride * 64);
     // Invalidate local bounds after vertex changes (needed for masks/culling).
     this.onViewUpdate();
@@ -997,6 +1049,7 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
     super.destroy();
     geometry.destroy();
     this.vertexBuffer.destroy();
+    this.clipBuffer.destroy();
     this.indexBuffer.destroy();
     shader?.destroy();
   }

@@ -33,6 +33,10 @@ pnpm probe:unity --sweeps       # Shape 时间扫描、量化与方向对齐
 pnpm probe:unity --spaces       # 模拟空间、世界重力与线性速度
 pnpm probe:unity --stretch      # 拉伸长度、粒子速度与移动视图
 pnpm probe:unity --meshes       # 多 Mesh、队列 / 系统排序、原生雾效 / 场景深度像素与 submesh 限制
+pnpm probe:unity --canvas       # 三种 Canvas 布局、视口、像素与 Pixel Perfect
+pnpm probe:unity --images       # Image 填充、裁边网格、平铺顶点上限
+pnpm probe:unity --ui-masks     # 嵌套 UI 遮罩、软裁切与 CanvasGroup
+pnpm probe:unity --sprite-masks # Sprite / 粒子遮罩、阈值、排序范围
 pnpm probe:unity --sprite-shapes # Sprite placement、空引用、Donut 分布与扫描
 pnpm probe:unity --sprite-rendering # Sprite 翻转、pivot、九宫格、连续 / Adaptive 平铺
 pnpm probe:unity --sprite-sheets # Sprite 序列帧时间边界、几何缩放与 UV
@@ -43,7 +47,7 @@ pnpm probe:unity --noise-fit    # 执行本地提供的 Noise 采样输入
 pnpm probe:unity --prefab-layout # 原始 prefab 布局
 ```
 
-脚本将 `project/` 模板复制到仓库的 `data/unity-probe/` 后运行。该目录是专用临时工程，请勿放入业务工程。测量结果和 Editor 日志写入 `data/unity-baselines/`，均由 Git 忽略。部分模式需要图形设备。
+脚本将 `project/` 模板复制到仓库的 `data/unity-probe/` 后运行。该目录是专用临时工程，请勿放入业务工程。测量结果和 Editor 日志写入 `data/unity-baselines/`，均由 Git 忽略。部分模式需要图形设备。UI 探针从指定 Editor 安装中复制 UGUI Runtime 到忽略的临时工程；不分发 Unity 源码。
 
 `--noise-fit` 需要先准备 `data/unity-baselines/noise-fit-input.json`。`--prefab-layout` 默认使用相邻 Noa 项目的 `data/scenario/effect/kirakira_01_rip/`；可通过 `NATSUME_PREFAB_SOURCE` 指定其他同结构资源目录。
 
@@ -93,6 +97,10 @@ pnpm probe:unity --custom-data --update-fixtures
 pnpm probe:unity --sweeps --update-fixtures
 pnpm probe:unity --spaces --update-fixtures
 pnpm probe:unity --meshes --update-fixtures
+pnpm probe:unity --canvas       # 三种 Canvas 布局、视口、像素与 Pixel Perfect
+pnpm probe:unity --images       # Image 填充、裁边网格、平铺顶点上限
+pnpm probe:unity --ui-masks     # 嵌套 UI 遮罩、软裁切与 CanvasGroup
+pnpm probe:unity --sprite-masks # Sprite / 粒子遮罩、阈值、排序范围
 pnpm probe:unity --sprite-shapes # Sprite placement、空引用、Donut 分布与扫描
 pnpm probe:unity --sprite-rendering # Sprite 翻转、pivot、九宫格、连续 / Adaptive 平铺
 pnpm probe:unity --sprite-sheets # Sprite 序列帧时间边界、几何缩放与 UV

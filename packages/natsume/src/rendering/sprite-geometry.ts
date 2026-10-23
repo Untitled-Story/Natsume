@@ -19,6 +19,13 @@ export function spriteGeometry(
       'drawMode' | 'size' | 'tileMode' | 'adaptiveModeThreshold' | 'flipX' | 'flipY'
     >
   >,
+  uvPositionScale = 1,
+  tiling?: {
+    readonly fillCenter: boolean;
+    readonly columns?: number;
+    readonly rows?: number;
+    readonly padding?: readonly number[];
+  },
 ): MeshT {
   const source = pack.getMesh(sprite.meshAssetId);
   check(source, 'SEMANTIC', 'Missing Sprite mesh');
@@ -71,6 +78,12 @@ export function spriteGeometry(
   };
   const xs = ranges(targetW, w, border.x / ppu, border.z / ppu),
     ys = ranges(targetH, h, border.y / ppu, border.w / ppu);
+  if (tiling?.padding) {
+    xs.source[0] = tiling.padding[0]! / ppu;
+    ys.source[0] = tiling.padding[1]! / ppu;
+    xs.source[3] = w - tiling.padding[2]! / ppu;
+    ys.source[3] = h - tiling.padding[3]! / ppu;
+  }
   const texcoords: Vec4T[] = [];
   const append = (
     x0: number,
@@ -98,8 +111,8 @@ export function spriteGeometry(
       const px = x! - pivot.x * targetW,
         py = y! - pivot.y * targetH;
       mesh.positions.push(new Vec3T(renderer.flipX ? -px : px, renderer.flipY ? -py : py, 0));
-      const ux = sx! - pivot.x * w,
-        uy = sy! - pivot.y * h;
+      const ux = (sx! - pivot.x * w) * uvPositionScale,
+        uy = (sy! - pivot.y * h) * uvPositionScale;
       texcoords.push(
         new Vec4T(
           mapping![0]! * ux + mapping![1]! * uy + mapping![2]!,
@@ -119,6 +132,7 @@ export function spriteGeometry(
     tile: boolean,
     originalSize: number,
     targetSize: number,
+    forcedCount?: number,
   ) => {
     const length = hi - lo,
       source = shi - slo;
@@ -127,14 +141,14 @@ export function spriteGeometry(
     const adaptive = renderer.tileMode === 1;
     if (adaptive)
       count = Math.max(1, Math.ceil(targetSize / originalSize - renderer.adaptiveModeThreshold));
-    const step = adaptive ? length / count : source,
+    const step = forcedCount ? length / forcedCount : adaptive ? length / count : source,
       result: number[][] = [];
     check(
-      Math.ceil(length / step) <= 250_000,
+      Math.ceil(length / step - 1e-10) <= 250_000,
       'LIMIT',
       'Sprite tile count exceeds geometry budget',
     );
-    for (let i = 0; i < Math.ceil(length / step); i++) {
+    for (let i = 0; i < Math.ceil(length / step - 1e-10); i++) {
       const end = Math.min(hi, lo + (i + 1) * step);
       result.push([lo + i * step, end, slo, slo + (source * (end - lo - i * step)) / step]);
     }
@@ -142,6 +156,7 @@ export function spriteGeometry(
   };
   for (let y = 0; y < 3; y++)
     for (let x = 0; x < 3; x++) {
+      if (x === 1 && y === 1 && tiling?.fillCenter === false) continue;
       const xr = segments(
         xs.target[x]!,
         xs.target[x + 1]!,
@@ -150,6 +165,7 @@ export function spriteGeometry(
         renderer.drawMode === 2 && x === 1,
         w,
         targetW,
+        tiling?.columns,
       );
       const yr = segments(
         ys.target[y]!,
@@ -159,6 +175,7 @@ export function spriteGeometry(
         renderer.drawMode === 2 && y === 1,
         h,
         targetH,
+        tiling?.rows,
       );
       check(
         xr.length * yr.length * 4 + mesh.positions.length <= 1_000_000,

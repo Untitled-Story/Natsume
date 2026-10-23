@@ -49,6 +49,7 @@ async function init(): Promise<void> {
       viewport.prepend(next.canvas);
       observer = new ResizeObserver(() => {
         next.renderer.resize(Math.max(1, viewport.clientWidth), Math.max(1, viewport.clientHeight));
+        effect?.setCanvasEnvironment(canvasEnvironment());
         place();
       });
       observer.observe(viewport);
@@ -132,8 +133,9 @@ function fit(): void {
       const vx = vertices[index]!,
         vy = vertices[index + 1]!,
         vz = vertices[index + 2]!;
-      const x = (m ? m[0]! * vx + m[4]! * vy + m[8]! * vz + m[12]! : vx) + child.position.x,
-        y = (m ? m[1]! * vx + m[5]! * vy + m[9]! * vz + m[13]! : vy) + child.position.y;
+      const w = m ? m[3]! * vx + m[7]! * vy + m[11]! * vz + m[15]! : 1;
+      const x = (m ? (m[0]! * vx + m[4]! * vy + m[8]! * vz + m[12]!) / w : vx) + child.position.x,
+        y = (m ? (m[1]! * vx + m[5]! * vy + m[9]! * vz + m[13]!) / w : vy) + child.position.y;
       if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
       minX = Math.min(minX, x);
       maxX = Math.max(maxX, x);
@@ -196,12 +198,43 @@ export function clearPreview(): void {
   focus.replaceChildren(new Option('全景', '0'));
 }
 
+function canvasEnvironment() {
+  const width = app!.screen.width,
+    height = app!.screen.height;
+  return {
+    displays: { 0: { width, height } },
+    mainCamera: {
+      viewMatrix: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, -1, 0, 0, 0, -1000, 1],
+      projectionMatrix: [
+        2 / width,
+        0,
+        0,
+        0,
+        0,
+        2 / height,
+        0,
+        0,
+        0,
+        0,
+        -2 / 1999.9,
+        0,
+        0,
+        0,
+        -2000.1 / 1999.9,
+        1,
+      ],
+    },
+  };
+}
+
 export async function showPreview(pack: EffectPack, signal: AbortSignal): Promise<void> {
   await init();
   if (signal.aborted) return;
   const created = await runtime!.instantiate(pack, {
     seed: 12345,
     renderEnvironment: { globalMipBias: 0 },
+    canvasEnvironment: canvasEnvironment(),
+    parentLayout: { width: app!.screen.width, height: app!.screen.height },
     particleEnvironment: {
       fog: { mode: 'none' },
       viewPosition: [0, 0, -1000],

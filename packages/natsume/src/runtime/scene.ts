@@ -1,3 +1,6 @@
+import { canvasLayout, type CanvasLayout } from '../rendering/canvas-layout.js';
+import type { CanvasEnvironment } from '../rendering/canvas-environment.js';
+import type { CanvasT } from '../format/generated/noa/ir/canvas.js';
 import { mat4, quat } from 'gl-matrix';
 import { check } from '../errors.js';
 import type { EffectPack, DeepReadonly as R } from '../pack.js';
@@ -45,9 +48,20 @@ export class SceneNode {
 export class Scene {
   readonly nodes = new Map<number, SceneNode>();
   readonly ordered: SceneNode[] = [];
-  readonly layoutSize: LayoutSize | undefined;
+  get layoutSize(): LayoutSize | undefined {
+    return this.roots.length === 1 ? this.nodes.get(this.roots[0]!)?.layout : undefined;
+  }
+  readonly canvases = new Map<number, R<CanvasT>>();
+  readonly rootCanvases = new Map<number, number>();
+  readonly canvasLayouts = new Map<number, CanvasLayout>();
+
   private readonly hostLayout: LayoutSize | undefined;
-  constructor(pack: EffectPack, roots: readonly number[], hostLayout?: LayoutSize) {
+  constructor(
+    pack: EffectPack,
+    private readonly roots: readonly number[],
+    hostLayout?: LayoutSize,
+    canvasEnvironment?: CanvasEnvironment,
+  ) {
     this.hostLayout = hostLayout;
     const rects = new Map(
       pack.components
@@ -122,9 +136,33 @@ export class Scene {
         [s?.x ?? 1, s?.y ?? 1, s?.z ?? 1],
       );
     }
-    if (roots.length === 1) this.layoutSize = this.nodes.get(roots[0]!)?.layout;
+    for (const c of pack.components)
+      if (c.dataType === ComponentData.Canvas && c.enabled && this.nodes.has(c.nodeId))
+        this.canvases.set(c.nodeId, c.data as R<CanvasT>);
+    for (const n of this.ordered) {
+      const parent = n.parent && this.rootCanvases.get(n.parent.id);
+      if (parent !== undefined) this.rootCanvases.set(n.id, parent);
+      else if (this.canvases.has(n.id)) this.rootCanvases.set(n.id, n.id);
+    }
+    this.configureCanvasEnvironment(canvasEnvironment);
     for (const n of this.ordered) if (n.rect) this.initialRects.set(n.id, structuredClone(n.rect));
     this.update();
+  }
+  setCanvasEnvironment(environment: CanvasEnvironment): void {
+    this.configureCanvasEnvironment(environment);
+    for (const n of this.ordered) if (n.rect) n.layoutDirty = true;
+    this.update();
+  }
+  private configureCanvasEnvironment(environment?: CanvasEnvironment): void {
+    const layouts = new Map<number, CanvasLayout>();
+    for (const [id, canvas] of this.canvases) {
+      if (this.rootCanvases.get(id) !== id || canvas.mode === 2) continue;
+      check(environment, 'HOST', 'Screen Canvas requires canvasEnvironment');
+      layouts.set(id, canvasLayout(canvas, environment));
+    }
+    this.canvasLayouts.clear();
+    for (const [id, layout] of layouts) this.canvasLayouts.set(id, layout);
+    for (const n of this.ordered) if (n.rect) n.layoutDirty = true;
   }
   /** Rebuild only animation-owned matrices; host matrix edits remain intact. */
   private rebuild(n: SceneNode): void {
@@ -178,12 +216,25 @@ export class Scene {
     for (const n of this.ordered) {
       if (n.parent?.layoutDirty && n.rect) n.layoutDirty = true;
       this.rebuild(n);
+      const canvas = this.canvasLayouts.get(n.id);
+      if (canvas) {
+        if (n.rect) {
+          n.rect.pivot!.x = n.rect.pivot!.y = 0.5;
+          n.layout = { width: canvas.width, height: canvas.height };
+        }
+        if (n.parent) {
+          const inverse = mat4.invert(mat4.create(), n.parent.worldMatrix);
+          check(inverse, 'HOST', 'Screen Canvas parent transform must be invertible');
+          mat4.multiply(n.localMatrix, inverse, canvas.world);
+        } else mat4.copy(n.localMatrix, canvas.world);
+      }
       n.activeInHierarchy = n.active && (n.parent?.activeInHierarchy ?? true);
       const q = n.localRotation;
       quat.set(n.worldRotation, q.x, q.y, q.z, q.w);
       if (n.parent) quat.multiply(n.worldRotation, n.parent.worldRotation, n.worldRotation);
       if (n.parent) mat4.multiply(n.worldMatrix, n.parent.worldMatrix, n.localMatrix);
       else mat4.copy(n.worldMatrix, n.localMatrix);
+      if (canvas) mat4.getRotation(n.worldRotation, n.worldMatrix);
     }
     for (const n of this.ordered) {
       n.transformDirty = false;

@@ -53,6 +53,9 @@ const unit = (value: number, name: string) =>
 export const SUPPORTED_FEATURES: Readonly<Record<string, number>> = Object.freeze(
   Object.fromEntries(
     [
+      'ui.canvas',
+      'material.unity-ui-default',
+      'render.sprite-mask',
       'asset.sprite',
       'scene.sprite-renderer',
       'animation.sprite',

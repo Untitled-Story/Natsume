@@ -1,3 +1,4 @@
+import type { CanvasEnvironment } from '../rendering/canvas-environment.js';
 import { visitAnimationEvents, type NatsumeAnimationEvent } from './animation-events.js';
 import { SUPPORTED_FEATURES } from '../format/semantics.js';
 import { AnimationProperty } from '../format/generated/noa/ir/animation-property.js';
@@ -18,6 +19,8 @@ import { Scene, type LayoutSize } from './scene.js';
 import { Emitter, prewarmDuration, type Diagnostic } from './emitter.js';
 
 export interface SimulationOptions {
+  /** Host display and projection inputs for source Canvas components. */
+  readonly canvasEnvironment?: CanvasEnvironment;
   readonly entryId?: number;
   readonly seed?: number;
   /** Required only when the entry's root uses stretched external anchors. */
@@ -108,7 +111,7 @@ export class Simulation {
       'Embedded cameras are not implemented; use a host display matrix',
     );
     this.entry = entry;
-    this.scene = new Scene(pack, entry.roots, options.parentLayout);
+    this.scene = new Scene(pack, entry.roots, options.parentLayout, options.canvasEnvironment);
     this.bindings = new AnimationBindings(pack, this.scene);
     this.diagnostics.push({
       code: 'NATSUME_RANDOM_SEQUENCE',
