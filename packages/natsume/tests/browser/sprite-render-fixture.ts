@@ -101,7 +101,7 @@ export async function measureSpriteRendering(native: { texture: number[]; cases:
       {
         format: 'noa-package',
         version: 1,
-        noir_version: [2, 0],
+        noir_version: [3, 0],
         document: 'scene.noir',
         files: [],
       },
@@ -158,7 +158,7 @@ export async function measureSpriteRendering(native: { texture: number[]; cases:
       {
         format: 'noa-package',
         version: 1,
-        noir_version: [2, 0],
+        noir_version: [3, 0],
         document: 'scene.noir',
         files: [
           {

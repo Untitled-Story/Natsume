@@ -1,3 +1,4 @@
+import { SourceReferenceT } from '../src/format/generated/noa/ir/source-reference.js';
 import { SpriteRendererT } from '../src/format/generated/noa/ir/sprite-renderer.js';
 import { ActionT } from '../src/format/generated/noa/ir/action.js';
 import { ActionKind } from '../src/format/generated/noa/ir/action-kind.js';
@@ -55,7 +56,7 @@ import type { DocumentT } from '../src/format/generated/noa/ir/document.js';
 export function packDocument(d: DocumentT): EffectPack {
   return new EffectPack(
     d,
-    { format: 'noa-package', version: 1, noir_version: [2, 0], document: 'scene.noir', files: [] },
+    { format: 'noa-package', version: 1, noir_version: [3, 0], document: 'scene.noir', files: [] },
     new Map(),
     new Map(),
   );
@@ -70,6 +71,7 @@ export function animationCurve(a = 0, b = 1): ScalarCurveT {
 }
 function fixture(tracks: TrackT[]) {
   const d = minimalDocument();
+  d.features.push(new FeatureRequirementT('animator.controller', 1, true));
   d.nodes.push(
     new NodeT(
       3,
@@ -86,9 +88,15 @@ function fixture(tracks: TrackT[]) {
       1,
       true,
       C.Animator,
-      new AnimatorT(false, false, [
-        new AnimatorLayerT('Base', 1, 11, [new AnimatorStateT(11, 'A', 10, 1, 0, true)]),
-      ]),
+      new AnimatorT(
+        new SourceReferenceT(null, 1n),
+        false,
+        false,
+        0,
+        0,
+        [],
+        [new AnimatorLayerT('Base', 1, 0, 11, [new AnimatorStateT(11, 'A', 10, 1, 0, true)])],
+      ),
     ),
   );
   return d;
@@ -390,9 +398,15 @@ it('orders overlapping writers by priority and preserves settings across switche
       1,
       true,
       C.Animator,
-      new AnimatorT(false, false, [
-        new AnimatorLayerT('Base', 1, 13, [new AnimatorStateT(13, 'B', 12)]),
-      ]),
+      new AnimatorT(
+        new SourceReferenceT(null, 1n),
+        false,
+        false,
+        0,
+        0,
+        [],
+        [new AnimatorLayerT('Base', 1, 0, 13, [new AnimatorStateT(13, 'B', 12)])],
+      ),
     ),
   );
   const s = new Simulation(packDocument(d));
@@ -432,9 +446,15 @@ it('keeps registration order on state changes and re-registers an Animator when 
       1,
       true,
       C.Animator,
-      new AnimatorT(true, false, [
-        new AnimatorLayerT('Base', 1, 13, [new AnimatorStateT(13, 'B', 12)]),
-      ]),
+      new AnimatorT(
+        new SourceReferenceT(null, 1n),
+        true,
+        false,
+        0,
+        0,
+        [],
+        [new AnimatorLayerT('Base', 1, 0, 13, [new AnimatorStateT(13, 'B', 12)])],
+      ),
     ),
   );
   const s = new Simulation(packDocument(d));
@@ -471,13 +491,16 @@ it('allows an entry PlayClip to be prioritized alongside Animator writers', () =
 });
 it('loads executable transform capabilities and rejects missing capability declarations', async () => {
   const d = fixture([vtrack(P.NodeScale)]);
-  d.features = [new FeatureRequirementT('animation.transform')];
+  d.features = [
+    new FeatureRequirementT('animation.transform'),
+    new FeatureRequirementT('animator.controller'),
+  ];
   const pack = await loadPack(await archive(encode(d)));
   const s = new Simulation(pack);
   s.play();
   s.update(1 / 60);
   expect(s.scene.nodes.get(3)!.localScale.x).toBeCloseTo(1 / 60);
-  d.features = [];
+  d.features = [new FeatureRequirementT('animator.controller')];
   await expect(loadPack(await archive(encode(d)))).rejects.toThrow('animation.transform');
 });
 
@@ -499,7 +522,7 @@ it('isolates Sprite color channels and restores source values on restart', () =>
   doc.animations = [clip];
   const pack = new EffectPack(
     doc,
-    { format: 'noa-package', version: 1, noir_version: [2, 0], document: 'scene.noir', files: [] },
+    { format: 'noa-package', version: 1, noir_version: [3, 0], document: 'scene.noir', files: [] },
     new Map(),
     new Map(),
   );

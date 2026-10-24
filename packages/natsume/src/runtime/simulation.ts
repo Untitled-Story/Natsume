@@ -207,7 +207,9 @@ export class Simulation {
         )
           continue;
         if (this.bindings.enabled.get(c.id) && this.scene.nodes.get(c.nodeId)!.activeInHierarchy) {
-          this.applyAnimatorState(c.id, (c.data as R<AnimatorT>).layers[0]!.defaultStateId, false);
+          const state = (c.data as R<AnimatorT>).layers[0]?.defaultStateId;
+          if (state) this.applyAnimatorState(c.id, state, false);
+          else this.startedAnimators.add(c.id);
           changed = true;
         }
       }
@@ -277,7 +279,8 @@ export class Simulation {
         this.scene.nodes.get(c.nodeId)?.activeInHierarchy
       ) {
         const layer = (c.data as R<AnimatorT>).layers[0]!;
-        this.applyAnimatorState(c.id, layer.defaultStateId, false);
+        if (layer?.defaultStateId) this.applyAnimatorState(c.id, layer.defaultStateId, false);
+        else this.startedAnimators.add(c.id);
       }
     for (const a of this.entry.actions) {
       switch (a.kind) {
@@ -353,12 +356,14 @@ export class Simulation {
       'HOST',
       'Unknown Animator',
     );
-    const layer = (c.data as R<AnimatorT>).layers[0]!,
-      s = layer.states.find((s) => (typeof state === 'number' ? s.id === state : s.name === state));
+    const layer = (c.data as R<AnimatorT>).layers[0],
+      s = layer?.states.find((s) =>
+        typeof state === 'number' ? s.id === state : s.name === state,
+      );
     check(s, 'HOST', 'Unknown Animator state');
     if (!this.animatorDefaults.has(animatorId)) {
       const unique = new Map<string, CompiledBinding>();
-      for (const state of layer.states)
+      for (const state of layer!.states)
         for (const track of this.clips.get(state.animationId)!.tracks) {
           const binding = this.bindings.compile(track);
           if (binding && !unique.has(binding.key)) unique.set(binding.key, binding);

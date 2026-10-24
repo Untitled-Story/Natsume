@@ -1,3 +1,4 @@
+import { SourceReferenceT } from '../src/format/generated/noa/ir/source-reference.js';
 import { Simulation } from '../src/runtime/simulation.js';
 import { AnimatorT } from '../src/format/generated/noa/ir/animator.js';
 import { AnimatorLayerT } from '../src/format/generated/noa/ir/animator-layer.js';
@@ -286,7 +287,7 @@ function setup(c: Case) {
       {
         format: 'noa-package',
         version: 1,
-        noir_version: [2, 0],
+        noir_version: [3, 0],
         document: 'scene.noir',
         files: [],
       },
@@ -389,9 +390,15 @@ it.skipIf(!hasNativeFixture('unity-animation-bindings.json'))(
           1,
           true,
           C.Animator,
-          new AnimatorT(c.keepState, c.writeDefaults, [
-            new AnimatorLayerT('Base', 1, 11, [new AnimatorStateT(11, 'A', 10, 1, 0, true)]),
-          ]),
+          new AnimatorT(
+            new SourceReferenceT(null, 1n),
+            c.keepState,
+            c.writeDefaults,
+            0,
+            0,
+            [],
+            [new AnimatorLayerT('Base', 1, 0, 11, [new AnimatorStateT(11, 'A', 10, 1, 0, true)])],
+          ),
         ),
       ];
       const pack = new EffectPack(
@@ -399,7 +406,7 @@ it.skipIf(!hasNativeFixture('unity-animation-bindings.json'))(
         {
           format: 'noa-package',
           version: 1,
-          noir_version: [2, 0],
+          noir_version: [3, 0],
           document: 'scene.noir',
           files: [],
         },
@@ -461,12 +468,20 @@ it.skipIf(!hasNativeFixture('unity-animation-bindings.json'))(
           1,
           true,
           C.Animator,
-          new AnimatorT(false, false, [
-            new AnimatorLayerT('Base', 1, 11, [
-              new AnimatorStateT(11, 'A', 10, 1, 0, true),
-              new AnimatorStateT(13, 'B', 12, 1, 0, c.writeDefaults),
-            ]),
-          ]),
+          new AnimatorT(
+            new SourceReferenceT(null, 1n),
+            false,
+            false,
+            0,
+            0,
+            [],
+            [
+              new AnimatorLayerT('Base', 1, 0, 11, [
+                new AnimatorStateT(11, 'A', 10, 1, 0, true),
+                new AnimatorStateT(13, 'B', 12, 1, 0, c.writeDefaults),
+              ]),
+            ],
+          ),
         ),
       ];
       const pack = new EffectPack(
@@ -474,7 +489,7 @@ it.skipIf(!hasNativeFixture('unity-animation-bindings.json'))(
           {
             format: 'noa-package',
             version: 1,
-            noir_version: [2, 0],
+            noir_version: [3, 0],
             document: 'scene.noir',
             files: [],
           },
@@ -526,18 +541,30 @@ it.skipIf(!hasNativeFixture('unity-animation-bindings.json'))(
           1,
           true,
           C.Animator,
-          new AnimatorT(true, false, [
-            new AnimatorLayerT('Base', 1, 11, [new AnimatorStateT(11, 'A', 10)]),
-          ]),
+          new AnimatorT(
+            new SourceReferenceT(null, 1n),
+            true,
+            false,
+            0,
+            0,
+            [],
+            [new AnimatorLayerT('Base', 1, 0, 11, [new AnimatorStateT(11, 'A', 10)])],
+          ),
         ),
         child = new ComponentT(
           6,
           3,
           true,
           C.Animator,
-          new AnimatorT(true, false, [
-            new AnimatorLayerT('Base', 1, 13, [new AnimatorStateT(13, 'B', 12)]),
-          ]),
+          new AnimatorT(
+            new SourceReferenceT(null, 1n),
+            true,
+            false,
+            0,
+            0,
+            [],
+            [new AnimatorLayerT('Base', 1, 0, 13, [new AnimatorStateT(13, 'B', 12)])],
+          ),
         );
       d.components = c.childCreatedFirst ? [child, parent] : [parent, child];
       const pack = new EffectPack(
@@ -545,7 +572,7 @@ it.skipIf(!hasNativeFixture('unity-animation-bindings.json'))(
           {
             format: 'noa-package',
             version: 1,
-            noir_version: [2, 0],
+            noir_version: [3, 0],
             document: 'scene.noir',
             files: [],
           },

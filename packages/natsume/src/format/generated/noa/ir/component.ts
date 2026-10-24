@@ -15,6 +15,7 @@ import { MeshFilter, MeshFilterT } from '../../noa/ir/mesh-filter.js';
 import { MeshRenderer, MeshRendererT } from '../../noa/ir/mesh-renderer.js';
 import { ParticleRenderer, ParticleRendererT } from '../../noa/ir/particle-renderer.js';
 import { ParticleSystem, ParticleSystemT } from '../../noa/ir/particle-system.js';
+import { PlayableDirector, PlayableDirectorT } from '../../noa/ir/playable-director.js';
 import { RectLayout, RectLayoutT } from '../../noa/ir/rect-layout.js';
 import { RectMask2D, RectMask2DT } from '../../noa/ir/rect-mask2-d.js';
 import { SpriteMask, SpriteMaskT } from '../../noa/ir/sprite-mask.js';
@@ -139,7 +140,7 @@ constructor(
   public nodeId: number = 0,
   public enabled: boolean = true,
   public dataType: ComponentData = ComponentData.NONE,
-  public data: AnimatorT|CameraT|CanvasGroupT|CanvasRendererT|CanvasT|CustomComponentT|MeshFilterT|MeshRendererT|ParticleRendererT|ParticleSystemT|RectLayoutT|RectMask2DT|SpriteMaskT|SpriteRendererT|UIImageT|UIMaskT|null = null
+  public data: AnimatorT|CameraT|CanvasGroupT|CanvasRendererT|CanvasT|CustomComponentT|MeshFilterT|MeshRendererT|ParticleRendererT|ParticleSystemT|PlayableDirectorT|RectLayoutT|RectMask2DT|SpriteMaskT|SpriteRendererT|UIImageT|UIMaskT|null = null
 ){}
 
 

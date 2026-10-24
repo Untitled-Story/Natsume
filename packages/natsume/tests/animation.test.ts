@@ -1,3 +1,5 @@
+import { FeatureRequirementT } from '../src/format/generated/noa/ir/feature-requirement.js';
+import { SourceReferenceT } from '../src/format/generated/noa/ir/source-reference.js';
 import { expect, it } from 'vitest';
 import { Simulation } from '../src/runtime/simulation.js';
 import { AnimationClock, sampleBool, animationSupport } from '../src/runtime/animation.js';
@@ -26,6 +28,7 @@ import { CurveDomain } from '../src/format/generated/noa/ir/curve-domain.js';
 
 function document() {
   const d = minimalDocument();
+  d.features.push(new FeatureRequirementT('animator.controller', 1, true));
   d.nodes.push(new NodeT(3, 'target', 1, true, d.nodes[0]!.transform));
   d.animations = [
     new AnimationT(6, 'active', 1, false, [
@@ -47,9 +50,15 @@ function document() {
       1,
       true,
       ComponentData.Animator,
-      new AnimatorT(false, false, [
-        new AnimatorLayerT('Base', 1, 5, [new AnimatorStateT(5, 'default', 6, 1, 0, true)]),
-      ]),
+      new AnimatorT(
+        new SourceReferenceT(null, 1n),
+        false,
+        false,
+        0,
+        0,
+        [],
+        [new AnimatorLayerT('Base', 1, 0, 5, [new AnimatorStateT(5, 'default', 6, 1, 0, true)])],
+      ),
     ),
   ];
   return d;

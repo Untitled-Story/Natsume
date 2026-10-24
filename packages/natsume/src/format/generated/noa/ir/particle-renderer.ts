@@ -197,13 +197,23 @@ sourceSortingLayerId():number {
   return offset ? this.bb!.readInt32(this.bb_pos + offset) : 0;
 }
 
-meshDistribution():MeshDistribution {
+trailVertexStreams(index: number, obj?:VertexStream):VertexStream|null {
   const offset = this.bb!.__offset(this.bb_pos, 56);
+  return offset ? (obj || new VertexStream()).__init(this.bb!.__indirect(this.bb!.__vector(this.bb_pos + offset) + index * 4), this.bb!) : null;
+}
+
+trailVertexStreamsLength():number {
+  const offset = this.bb!.__offset(this.bb_pos, 56);
+  return offset ? this.bb!.__vector_len(this.bb_pos + offset) : 0;
+}
+
+meshDistribution():MeshDistribution {
+  const offset = this.bb!.__offset(this.bb_pos, 58);
   return offset ? this.bb!.readUint8(this.bb_pos + offset) : MeshDistribution.UniformRandom;
 }
 
 static startParticleRenderer(builder:flatbuffers.Builder) {
-  builder.startObject(27);
+  builder.startObject(28);
 }
 
 static addMaskInteraction(builder:flatbuffers.Builder, maskInteraction:MaskInteraction) {
@@ -373,8 +383,24 @@ static addSourceSortingLayerId(builder:flatbuffers.Builder, sourceSortingLayerId
   builder.addFieldInt32(25, sourceSortingLayerId, 0);
 }
 
+static addTrailVertexStreams(builder:flatbuffers.Builder, trailVertexStreamsOffset:flatbuffers.Offset) {
+  builder.addFieldOffset(26, trailVertexStreamsOffset, 0);
+}
+
+static createTrailVertexStreamsVector(builder:flatbuffers.Builder, data:flatbuffers.Offset[]):flatbuffers.Offset {
+  builder.startVector(4, data.length, 4);
+  for (let i = data.length - 1; i >= 0; i--) {
+    builder.addOffset(data[i]!);
+  }
+  return builder.endVector();
+}
+
+static startTrailVertexStreamsVector(builder:flatbuffers.Builder, numElems:number) {
+  builder.startVector(4, numElems, 4);
+}
+
 static addMeshDistribution(builder:flatbuffers.Builder, meshDistribution:MeshDistribution) {
-  builder.addFieldInt8(26, meshDistribution, MeshDistribution.UniformRandom);
+  builder.addFieldInt8(27, meshDistribution, MeshDistribution.UniformRandom);
 }
 
 static endParticleRenderer(builder:flatbuffers.Builder):flatbuffers.Offset {
@@ -412,6 +438,7 @@ unpack(): ParticleRendererT {
     this.freeformStretching(),
     this.rotateWithStretchDirection(),
     this.sourceSortingLayerId(),
+    this.bb!.__offset(this.bb_pos, 56) ? this.bb!.createObjList<VertexStream, VertexStreamT>(this.trailVertexStreams.bind(this), this.trailVertexStreamsLength()) : null,
     this.meshDistribution()
   );
 }
@@ -444,6 +471,7 @@ unpackTo(_o: ParticleRendererT): void {
   _o.freeformStretching = this.freeformStretching();
   _o.rotateWithStretchDirection = this.rotateWithStretchDirection();
   _o.sourceSortingLayerId = this.sourceSortingLayerId();
+  _o.trailVertexStreams = this.bb!.__offset(this.bb_pos, 56) ? this.bb!.createObjList<VertexStream, VertexStreamT>(this.trailVertexStreams.bind(this), this.trailVertexStreamsLength()) : null;
   _o.meshDistribution = this.meshDistribution();
 }
 }
@@ -476,6 +504,7 @@ constructor(
   public freeformStretching: boolean = false,
   public rotateWithStretchDirection: boolean = true,
   public sourceSortingLayerId: number = 0,
+  public trailVertexStreams: (VertexStreamT)[] | null = null,
   public meshDistribution: MeshDistribution = MeshDistribution.UniformRandom
 ){}
 
@@ -486,6 +515,7 @@ pack(builder:flatbuffers.Builder): flatbuffers.Offset {
   const meshAssetIds = ParticleRenderer.createMeshAssetIdsVector(builder, this.meshAssetIds);
   const meshWeights = ParticleRenderer.createMeshWeightsVector(builder, this.meshWeights);
   const vertexStreams = ParticleRenderer.createVertexStreamsVector(builder, builder.createObjectOffsetList(this.vertexStreams));
+  const trailVertexStreams = this.trailVertexStreams === null ? 0 : ParticleRenderer.createTrailVertexStreamsVector(builder, builder.createObjectOffsetList(this.trailVertexStreams));
 
   ParticleRenderer.startParticleRenderer(builder);
   ParticleRenderer.addMaskInteraction(builder, this.maskInteraction);
@@ -514,6 +544,7 @@ pack(builder:flatbuffers.Builder): flatbuffers.Offset {
   ParticleRenderer.addFreeformStretching(builder, this.freeformStretching);
   ParticleRenderer.addRotateWithStretchDirection(builder, this.rotateWithStretchDirection);
   ParticleRenderer.addSourceSortingLayerId(builder, this.sourceSortingLayerId);
+  ParticleRenderer.addTrailVertexStreams(builder, trailVertexStreams);
   ParticleRenderer.addMeshDistribution(builder, this.meshDistribution);
 
   return ParticleRenderer.endParticleRenderer(builder);

@@ -1,4 +1,4 @@
-// NOIR candidate wire 2.0, schema draft 0.5. Not yet a stable release.
+// NOIR candidate wire 3.0, schema draft 0.6. Not yet a stable release.
 // Beta schema: changes are recorded in docs/temp; regenerate consumer bindings.
 namespace Noa.IR;
 
@@ -320,9 +320,26 @@ table RotationBySpeedModule {
   angular_velocity:VectorParameter (required); separate_axes:bool;
   speed_range:Vec2;
 }
+// Ordered slots; target 0 preserves a null Unity emitter slot (no emission).
+enum SubEmitterEvent:ubyte { Birth, Collision, Death, Trigger, Manual }
+// Unity inheritance bits: color=1,size=2,rotation=4,lifetime=8,duration=16.
+table SubEmitter { system_component_id:uint; event:SubEmitterEvent; inherit_properties:uint; probability:float = 1; }
+table SubEmittersModule { emitters:[SubEmitter] (required); }
+enum TrailMode:ubyte { PerParticle, Ribbon }
+enum TrailTextureMode:ubyte { Stretch, Tile, DistributePerSegment, RepeatPerSegment, Static }
+table TrailsModule {
+  mode:TrailMode; ratio:float = 1; lifetime:ScalarParameter (required);
+  min_vertex_distance:float; texture_mode:TrailTextureMode; texture_scale:Vec2;
+  ribbon_count:uint = 1; shadow_bias:float;
+  world_space:bool; die_with_particles:bool; size_affects_width:bool;
+  size_affects_lifetime:bool; inherit_particle_color:bool; generate_lighting_data:bool;
+  split_sub_emitter_ribbons:bool; attach_ribbons_to_transform:bool;
+  color_over_lifetime:ColorParameter (required); width_over_trail:ScalarParameter (required);
+  color_over_trail:ColorParameter (required);
+}
 union ParticleModuleData {
   EmissionModule, ShapeModule, ColorModule, SizeModule, RotationModule,
-  VelocityModule, LimitVelocityModule, NoiseModule, TextureSheetModule, CustomDataModule, SizeBySpeedModule, RotationBySpeedModule
+  VelocityModule, LimitVelocityModule, NoiseModule, TextureSheetModule, CustomDataModule, SizeBySpeedModule, RotationBySpeedModule, SubEmittersModule, TrailsModule
 }
 table ParticleModule { data:ParticleModuleData; }
 table ParticleSystem {
@@ -331,7 +348,7 @@ table ParticleSystem {
 }
 enum VertexSemantic:ubyte {
   Position, Normal, Color, UV0, UV1, UV2, UV3, Size, Rotation,
-  Velocity, AgeNormalized, Custom1, Custom2, Center, VertexId
+  Velocity, AgeNormalized, Custom1, Custom2, Center, VertexId, Tangent, NextTrailCenter, PreviousTrailCenter, PercentageAlongTrail, TrailWidth
 }
 table VertexStream { semantic:VertexSemantic; components:ubyte; }
 enum MeshDistribution:ubyte { UniformRandom, NonUniformRandom }
@@ -355,6 +372,8 @@ table ParticleRenderer {
   freeform_stretching:bool;
   rotate_with_stretch_direction:bool = true;
   source_sorting_layer_id:int;
+  // Material slot 0 draws particles; slot 1 draws trails. No implicit fallback.
+  trail_vertex_streams:[VertexStream];
   // Absent in older packages: uniform selection ignores mesh_weights.
   mesh_distribution:MeshDistribution;
 }
@@ -393,26 +412,95 @@ table CustomComponent {
   source_script:SourceReference (required);
   fields:[SerializedField] (required);
 }
-// Initial supported controller subset: single normal-update layer, no transitions,
-// avatar or root motion. State/clip IDs are scoped to their owning Animator.
+// Controller data is declarative; Natsume evaluates conditions, clocks and blending.
+enum AnimatorParameterType:ubyte { Float, Int, Bool, Trigger }
+table AnimatorParameter { name:string (required); type:AnimatorParameterType; default_float:float; default_int:int; default_bool:bool; }
+enum AnimatorConditionMode:ubyte { If, IfNot, Greater, Less, Equals, NotEqual }
+table AnimatorCondition { parameter:string (required); mode:AnimatorConditionMode; threshold:float; }
+enum AnimatorInterruption:ubyte { None, Source, Destination, SourceThenDestination, DestinationThenSource }
+table AnimatorTransition {
+  // Destination 0 is legal only for an Exit transition.
+  destination_state_id:uint; is_exit:bool;
+  conditions:[AnimatorCondition] (required);
+  name:string; solo:bool; mute:bool;
+  duration:float; fixed_duration:bool; offset:float;
+  has_exit_time:bool; exit_time:float;
+  interruption:AnimatorInterruption; ordered_interruption:bool; can_transition_to_self:bool;
+}
 table AnimatorState {
-  id:uint;
-  name:string (required);
-  animation_id:uint;
-  speed:float = 1;
-  cycle_offset:float;
-  write_default_values:bool;
+  id:uint; name:string (required);
+  // 0 = empty Motion, not an invented empty animation clip.
+  animation_id:uint; speed:float = 1; cycle_offset:float;
+  write_default_values:bool; tag:string;
+  speed_parameter:string; cycle_offset_parameter:string; time_parameter:string;
+  transitions:[AnimatorTransition] (required);
 }
+enum AnimatorLayerBlend:ubyte { Override, Additive }
 table AnimatorLayer {
-  name:string (required);
-  default_weight:float;
-  default_state_id:uint;
-  states:[AnimatorState] (required);
+  name:string (required); default_weight:float; blend:AnimatorLayerBlend;
+  default_state_id:uint; states:[AnimatorState] (required);
+  any_state_transitions:[AnimatorTransition] (required);
+  entry_transitions:[AnimatorTransition] (required);
 }
+enum AnimatorUpdateMode:ubyte { Normal, AnimatePhysics, UnscaledTime }
+enum AnimatorCullingMode:ubyte { AlwaysAnimate, CullUpdateTransforms, CullCompletely }
 table Animator {
-  keep_state_on_disable:bool;
-  write_default_values_on_disable:bool;
-  layers:[AnimatorLayer] (required);
+  // Absent means no Controller; keep the Animator for Timeline/host playback.
+  source_controller:SourceReference;
+  keep_state_on_disable:bool; write_default_values_on_disable:bool;
+  update_mode:AnimatorUpdateMode; culling_mode:AnimatorCullingMode;
+  parameters:[AnimatorParameter] (required); layers:[AnimatorLayer] (required);
+}
+// A null playable asset is a real empty Director, with bindings preserved.
+enum DirectorWrap:ubyte { Hold, Loop, None }
+enum DirectorClock:ubyte { DSP, GameTime, UnscaledGameTime, Manual }
+table DirectorBinding { key:SourceReference (required); target:TypedReference; }
+table ExposedBinding { name:string (required); target:TypedReference; }
+enum TimelineDurationMode:ubyte { BasedOnClips, Fixed }
+enum TimelineTrackKind:ubyte { Group, Activation, Animation, Control }
+enum TimelinePostPlayback:ubyte { Active, Inactive, Revert, LeaveAsIs }
+enum TimelineExtrapolation:ubyte { None, Hold, Loop, PingPong, Continue }
+enum TimelineLoop:ubyte { UseSource, On, Off }
+table TimelineAnimation {
+  animation_id:uint; position:Vec3; euler_radians:Vec3;
+  use_track_match_fields:bool; match_target_fields:uint;
+  remove_start_offset:bool; apply_foot_ik:bool; loop:TimelineLoop;
+}
+table TimelineControl {
+  exposed_name:string; default_target:TypedReference;
+  update_particles:bool; particle_seed:uint; update_directors:bool;
+  update_time_control:bool; search_hierarchy:bool; active:bool;
+  post_playback:TimelinePostPlayback;
+}
+union TimelineClipData { TimelineAnimation, TimelineControl }
+table TimelineClip {
+  name:string; start:double; duration:double; clip_in:double; time_scale:double = 1;
+  ease_in:double; ease_out:double; blend_in:double = -1; blend_out:double = -1;
+  mix_in:ScalarCurve; mix_out:ScalarCurve;
+  blend_in_curve_manual:bool; blend_out_curve_manual:bool;
+  pre_extrapolation:TimelineExtrapolation; post_extrapolation:TimelineExtrapolation;
+  pre_extrapolation_time:double; post_extrapolation_time:double;
+  data:TimelineClipData;
+}
+table TimelineTrack {
+  source:SourceReference (required); name:string (required); kind:TimelineTrackKind; muted:bool;
+  // Parent is a track vector index; -1 means root. Children preserve source order.
+  parent_index:int = -1; children:[uint] (required); target:TypedReference;
+  post_playback:TimelinePostPlayback;
+  track_offset:ubyte; position:Vec3; euler_radians:Vec3;
+  match_target_fields:uint;
+  clips:[TimelineClip] (required);
+}
+table Timeline {
+  duration_mode:TimelineDurationMode; fixed_duration:double;
+  roots:[uint] (required); tracks:[TimelineTrack] (required);
+}
+table PlayableDirector {
+  play_on_awake:bool; wrap:DirectorWrap; clock:DirectorClock; initial_time:double;
+  // No source asset => no timeline. Unknown tracks/playables are compile errors.
+  source_asset:SourceReference;
+  timeline:Timeline;
+  bindings:[DirectorBinding] (required); exposed_references:[ExposedBinding] (required);
 }
 table RenderEnvironment {
   cast_shadows:ubyte; receive_shadows:bool; light_probes:ubyte; reflection_probes:ubyte;
@@ -459,7 +547,7 @@ table UIMask { graphic_component_id:uint; show_graphic:bool = true; }
 table RectMask2D { padding:Vec4; softness:Vec2; }
 table CanvasGroup { alpha:float = 1; ignore_parent_groups:bool; }
 
-union ComponentData { RectLayout, Camera, ParticleSystem, ParticleRenderer, CustomComponent, Animator, MeshRenderer, SpriteRenderer, SpriteMask, Canvas, CanvasRenderer, MeshFilter, UIImage, UIMask, RectMask2D, CanvasGroup }
+union ComponentData { RectLayout, Camera, ParticleSystem, ParticleRenderer, CustomComponent, Animator, MeshRenderer, SpriteRenderer, SpriteMask, Canvas, CanvasRenderer, MeshFilter, UIImage, UIMask, RectMask2D, CanvasGroup, PlayableDirector }
 table Component { id:uint; node_id:uint; enabled:bool = true; data:ComponentData; }
 
 table FloatTrack { curve:ScalarCurve (required); }

@@ -12,7 +12,9 @@ import { RotationModule, RotationModuleT } from '../../noa/ir/rotation-module.js
 import { ShapeModule, ShapeModuleT } from '../../noa/ir/shape-module.js';
 import { SizeBySpeedModule, SizeBySpeedModuleT } from '../../noa/ir/size-by-speed-module.js';
 import { SizeModule, SizeModuleT } from '../../noa/ir/size-module.js';
+import { SubEmittersModule, SubEmittersModuleT } from '../../noa/ir/sub-emitters-module.js';
 import { TextureSheetModule, TextureSheetModuleT } from '../../noa/ir/texture-sheet-module.js';
+import { TrailsModule, TrailsModuleT } from '../../noa/ir/trails-module.js';
 import { VelocityModule, VelocityModuleT } from '../../noa/ir/velocity-module.js';
 
 
@@ -29,13 +31,15 @@ export enum ParticleModuleData {
   TextureSheetModule = 9,
   CustomDataModule = 10,
   SizeBySpeedModule = 11,
-  RotationBySpeedModule = 12
+  RotationBySpeedModule = 12,
+  SubEmittersModule = 13,
+  TrailsModule = 14
 }
 
 export function unionToParticleModuleData(
   type: ParticleModuleData,
-  accessor: (obj:ColorModule|CustomDataModule|EmissionModule|LimitVelocityModule|NoiseModule|RotationBySpeedModule|RotationModule|ShapeModule|SizeBySpeedModule|SizeModule|TextureSheetModule|VelocityModule) => ColorModule|CustomDataModule|EmissionModule|LimitVelocityModule|NoiseModule|RotationBySpeedModule|RotationModule|ShapeModule|SizeBySpeedModule|SizeModule|TextureSheetModule|VelocityModule|null
-): ColorModule|CustomDataModule|EmissionModule|LimitVelocityModule|NoiseModule|RotationBySpeedModule|RotationModule|ShapeModule|SizeBySpeedModule|SizeModule|TextureSheetModule|VelocityModule|null {
+  accessor: (obj:ColorModule|CustomDataModule|EmissionModule|LimitVelocityModule|NoiseModule|RotationBySpeedModule|RotationModule|ShapeModule|SizeBySpeedModule|SizeModule|SubEmittersModule|TextureSheetModule|TrailsModule|VelocityModule) => ColorModule|CustomDataModule|EmissionModule|LimitVelocityModule|NoiseModule|RotationBySpeedModule|RotationModule|ShapeModule|SizeBySpeedModule|SizeModule|SubEmittersModule|TextureSheetModule|TrailsModule|VelocityModule|null
+): ColorModule|CustomDataModule|EmissionModule|LimitVelocityModule|NoiseModule|RotationBySpeedModule|RotationModule|ShapeModule|SizeBySpeedModule|SizeModule|SubEmittersModule|TextureSheetModule|TrailsModule|VelocityModule|null {
   switch(ParticleModuleData[type]) {
     case 'NONE': return null;
     case 'EmissionModule': return accessor(new EmissionModule())! as EmissionModule;
@@ -50,15 +54,17 @@ export function unionToParticleModuleData(
     case 'CustomDataModule': return accessor(new CustomDataModule())! as CustomDataModule;
     case 'SizeBySpeedModule': return accessor(new SizeBySpeedModule())! as SizeBySpeedModule;
     case 'RotationBySpeedModule': return accessor(new RotationBySpeedModule())! as RotationBySpeedModule;
+    case 'SubEmittersModule': return accessor(new SubEmittersModule())! as SubEmittersModule;
+    case 'TrailsModule': return accessor(new TrailsModule())! as TrailsModule;
     default: return null;
   }
 }
 
 export function unionListToParticleModuleData(
   type: ParticleModuleData,
-  accessor: (index: number, obj:ColorModule|CustomDataModule|EmissionModule|LimitVelocityModule|NoiseModule|RotationBySpeedModule|RotationModule|ShapeModule|SizeBySpeedModule|SizeModule|TextureSheetModule|VelocityModule) => ColorModule|CustomDataModule|EmissionModule|LimitVelocityModule|NoiseModule|RotationBySpeedModule|RotationModule|ShapeModule|SizeBySpeedModule|SizeModule|TextureSheetModule|VelocityModule|null,
+  accessor: (index: number, obj:ColorModule|CustomDataModule|EmissionModule|LimitVelocityModule|NoiseModule|RotationBySpeedModule|RotationModule|ShapeModule|SizeBySpeedModule|SizeModule|SubEmittersModule|TextureSheetModule|TrailsModule|VelocityModule) => ColorModule|CustomDataModule|EmissionModule|LimitVelocityModule|NoiseModule|RotationBySpeedModule|RotationModule|ShapeModule|SizeBySpeedModule|SizeModule|SubEmittersModule|TextureSheetModule|TrailsModule|VelocityModule|null,
   index: number
-): ColorModule|CustomDataModule|EmissionModule|LimitVelocityModule|NoiseModule|RotationBySpeedModule|RotationModule|ShapeModule|SizeBySpeedModule|SizeModule|TextureSheetModule|VelocityModule|null {
+): ColorModule|CustomDataModule|EmissionModule|LimitVelocityModule|NoiseModule|RotationBySpeedModule|RotationModule|ShapeModule|SizeBySpeedModule|SizeModule|SubEmittersModule|TextureSheetModule|TrailsModule|VelocityModule|null {
   switch(ParticleModuleData[type]) {
     case 'NONE': return null;
     case 'EmissionModule': return accessor(index, new EmissionModule())! as EmissionModule;
@@ -73,6 +79,8 @@ export function unionListToParticleModuleData(
     case 'CustomDataModule': return accessor(index, new CustomDataModule())! as CustomDataModule;
     case 'SizeBySpeedModule': return accessor(index, new SizeBySpeedModule())! as SizeBySpeedModule;
     case 'RotationBySpeedModule': return accessor(index, new RotationBySpeedModule())! as RotationBySpeedModule;
+    case 'SubEmittersModule': return accessor(index, new SubEmittersModule())! as SubEmittersModule;
+    case 'TrailsModule': return accessor(index, new TrailsModule())! as TrailsModule;
     default: return null;
   }
 }

@@ -182,7 +182,7 @@ export function verifyBuffer(bytes: Uint8Array, format: keyof typeof schemas): v
         return scalar(field.type, pos);
       };
       check(
-        version('format_major', 0) === 2 &&
+        version('format_major', 0) === (format === 'noir' ? 3 : 2) &&
           version('format_minor', 0) === 0 &&
           (format !== 'noir' || version('semantics_revision', 1) === 1),
         'VERSION',

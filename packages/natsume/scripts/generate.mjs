@@ -31,6 +31,23 @@ execFileSync(
   ],
   { stdio: 'inherit' },
 );
+// Object API arrays erase absent versus present-empty optional vectors.
+// Trails uses that distinction as part of the renderer contract.
+const rendererPath = 'src/format/generated/noa/ir/particle-renderer.ts';
+let renderer = readFileSync(rendererPath, 'utf8');
+const trailList =
+  'this.bb!.createObjList<VertexStream, VertexStreamT>(this.trailVertexStreams.bind(this), this.trailVertexStreamsLength())';
+renderer = renderer
+  .replaceAll(trailList, `this.bb!.__offset(this.bb_pos, 56) ? ${trailList} : null`)
+  .replace(
+    'public trailVertexStreams: (VertexStreamT)[] = []',
+    'public trailVertexStreams: (VertexStreamT)[] | null = null',
+  )
+  .replace(
+    'ParticleRenderer.createTrailVertexStreamsVector(builder, builder.createObjectOffsetList(this.trailVertexStreams))',
+    'this.trailVertexStreams === null ? 0 : ParticleRenderer.createTrailVertexStreamsVector(builder, builder.createObjectOffsetList(this.trailVertexStreams))',
+  );
+writeFileSync(rendererPath, renderer);
 // flatc emits trailing spaces in union helpers. Keep regeneration diff-clean.
 function normalize(directory) {
   for (const entry of readdirSync(directory, { withFileTypes: true })) {

@@ -189,7 +189,7 @@ it('preserves typed payloads and rejects malformed source event contracts', asyn
   const d = structuredClone(pack.document) as DocumentT;
   d.features = [
     new FeatureRequirementT('animation.events-typed', 1, true),
-    new FeatureRequirementT('animator.single-layer', 1, true),
+    new FeatureRequirementT('animator.controller', 1, true),
   ];
   const event = d.animations[0]!.events[0]!;
   event.stringParameter = '001';

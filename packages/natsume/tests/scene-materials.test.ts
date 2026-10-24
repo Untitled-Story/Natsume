@@ -56,7 +56,7 @@ function fixture() {
       {
         format: 'noa-package',
         version: 1,
-        noir_version: [2, 0],
+        noir_version: [3, 0],
         document: 'scene.noir',
         files: [],
       },
@@ -109,7 +109,7 @@ it('requires the host mip bias only for the recipe that reads it', () => {
       {
         format: 'noa-package',
         version: 1,
-        noir_version: [2, 0],
+        noir_version: [3, 0],
         document: 'scene.noir',
         files: [
           {

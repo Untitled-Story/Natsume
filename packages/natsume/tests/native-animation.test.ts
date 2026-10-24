@@ -1,3 +1,4 @@
+import { SourceReferenceT } from '../src/format/generated/noa/ir/source-reference.js';
 import { expect, it } from 'vitest';
 import { readNativeFixture, hasNativeFixture } from './native-fixture.js';
 import { Simulation } from '../src/runtime/simulation.js';
@@ -151,9 +152,19 @@ it.skipIf(!hasNativeFixture('unity-animation.json'))(
           1,
           true,
           6,
-          new AnimatorT(index === 1, false, [
-            new AnimatorLayerT('Base', 1, 5, [new AnimatorStateT(5, 'default', 6, 1, 0.25, true)]),
-          ]),
+          new AnimatorT(
+            new SourceReferenceT(null, 1n),
+            index === 1,
+            false,
+            0,
+            0,
+            [],
+            [
+              new AnimatorLayerT('Base', 1, 0, 5, [
+                new AnimatorStateT(5, 'default', 6, 1, 0.25, true),
+              ]),
+            ],
+          ),
         ),
       ];
       const pack = new EffectPack(
@@ -161,7 +172,7 @@ it.skipIf(!hasNativeFixture('unity-animation.json'))(
         {
           format: 'noa-package',
           version: 1,
-          noir_version: [2, 0],
+          noir_version: [3, 0],
           document: 'scene.noir',
           files: [],
         },

@@ -86,12 +86,37 @@ export function animationSupport(animation: R<AnimationT>): readonly SupportIssu
 export function animatorSupport(animator: R<AnimatorT>, id: number): readonly SupportIssue[] {
   const rules = new SupportChecks();
   rules.require(
-    animator.layers.length === 1,
+    animator.layers.length <= 1,
     'CAPABILITY',
     'layers',
     animator.layers.length,
     'Only single-layer Animator is supported',
   );
+  const require = (supported: boolean, field: string, value: unknown) =>
+    rules.require(
+      supported,
+      'CAPABILITY',
+      `animators.${id}.${field}`,
+      value,
+      'Animator controller branch is not implemented',
+    );
+  require(animator.parameters.length === 0, 'parameters', animator.parameters.length);
+  require(animator.updateMode === 0, 'updateMode', animator.updateMode);
+  require(animator.cullingMode === 0, 'cullingMode', animator.cullingMode);
+  for (const [index, layer] of animator.layers.entries()) {
+    require(layer.blend === 0, `layers.${index}.blend`, layer.blend);
+    require(layer.anyStateTransitions.length === 0, `layers.${index}.anyStateTransitions`, layer
+      .anyStateTransitions.length);
+    require(layer.entryTransitions.length === 0, `layers.${index}.entryTransitions`, layer
+      .entryTransitions.length);
+    for (const state of layer.states) {
+      require(state.animationId !== 0, `states.${state.id}.animationId`, state.animationId);
+      require(state.transitions.length === 0, `states.${state.id}.transitions`, state.transitions
+        .length);
+      for (const field of ['speedParameter', 'cycleOffsetParameter', 'timeParameter'] as const)
+        require(state[field] === null, `states.${state.id}.${field}`, state[field]);
+    }
+  }
   for (const layer of animator.layers)
     for (const state of layer.states) {
       rules.require(

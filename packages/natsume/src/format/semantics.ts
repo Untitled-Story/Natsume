@@ -1,3 +1,4 @@
+import { validateControl } from './control-semantics.js';
 import { validateAnimationBindings } from './animation-semantics.js';
 import { validateSceneAssets } from './scene-semantics.js';
 import { check } from '../errors.js';
@@ -70,7 +71,7 @@ export const SUPPORTED_FEATURES: Readonly<Record<string, number>> = Object.freez
       'layout.rect',
       'camera.host',
       'script.bridge',
-      'animator.single-layer',
+      'animator.controller',
       'animation.node-active',
       'animation.transform',
       'animation.layout',
@@ -117,13 +118,15 @@ export const SUPPORTED_FEATURES: Readonly<Record<string, number>> = Object.freez
 export const KNOWN_FEATURES: Readonly<Record<string, number>> = Object.freeze({
   ...SUPPORTED_FEATURES,
   ...Object.fromEntries(
-    ['render.sprite-mask', 'material.unity-ui-default', 'ui.canvas'].map((name) => [name, 1]),
+    ['particle.sub-emitters', 'particle.trails', 'timeline.director', 'timeline.graph'].map(
+      (name) => [name, 1],
+    ),
   ),
 });
 
 export function validateDocument(document: DocumentT): void {
   check(
-    document.formatMajor === 2 && document.formatMinor === 0 && document.semanticsRevision === 1,
+    document.formatMajor === 3 && document.formatMinor === 0 && document.semanticsRevision === 1,
     'VERSION',
     'Unsupported NOIR version or semantics revision',
   );
@@ -151,11 +154,6 @@ export function validateDocument(document: DocumentT): void {
   const components = new Map(document.components.map((value) => [value.id, value]));
   const assets = new Map(document.assets.map((value) => [value.id, value]));
   const nodes = new Map(document.nodes.map((value) => [value.id, value]));
-  for (const component of document.components)
-    if (component.dataType === 6) {
-      for (const layer of array(object(component.data).layers))
-        for (const state of array(layer.states)) add(number(state, 'id'), 'state');
-    }
   ref(document.defaultEntryId, 'entry');
   // Linear-time hierarchy validation; input depth does not recurse on the JS stack.
   const finished = new Set<number>();
@@ -485,16 +483,6 @@ export function validateDocument(document: DocumentT): void {
           'Invalid vertex stream',
         );
         break;
-      case 'AnimatorLayer':
-        check(
-          array(o.states).some((state) => state.id === o.defaultStateId),
-          'SEMANTIC',
-          'Missing default animator state',
-        );
-        break;
-      case 'AnimatorState':
-        ref(number(o, 'animationId'), 'animation');
-        break;
       case 'Animation':
         check(number(o, 'durationSeconds') >= 0, 'SEMANTIC', 'Negative animation duration');
         break;
@@ -600,6 +588,7 @@ export function validateDocument(document: DocumentT): void {
     }
   };
   visit('Document', document);
+  validateControl(document, requireFeature);
   validateSceneAssets(document, requireFeature);
   validateAnimationBindings(document, requireFeature);
   for (const material of document.materials)

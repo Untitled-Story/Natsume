@@ -1,3 +1,5 @@
+import { animatorSupport } from '../src/runtime/animation.js';
+import type { AnimatorT } from '../src/format/generated/noa/ir/animator.js';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { expect, it } from 'vitest';
 import { loadPack } from '../src/loader/load.js';
@@ -20,9 +22,16 @@ it.skipIf(!existsSync(source))(
       const unsupported = document.features
         .filter((f) => f.required && SUPPORTED_FEATURES[f.name as string] !== f.revision)
         .map((f) => f.name as string);
+      const controllerIssues = document.components
+        .filter((c) => c.dataType === 6)
+        .flatMap((c) => animatorSupport(c.data as AnimatorT, c.id))
+        .filter((i) => i.severity === 'error');
+      unsupported.push(...controllerIssues.map((i) => i.field));
       if (unsupported.length) {
         const pack = await loadPack(bytes);
-        expect(() => new Simulation(pack), file).toThrow(/Required feature is not implemented/);
+        expect(() => new Simulation(pack, { gravity: [0, -9.81, 0] }), file).toThrow(
+          /Required feature is not implemented|Animator controller branch|single-layer/,
+        );
         pack.dispose();
         results.push({ file, accepted: false, timed: 0, unsupported });
         continue;

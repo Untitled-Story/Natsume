@@ -95,7 +95,7 @@ it.skipIf(!native.length)('matches native sprite placement and nonrandom spawn m
   doc.assets = [new AssetT(42, 4, new SpriteAssetT(43, 44))];
   const pack = new EffectPack(
     doc,
-    { format: 'noa-package', version: 1, noir_version: [2, 0], document: 'scene.noir', files: [] },
+    { format: 'noa-package', version: 1, noir_version: [3, 0], document: 'scene.noir', files: [] },
     new Map(),
     new Map([[43, mesh]]),
   );

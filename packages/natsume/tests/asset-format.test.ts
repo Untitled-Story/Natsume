@@ -78,7 +78,7 @@ async function packBytes(d: DocumentT, assets: Record<string, Uint8Array>) {
         JSON.stringify({
           format: 'noa-package',
           version: 1,
-          noir_version: [2, 0],
+          noir_version: [3, 0],
           document: 'scene.noir',
           files: entries,
         }),
@@ -97,13 +97,13 @@ function pngHeader() {
 }
 
 it('rejects omitted, old and unknown major versions before interpreting changed layouts', async () => {
-  for (const version of [0, 1, 3]) {
+  for (const version of [0, 1, 2, 4]) {
     const d = minimalDocument();
     d.formatMajor = version;
     expect(() => verifyBuffer(encode(d), 'noir')).toThrow(/version/);
     expect(() => validateDocument(d)).toThrow(/version/);
     const m = triangle();
-    m.formatMajor = version;
+    m.formatMajor = version === 2 ? 3 : version;
     expect(() => verifyBuffer(encodeMesh(m), 'mesh')).toThrow(/version/);
     expect(() => validateMesh(m)).toThrow(/version/);
     expect(() =>

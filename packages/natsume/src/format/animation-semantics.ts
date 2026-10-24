@@ -96,7 +96,7 @@ export function validateAnimationBindings(d: DocumentT, required: (name: string)
             ([C.ParticleRenderer, C.MeshRenderer, C.SpriteRenderer].includes(
               c?.dataType ?? C.NONE,
             ) ||
-              (b.property === P.ComponentEnabled && c?.dataType === C.Animator));
+              (b.property === P.ComponentEnabled && [C.Animator, C.PlayableDirector].includes(c?.dataType ?? C.NONE)));
           break;
         case P.SpriteColor:
           required('animation.sprite');

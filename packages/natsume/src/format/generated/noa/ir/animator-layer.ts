@@ -4,7 +4,9 @@
 
 import * as flatbuffers from 'flatbuffers';
 
+import { AnimatorLayerBlend } from '../../noa/ir/animator-layer-blend.js';
 import { AnimatorState, AnimatorStateT } from '../../noa/ir/animator-state.js';
+import { AnimatorTransition, AnimatorTransitionT } from '../../noa/ir/animator-transition.js';
 
 
 export class AnimatorLayer implements flatbuffers.IUnpackableObject<AnimatorLayerT> {
@@ -37,23 +39,48 @@ defaultWeight():number {
   return offset ? this.bb!.readFloat32(this.bb_pos + offset) : 0.0;
 }
 
-defaultStateId():number {
+blend():AnimatorLayerBlend {
   const offset = this.bb!.__offset(this.bb_pos, 8);
+  return offset ? this.bb!.readUint8(this.bb_pos + offset) : AnimatorLayerBlend.Override;
+}
+
+defaultStateId():number {
+  const offset = this.bb!.__offset(this.bb_pos, 10);
   return offset ? this.bb!.readUint32(this.bb_pos + offset) : 0;
 }
 
 states(index: number, obj?:AnimatorState):AnimatorState|null {
-  const offset = this.bb!.__offset(this.bb_pos, 10);
+  const offset = this.bb!.__offset(this.bb_pos, 12);
   return offset ? (obj || new AnimatorState()).__init(this.bb!.__indirect(this.bb!.__vector(this.bb_pos + offset) + index * 4), this.bb!) : null;
 }
 
 statesLength():number {
-  const offset = this.bb!.__offset(this.bb_pos, 10);
+  const offset = this.bb!.__offset(this.bb_pos, 12);
+  return offset ? this.bb!.__vector_len(this.bb_pos + offset) : 0;
+}
+
+anyStateTransitions(index: number, obj?:AnimatorTransition):AnimatorTransition|null {
+  const offset = this.bb!.__offset(this.bb_pos, 14);
+  return offset ? (obj || new AnimatorTransition()).__init(this.bb!.__indirect(this.bb!.__vector(this.bb_pos + offset) + index * 4), this.bb!) : null;
+}
+
+anyStateTransitionsLength():number {
+  const offset = this.bb!.__offset(this.bb_pos, 14);
+  return offset ? this.bb!.__vector_len(this.bb_pos + offset) : 0;
+}
+
+entryTransitions(index: number, obj?:AnimatorTransition):AnimatorTransition|null {
+  const offset = this.bb!.__offset(this.bb_pos, 16);
+  return offset ? (obj || new AnimatorTransition()).__init(this.bb!.__indirect(this.bb!.__vector(this.bb_pos + offset) + index * 4), this.bb!) : null;
+}
+
+entryTransitionsLength():number {
+  const offset = this.bb!.__offset(this.bb_pos, 16);
   return offset ? this.bb!.__vector_len(this.bb_pos + offset) : 0;
 }
 
 static startAnimatorLayer(builder:flatbuffers.Builder) {
-  builder.startObject(4);
+  builder.startObject(7);
 }
 
 static addName(builder:flatbuffers.Builder, nameOffset:flatbuffers.Offset) {
@@ -64,12 +91,16 @@ static addDefaultWeight(builder:flatbuffers.Builder, defaultWeight:number) {
   builder.addFieldFloat32(1, defaultWeight, 0.0);
 }
 
+static addBlend(builder:flatbuffers.Builder, blend:AnimatorLayerBlend) {
+  builder.addFieldInt8(2, blend, AnimatorLayerBlend.Override);
+}
+
 static addDefaultStateId(builder:flatbuffers.Builder, defaultStateId:number) {
-  builder.addFieldInt32(2, defaultStateId, 0);
+  builder.addFieldInt32(3, defaultStateId, 0);
 }
 
 static addStates(builder:flatbuffers.Builder, statesOffset:flatbuffers.Offset) {
-  builder.addFieldOffset(3, statesOffset, 0);
+  builder.addFieldOffset(4, statesOffset, 0);
 }
 
 static createStatesVector(builder:flatbuffers.Builder, data:flatbuffers.Offset[]):flatbuffers.Offset {
@@ -84,19 +115,56 @@ static startStatesVector(builder:flatbuffers.Builder, numElems:number) {
   builder.startVector(4, numElems, 4);
 }
 
+static addAnyStateTransitions(builder:flatbuffers.Builder, anyStateTransitionsOffset:flatbuffers.Offset) {
+  builder.addFieldOffset(5, anyStateTransitionsOffset, 0);
+}
+
+static createAnyStateTransitionsVector(builder:flatbuffers.Builder, data:flatbuffers.Offset[]):flatbuffers.Offset {
+  builder.startVector(4, data.length, 4);
+  for (let i = data.length - 1; i >= 0; i--) {
+    builder.addOffset(data[i]!);
+  }
+  return builder.endVector();
+}
+
+static startAnyStateTransitionsVector(builder:flatbuffers.Builder, numElems:number) {
+  builder.startVector(4, numElems, 4);
+}
+
+static addEntryTransitions(builder:flatbuffers.Builder, entryTransitionsOffset:flatbuffers.Offset) {
+  builder.addFieldOffset(6, entryTransitionsOffset, 0);
+}
+
+static createEntryTransitionsVector(builder:flatbuffers.Builder, data:flatbuffers.Offset[]):flatbuffers.Offset {
+  builder.startVector(4, data.length, 4);
+  for (let i = data.length - 1; i >= 0; i--) {
+    builder.addOffset(data[i]!);
+  }
+  return builder.endVector();
+}
+
+static startEntryTransitionsVector(builder:flatbuffers.Builder, numElems:number) {
+  builder.startVector(4, numElems, 4);
+}
+
 static endAnimatorLayer(builder:flatbuffers.Builder):flatbuffers.Offset {
   const offset = builder.endObject();
   builder.requiredField(offset, 4) // name
-  builder.requiredField(offset, 10) // states
+  builder.requiredField(offset, 12) // states
+  builder.requiredField(offset, 14) // any_state_transitions
+  builder.requiredField(offset, 16) // entry_transitions
   return offset;
 }
 
-static createAnimatorLayer(builder:flatbuffers.Builder, nameOffset:flatbuffers.Offset, defaultWeight:number, defaultStateId:number, statesOffset:flatbuffers.Offset):flatbuffers.Offset {
+static createAnimatorLayer(builder:flatbuffers.Builder, nameOffset:flatbuffers.Offset, defaultWeight:number, blend:AnimatorLayerBlend, defaultStateId:number, statesOffset:flatbuffers.Offset, anyStateTransitionsOffset:flatbuffers.Offset, entryTransitionsOffset:flatbuffers.Offset):flatbuffers.Offset {
   AnimatorLayer.startAnimatorLayer(builder);
   AnimatorLayer.addName(builder, nameOffset);
   AnimatorLayer.addDefaultWeight(builder, defaultWeight);
+  AnimatorLayer.addBlend(builder, blend);
   AnimatorLayer.addDefaultStateId(builder, defaultStateId);
   AnimatorLayer.addStates(builder, statesOffset);
+  AnimatorLayer.addAnyStateTransitions(builder, anyStateTransitionsOffset);
+  AnimatorLayer.addEntryTransitions(builder, entryTransitionsOffset);
   return AnimatorLayer.endAnimatorLayer(builder);
 }
 
@@ -104,8 +172,11 @@ unpack(): AnimatorLayerT {
   return new AnimatorLayerT(
     this.name(),
     this.defaultWeight(),
+    this.blend(),
     this.defaultStateId(),
-    this.bb!.createObjList<AnimatorState, AnimatorStateT>(this.states.bind(this), this.statesLength())
+    this.bb!.createObjList<AnimatorState, AnimatorStateT>(this.states.bind(this), this.statesLength()),
+    this.bb!.createObjList<AnimatorTransition, AnimatorTransitionT>(this.anyStateTransitions.bind(this), this.anyStateTransitionsLength()),
+    this.bb!.createObjList<AnimatorTransition, AnimatorTransitionT>(this.entryTransitions.bind(this), this.entryTransitionsLength())
   );
 }
 
@@ -113,8 +184,11 @@ unpack(): AnimatorLayerT {
 unpackTo(_o: AnimatorLayerT): void {
   _o.name = this.name();
   _o.defaultWeight = this.defaultWeight();
+  _o.blend = this.blend();
   _o.defaultStateId = this.defaultStateId();
   _o.states = this.bb!.createObjList<AnimatorState, AnimatorStateT>(this.states.bind(this), this.statesLength());
+  _o.anyStateTransitions = this.bb!.createObjList<AnimatorTransition, AnimatorTransitionT>(this.anyStateTransitions.bind(this), this.anyStateTransitionsLength());
+  _o.entryTransitions = this.bb!.createObjList<AnimatorTransition, AnimatorTransitionT>(this.entryTransitions.bind(this), this.entryTransitionsLength());
 }
 }
 
@@ -122,20 +196,28 @@ export class AnimatorLayerT implements flatbuffers.IGeneratedObject {
 constructor(
   public name: string|Uint8Array|null = null,
   public defaultWeight: number = 0.0,
+  public blend: AnimatorLayerBlend = AnimatorLayerBlend.Override,
   public defaultStateId: number = 0,
-  public states: (AnimatorStateT)[] = []
+  public states: (AnimatorStateT)[] = [],
+  public anyStateTransitions: (AnimatorTransitionT)[] = [],
+  public entryTransitions: (AnimatorTransitionT)[] = []
 ){}
 
 
 pack(builder:flatbuffers.Builder): flatbuffers.Offset {
   const name = (this.name !== null ? builder.createString(this.name!) : 0);
   const states = AnimatorLayer.createStatesVector(builder, builder.createObjectOffsetList(this.states));
+  const anyStateTransitions = AnimatorLayer.createAnyStateTransitionsVector(builder, builder.createObjectOffsetList(this.anyStateTransitions));
+  const entryTransitions = AnimatorLayer.createEntryTransitionsVector(builder, builder.createObjectOffsetList(this.entryTransitions));
 
   return AnimatorLayer.createAnimatorLayer(builder,
     name,
     this.defaultWeight,
+    this.blend,
     this.defaultStateId,
-    states
+    states,
+    anyStateTransitions,
+    entryTransitions
   );
 }
 }

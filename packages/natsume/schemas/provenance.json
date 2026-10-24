@@ -3,9 +3,10 @@
   "commit": "c2fdb50f93c4db0c4ae48478510ca86153ad4eca",
   "flatc": "25.12.19",
   "sha256": {
-    "noir.fbs": "8eeea200085000ad3ad65c5b30dcacb6074930369c76d00b3cfe2cd3d1501752",
+    "noir.fbs": "393eeef48fe88434cd02b407400a7ef603bd494ba37f87222afe7678c90c0b9d",
     "mesh.fbs": "0b7bd3b6ab52b4faa918c4b2dac3981e65fb93371e334ef9b72b3515e69c332d",
-    "noap.schema.json": "64baf9aacbb9591939ebc4b588a2123a78e2feb604b7096e9e20807f86ccaa15",
+    "noap.schema.json": "db2c906576a9d13b289091d60f6d6fdede31c5534b25dc2735ac9ff356b8ab66",
     "shader-data.schema.json": "cbb726f654bce66b7ef312a27907b0fe223944d264f09b55c6fb6d12682d08ef"
-  }
+  },
+  "source_note": "Working tree schema; file hashes identify the protocol independently of the commit."
 }

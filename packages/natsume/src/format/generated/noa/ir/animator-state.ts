@@ -4,6 +4,7 @@
 
 import * as flatbuffers from 'flatbuffers';
 
+import { AnimatorTransition, AnimatorTransitionT } from '../../noa/ir/animator-transition.js';
 
 
 export class AnimatorState implements flatbuffers.IUnpackableObject<AnimatorStateT> {
@@ -56,8 +57,46 @@ writeDefaultValues():boolean {
   return offset ? !!this.bb!.readInt8(this.bb_pos + offset) : false;
 }
 
+tag():string|null
+tag(optionalEncoding:flatbuffers.Encoding):string|Uint8Array|null
+tag(optionalEncoding?:any):string|Uint8Array|null {
+  const offset = this.bb!.__offset(this.bb_pos, 16);
+  return offset ? this.bb!.__string(this.bb_pos + offset, optionalEncoding) : null;
+}
+
+speedParameter():string|null
+speedParameter(optionalEncoding:flatbuffers.Encoding):string|Uint8Array|null
+speedParameter(optionalEncoding?:any):string|Uint8Array|null {
+  const offset = this.bb!.__offset(this.bb_pos, 18);
+  return offset ? this.bb!.__string(this.bb_pos + offset, optionalEncoding) : null;
+}
+
+cycleOffsetParameter():string|null
+cycleOffsetParameter(optionalEncoding:flatbuffers.Encoding):string|Uint8Array|null
+cycleOffsetParameter(optionalEncoding?:any):string|Uint8Array|null {
+  const offset = this.bb!.__offset(this.bb_pos, 20);
+  return offset ? this.bb!.__string(this.bb_pos + offset, optionalEncoding) : null;
+}
+
+timeParameter():string|null
+timeParameter(optionalEncoding:flatbuffers.Encoding):string|Uint8Array|null
+timeParameter(optionalEncoding?:any):string|Uint8Array|null {
+  const offset = this.bb!.__offset(this.bb_pos, 22);
+  return offset ? this.bb!.__string(this.bb_pos + offset, optionalEncoding) : null;
+}
+
+transitions(index: number, obj?:AnimatorTransition):AnimatorTransition|null {
+  const offset = this.bb!.__offset(this.bb_pos, 24);
+  return offset ? (obj || new AnimatorTransition()).__init(this.bb!.__indirect(this.bb!.__vector(this.bb_pos + offset) + index * 4), this.bb!) : null;
+}
+
+transitionsLength():number {
+  const offset = this.bb!.__offset(this.bb_pos, 24);
+  return offset ? this.bb!.__vector_len(this.bb_pos + offset) : 0;
+}
+
 static startAnimatorState(builder:flatbuffers.Builder) {
-  builder.startObject(6);
+  builder.startObject(11);
 }
 
 static addId(builder:flatbuffers.Builder, id:number) {
@@ -84,13 +123,46 @@ static addWriteDefaultValues(builder:flatbuffers.Builder, writeDefaultValues:boo
   builder.addFieldInt8(5, +writeDefaultValues, +false);
 }
 
+static addTag(builder:flatbuffers.Builder, tagOffset:flatbuffers.Offset) {
+  builder.addFieldOffset(6, tagOffset, 0);
+}
+
+static addSpeedParameter(builder:flatbuffers.Builder, speedParameterOffset:flatbuffers.Offset) {
+  builder.addFieldOffset(7, speedParameterOffset, 0);
+}
+
+static addCycleOffsetParameter(builder:flatbuffers.Builder, cycleOffsetParameterOffset:flatbuffers.Offset) {
+  builder.addFieldOffset(8, cycleOffsetParameterOffset, 0);
+}
+
+static addTimeParameter(builder:flatbuffers.Builder, timeParameterOffset:flatbuffers.Offset) {
+  builder.addFieldOffset(9, timeParameterOffset, 0);
+}
+
+static addTransitions(builder:flatbuffers.Builder, transitionsOffset:flatbuffers.Offset) {
+  builder.addFieldOffset(10, transitionsOffset, 0);
+}
+
+static createTransitionsVector(builder:flatbuffers.Builder, data:flatbuffers.Offset[]):flatbuffers.Offset {
+  builder.startVector(4, data.length, 4);
+  for (let i = data.length - 1; i >= 0; i--) {
+    builder.addOffset(data[i]!);
+  }
+  return builder.endVector();
+}
+
+static startTransitionsVector(builder:flatbuffers.Builder, numElems:number) {
+  builder.startVector(4, numElems, 4);
+}
+
 static endAnimatorState(builder:flatbuffers.Builder):flatbuffers.Offset {
   const offset = builder.endObject();
   builder.requiredField(offset, 6) // name
+  builder.requiredField(offset, 24) // transitions
   return offset;
 }
 
-static createAnimatorState(builder:flatbuffers.Builder, id:number, nameOffset:flatbuffers.Offset, animationId:number, speed:number, cycleOffset:number, writeDefaultValues:boolean):flatbuffers.Offset {
+static createAnimatorState(builder:flatbuffers.Builder, id:number, nameOffset:flatbuffers.Offset, animationId:number, speed:number, cycleOffset:number, writeDefaultValues:boolean, tagOffset:flatbuffers.Offset, speedParameterOffset:flatbuffers.Offset, cycleOffsetParameterOffset:flatbuffers.Offset, timeParameterOffset:flatbuffers.Offset, transitionsOffset:flatbuffers.Offset):flatbuffers.Offset {
   AnimatorState.startAnimatorState(builder);
   AnimatorState.addId(builder, id);
   AnimatorState.addName(builder, nameOffset);
@@ -98,6 +170,11 @@ static createAnimatorState(builder:flatbuffers.Builder, id:number, nameOffset:fl
   AnimatorState.addSpeed(builder, speed);
   AnimatorState.addCycleOffset(builder, cycleOffset);
   AnimatorState.addWriteDefaultValues(builder, writeDefaultValues);
+  AnimatorState.addTag(builder, tagOffset);
+  AnimatorState.addSpeedParameter(builder, speedParameterOffset);
+  AnimatorState.addCycleOffsetParameter(builder, cycleOffsetParameterOffset);
+  AnimatorState.addTimeParameter(builder, timeParameterOffset);
+  AnimatorState.addTransitions(builder, transitionsOffset);
   return AnimatorState.endAnimatorState(builder);
 }
 
@@ -108,7 +185,12 @@ unpack(): AnimatorStateT {
     this.animationId(),
     this.speed(),
     this.cycleOffset(),
-    this.writeDefaultValues()
+    this.writeDefaultValues(),
+    this.tag(),
+    this.speedParameter(),
+    this.cycleOffsetParameter(),
+    this.timeParameter(),
+    this.bb!.createObjList<AnimatorTransition, AnimatorTransitionT>(this.transitions.bind(this), this.transitionsLength())
   );
 }
 
@@ -120,6 +202,11 @@ unpackTo(_o: AnimatorStateT): void {
   _o.speed = this.speed();
   _o.cycleOffset = this.cycleOffset();
   _o.writeDefaultValues = this.writeDefaultValues();
+  _o.tag = this.tag();
+  _o.speedParameter = this.speedParameter();
+  _o.cycleOffsetParameter = this.cycleOffsetParameter();
+  _o.timeParameter = this.timeParameter();
+  _o.transitions = this.bb!.createObjList<AnimatorTransition, AnimatorTransitionT>(this.transitions.bind(this), this.transitionsLength());
 }
 }
 
@@ -130,12 +217,22 @@ constructor(
   public animationId: number = 0,
   public speed: number = 1.0,
   public cycleOffset: number = 0.0,
-  public writeDefaultValues: boolean = false
+  public writeDefaultValues: boolean = false,
+  public tag: string|Uint8Array|null = null,
+  public speedParameter: string|Uint8Array|null = null,
+  public cycleOffsetParameter: string|Uint8Array|null = null,
+  public timeParameter: string|Uint8Array|null = null,
+  public transitions: (AnimatorTransitionT)[] = []
 ){}
 
 
 pack(builder:flatbuffers.Builder): flatbuffers.Offset {
   const name = (this.name !== null ? builder.createString(this.name!) : 0);
+  const tag = (this.tag !== null ? builder.createString(this.tag!) : 0);
+  const speedParameter = (this.speedParameter !== null ? builder.createString(this.speedParameter!) : 0);
+  const cycleOffsetParameter = (this.cycleOffsetParameter !== null ? builder.createString(this.cycleOffsetParameter!) : 0);
+  const timeParameter = (this.timeParameter !== null ? builder.createString(this.timeParameter!) : 0);
+  const transitions = AnimatorState.createTransitionsVector(builder, builder.createObjectOffsetList(this.transitions));
 
   return AnimatorState.createAnimatorState(builder,
     this.id,
@@ -143,7 +240,12 @@ pack(builder:flatbuffers.Builder): flatbuffers.Offset {
     this.animationId,
     this.speed,
     this.cycleOffset,
-    this.writeDefaultValues
+    this.writeDefaultValues,
+    tag,
+    speedParameter,
+    cycleOffsetParameter,
+    timeParameter,
+    transitions
   );
 }
 }

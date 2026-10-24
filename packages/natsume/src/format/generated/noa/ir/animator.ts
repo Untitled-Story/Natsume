@@ -4,7 +4,11 @@
 
 import * as flatbuffers from 'flatbuffers';
 
+import { AnimatorCullingMode } from '../../noa/ir/animator-culling-mode.js';
 import { AnimatorLayer, AnimatorLayerT } from '../../noa/ir/animator-layer.js';
+import { AnimatorParameter, AnimatorParameterT } from '../../noa/ir/animator-parameter.js';
+import { AnimatorUpdateMode } from '../../noa/ir/animator-update-mode.js';
+import { SourceReference, SourceReferenceT } from '../../noa/ir/source-reference.js';
 
 
 export class Animator implements flatbuffers.IUnpackableObject<AnimatorT> {
@@ -25,40 +29,93 @@ static getSizePrefixedRootAsAnimator(bb:flatbuffers.ByteBuffer, obj?:Animator):A
   return (obj || new Animator()).__init(bb.readInt32(bb.position()) + bb.position(), bb);
 }
 
-keepStateOnDisable():boolean {
+sourceController(obj?:SourceReference):SourceReference|null {
   const offset = this.bb!.__offset(this.bb_pos, 4);
-  return offset ? !!this.bb!.readInt8(this.bb_pos + offset) : false;
+  return offset ? (obj || new SourceReference()).__init(this.bb!.__indirect(this.bb_pos + offset), this.bb!) : null;
 }
 
-writeDefaultValuesOnDisable():boolean {
+keepStateOnDisable():boolean {
   const offset = this.bb!.__offset(this.bb_pos, 6);
   return offset ? !!this.bb!.readInt8(this.bb_pos + offset) : false;
 }
 
-layers(index: number, obj?:AnimatorLayer):AnimatorLayer|null {
+writeDefaultValuesOnDisable():boolean {
   const offset = this.bb!.__offset(this.bb_pos, 8);
+  return offset ? !!this.bb!.readInt8(this.bb_pos + offset) : false;
+}
+
+updateMode():AnimatorUpdateMode {
+  const offset = this.bb!.__offset(this.bb_pos, 10);
+  return offset ? this.bb!.readUint8(this.bb_pos + offset) : AnimatorUpdateMode.Normal;
+}
+
+cullingMode():AnimatorCullingMode {
+  const offset = this.bb!.__offset(this.bb_pos, 12);
+  return offset ? this.bb!.readUint8(this.bb_pos + offset) : AnimatorCullingMode.AlwaysAnimate;
+}
+
+parameters(index: number, obj?:AnimatorParameter):AnimatorParameter|null {
+  const offset = this.bb!.__offset(this.bb_pos, 14);
+  return offset ? (obj || new AnimatorParameter()).__init(this.bb!.__indirect(this.bb!.__vector(this.bb_pos + offset) + index * 4), this.bb!) : null;
+}
+
+parametersLength():number {
+  const offset = this.bb!.__offset(this.bb_pos, 14);
+  return offset ? this.bb!.__vector_len(this.bb_pos + offset) : 0;
+}
+
+layers(index: number, obj?:AnimatorLayer):AnimatorLayer|null {
+  const offset = this.bb!.__offset(this.bb_pos, 16);
   return offset ? (obj || new AnimatorLayer()).__init(this.bb!.__indirect(this.bb!.__vector(this.bb_pos + offset) + index * 4), this.bb!) : null;
 }
 
 layersLength():number {
-  const offset = this.bb!.__offset(this.bb_pos, 8);
+  const offset = this.bb!.__offset(this.bb_pos, 16);
   return offset ? this.bb!.__vector_len(this.bb_pos + offset) : 0;
 }
 
 static startAnimator(builder:flatbuffers.Builder) {
-  builder.startObject(3);
+  builder.startObject(7);
+}
+
+static addSourceController(builder:flatbuffers.Builder, sourceControllerOffset:flatbuffers.Offset) {
+  builder.addFieldOffset(0, sourceControllerOffset, 0);
 }
 
 static addKeepStateOnDisable(builder:flatbuffers.Builder, keepStateOnDisable:boolean) {
-  builder.addFieldInt8(0, +keepStateOnDisable, +false);
+  builder.addFieldInt8(1, +keepStateOnDisable, +false);
 }
 
 static addWriteDefaultValuesOnDisable(builder:flatbuffers.Builder, writeDefaultValuesOnDisable:boolean) {
-  builder.addFieldInt8(1, +writeDefaultValuesOnDisable, +false);
+  builder.addFieldInt8(2, +writeDefaultValuesOnDisable, +false);
+}
+
+static addUpdateMode(builder:flatbuffers.Builder, updateMode:AnimatorUpdateMode) {
+  builder.addFieldInt8(3, updateMode, AnimatorUpdateMode.Normal);
+}
+
+static addCullingMode(builder:flatbuffers.Builder, cullingMode:AnimatorCullingMode) {
+  builder.addFieldInt8(4, cullingMode, AnimatorCullingMode.AlwaysAnimate);
+}
+
+static addParameters(builder:flatbuffers.Builder, parametersOffset:flatbuffers.Offset) {
+  builder.addFieldOffset(5, parametersOffset, 0);
+}
+
+static createParametersVector(builder:flatbuffers.Builder, data:flatbuffers.Offset[]):flatbuffers.Offset {
+  builder.startVector(4, data.length, 4);
+  for (let i = data.length - 1; i >= 0; i--) {
+    builder.addOffset(data[i]!);
+  }
+  return builder.endVector();
+}
+
+static startParametersVector(builder:flatbuffers.Builder, numElems:number) {
+  builder.startVector(4, numElems, 4);
 }
 
 static addLayers(builder:flatbuffers.Builder, layersOffset:flatbuffers.Offset) {
-  builder.addFieldOffset(2, layersOffset, 0);
+  builder.addFieldOffset(6, layersOffset, 0);
 }
 
 static createLayersVector(builder:flatbuffers.Builder, data:flatbuffers.Offset[]):flatbuffers.Offset {
@@ -75,48 +132,71 @@ static startLayersVector(builder:flatbuffers.Builder, numElems:number) {
 
 static endAnimator(builder:flatbuffers.Builder):flatbuffers.Offset {
   const offset = builder.endObject();
-  builder.requiredField(offset, 8) // layers
+  builder.requiredField(offset, 14) // parameters
+  builder.requiredField(offset, 16) // layers
   return offset;
 }
 
-static createAnimator(builder:flatbuffers.Builder, keepStateOnDisable:boolean, writeDefaultValuesOnDisable:boolean, layersOffset:flatbuffers.Offset):flatbuffers.Offset {
+static createAnimator(builder:flatbuffers.Builder, sourceControllerOffset:flatbuffers.Offset, keepStateOnDisable:boolean, writeDefaultValuesOnDisable:boolean, updateMode:AnimatorUpdateMode, cullingMode:AnimatorCullingMode, parametersOffset:flatbuffers.Offset, layersOffset:flatbuffers.Offset):flatbuffers.Offset {
   Animator.startAnimator(builder);
+  Animator.addSourceController(builder, sourceControllerOffset);
   Animator.addKeepStateOnDisable(builder, keepStateOnDisable);
   Animator.addWriteDefaultValuesOnDisable(builder, writeDefaultValuesOnDisable);
+  Animator.addUpdateMode(builder, updateMode);
+  Animator.addCullingMode(builder, cullingMode);
+  Animator.addParameters(builder, parametersOffset);
   Animator.addLayers(builder, layersOffset);
   return Animator.endAnimator(builder);
 }
 
 unpack(): AnimatorT {
   return new AnimatorT(
+    (this.sourceController() !== null ? this.sourceController()!.unpack() : null),
     this.keepStateOnDisable(),
     this.writeDefaultValuesOnDisable(),
+    this.updateMode(),
+    this.cullingMode(),
+    this.bb!.createObjList<AnimatorParameter, AnimatorParameterT>(this.parameters.bind(this), this.parametersLength()),
     this.bb!.createObjList<AnimatorLayer, AnimatorLayerT>(this.layers.bind(this), this.layersLength())
   );
 }
 
 
 unpackTo(_o: AnimatorT): void {
+  _o.sourceController = (this.sourceController() !== null ? this.sourceController()!.unpack() : null);
   _o.keepStateOnDisable = this.keepStateOnDisable();
   _o.writeDefaultValuesOnDisable = this.writeDefaultValuesOnDisable();
+  _o.updateMode = this.updateMode();
+  _o.cullingMode = this.cullingMode();
+  _o.parameters = this.bb!.createObjList<AnimatorParameter, AnimatorParameterT>(this.parameters.bind(this), this.parametersLength());
   _o.layers = this.bb!.createObjList<AnimatorLayer, AnimatorLayerT>(this.layers.bind(this), this.layersLength());
 }
 }
 
 export class AnimatorT implements flatbuffers.IGeneratedObject {
 constructor(
+  public sourceController: SourceReferenceT|null = null,
   public keepStateOnDisable: boolean = false,
   public writeDefaultValuesOnDisable: boolean = false,
+  public updateMode: AnimatorUpdateMode = AnimatorUpdateMode.Normal,
+  public cullingMode: AnimatorCullingMode = AnimatorCullingMode.AlwaysAnimate,
+  public parameters: (AnimatorParameterT)[] = [],
   public layers: (AnimatorLayerT)[] = []
 ){}
 
 
 pack(builder:flatbuffers.Builder): flatbuffers.Offset {
+  const sourceController = (this.sourceController !== null ? this.sourceController!.pack(builder) : 0);
+  const parameters = Animator.createParametersVector(builder, builder.createObjectOffsetList(this.parameters));
   const layers = Animator.createLayersVector(builder, builder.createObjectOffsetList(this.layers));
 
   return Animator.createAnimator(builder,
+    sourceController,
     this.keepStateOnDisable,
     this.writeDefaultValuesOnDisable,
+    this.updateMode,
+    this.cullingMode,
+    parameters,
     layers
   );
 }

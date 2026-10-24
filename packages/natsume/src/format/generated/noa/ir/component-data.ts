@@ -12,6 +12,7 @@ import { MeshFilter, MeshFilterT } from '../../noa/ir/mesh-filter.js';
 import { MeshRenderer, MeshRendererT } from '../../noa/ir/mesh-renderer.js';
 import { ParticleRenderer, ParticleRendererT } from '../../noa/ir/particle-renderer.js';
 import { ParticleSystem, ParticleSystemT } from '../../noa/ir/particle-system.js';
+import { PlayableDirector, PlayableDirectorT } from '../../noa/ir/playable-director.js';
 import { RectLayout, RectLayoutT } from '../../noa/ir/rect-layout.js';
 import { RectMask2D, RectMask2DT } from '../../noa/ir/rect-mask2-d.js';
 import { SpriteMask, SpriteMaskT } from '../../noa/ir/sprite-mask.js';
@@ -37,13 +38,14 @@ export enum ComponentData {
   UIImage = 13,
   UIMask = 14,
   RectMask2D = 15,
-  CanvasGroup = 16
+  CanvasGroup = 16,
+  PlayableDirector = 17
 }
 
 export function unionToComponentData(
   type: ComponentData,
-  accessor: (obj:Animator|Camera|Canvas|CanvasGroup|CanvasRenderer|CustomComponent|MeshFilter|MeshRenderer|ParticleRenderer|ParticleSystem|RectLayout|RectMask2D|SpriteMask|SpriteRenderer|UIImage|UIMask) => Animator|Camera|Canvas|CanvasGroup|CanvasRenderer|CustomComponent|MeshFilter|MeshRenderer|ParticleRenderer|ParticleSystem|RectLayout|RectMask2D|SpriteMask|SpriteRenderer|UIImage|UIMask|null
-): Animator|Camera|Canvas|CanvasGroup|CanvasRenderer|CustomComponent|MeshFilter|MeshRenderer|ParticleRenderer|ParticleSystem|RectLayout|RectMask2D|SpriteMask|SpriteRenderer|UIImage|UIMask|null {
+  accessor: (obj:Animator|Camera|Canvas|CanvasGroup|CanvasRenderer|CustomComponent|MeshFilter|MeshRenderer|ParticleRenderer|ParticleSystem|PlayableDirector|RectLayout|RectMask2D|SpriteMask|SpriteRenderer|UIImage|UIMask) => Animator|Camera|Canvas|CanvasGroup|CanvasRenderer|CustomComponent|MeshFilter|MeshRenderer|ParticleRenderer|ParticleSystem|PlayableDirector|RectLayout|RectMask2D|SpriteMask|SpriteRenderer|UIImage|UIMask|null
+): Animator|Camera|Canvas|CanvasGroup|CanvasRenderer|CustomComponent|MeshFilter|MeshRenderer|ParticleRenderer|ParticleSystem|PlayableDirector|RectLayout|RectMask2D|SpriteMask|SpriteRenderer|UIImage|UIMask|null {
   switch(ComponentData[type]) {
     case 'NONE': return null;
     case 'RectLayout': return accessor(new RectLayout())! as RectLayout;
@@ -62,15 +64,16 @@ export function unionToComponentData(
     case 'UIMask': return accessor(new UIMask())! as UIMask;
     case 'RectMask2D': return accessor(new RectMask2D())! as RectMask2D;
     case 'CanvasGroup': return accessor(new CanvasGroup())! as CanvasGroup;
+    case 'PlayableDirector': return accessor(new PlayableDirector())! as PlayableDirector;
     default: return null;
   }
 }
 
 export function unionListToComponentData(
   type: ComponentData,
-  accessor: (index: number, obj:Animator|Camera|Canvas|CanvasGroup|CanvasRenderer|CustomComponent|MeshFilter|MeshRenderer|ParticleRenderer|ParticleSystem|RectLayout|RectMask2D|SpriteMask|SpriteRenderer|UIImage|UIMask) => Animator|Camera|Canvas|CanvasGroup|CanvasRenderer|CustomComponent|MeshFilter|MeshRenderer|ParticleRenderer|ParticleSystem|RectLayout|RectMask2D|SpriteMask|SpriteRenderer|UIImage|UIMask|null,
+  accessor: (index: number, obj:Animator|Camera|Canvas|CanvasGroup|CanvasRenderer|CustomComponent|MeshFilter|MeshRenderer|ParticleRenderer|ParticleSystem|PlayableDirector|RectLayout|RectMask2D|SpriteMask|SpriteRenderer|UIImage|UIMask) => Animator|Camera|Canvas|CanvasGroup|CanvasRenderer|CustomComponent|MeshFilter|MeshRenderer|ParticleRenderer|ParticleSystem|PlayableDirector|RectLayout|RectMask2D|SpriteMask|SpriteRenderer|UIImage|UIMask|null,
   index: number
-): Animator|Camera|Canvas|CanvasGroup|CanvasRenderer|CustomComponent|MeshFilter|MeshRenderer|ParticleRenderer|ParticleSystem|RectLayout|RectMask2D|SpriteMask|SpriteRenderer|UIImage|UIMask|null {
+): Animator|Camera|Canvas|CanvasGroup|CanvasRenderer|CustomComponent|MeshFilter|MeshRenderer|ParticleRenderer|ParticleSystem|PlayableDirector|RectLayout|RectMask2D|SpriteMask|SpriteRenderer|UIImage|UIMask|null {
   switch(ComponentData[type]) {
     case 'NONE': return null;
     case 'RectLayout': return accessor(index, new RectLayout())! as RectLayout;
@@ -89,6 +92,7 @@ export function unionListToComponentData(
     case 'UIMask': return accessor(index, new UIMask())! as UIMask;
     case 'RectMask2D': return accessor(index, new RectMask2D())! as RectMask2D;
     case 'CanvasGroup': return accessor(index, new CanvasGroup())! as CanvasGroup;
+    case 'PlayableDirector': return accessor(index, new PlayableDirector())! as PlayableDirector;
     default: return null;
   }
 }

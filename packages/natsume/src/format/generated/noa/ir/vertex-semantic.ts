@@ -17,5 +17,10 @@ export enum VertexSemantic {
   Custom1 = 11,
   Custom2 = 12,
   Center = 13,
-  VertexId = 14
+  VertexId = 14,
+  Tangent = 15,
+  NextTrailCenter = 16,
+  PreviousTrailCenter = 17,
+  PercentageAlongTrail = 18,
+  TrailWidth = 19
 }

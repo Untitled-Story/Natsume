@@ -1,3 +1,4 @@
+import { SourceReferenceT } from '../src/format/generated/noa/ir/source-reference.js';
 import { minimalDocument } from './helpers.js';
 import { EffectPack } from '../src/pack.js';
 import { AnimationEventT } from '../src/format/generated/noa/ir/animation-event.js';
@@ -19,7 +20,7 @@ export function eventPack() {
     e.animatorComponentId = 3;
     return e;
   });
-  const animator = new AnimatorT();
+  const animator = new AnimatorT(new SourceReferenceT(null, 1n));
   const layer = new AnimatorLayerT();
   layer.name = 'Base';
   layer.defaultStateId = 4;
