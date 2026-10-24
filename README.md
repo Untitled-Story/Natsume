@@ -137,7 +137,18 @@ const effect = await runtime.instantiate(pack, { canvasEnvironment });
 effect.setCanvasEnvironment(canvasEnvironment); // 整体替换；非法输入不改变当前环境
 ```
 
-World Canvas 保留源世界布局，沿用 `displayMatrix`；Overlay / Camera 的根布局由显示环境驱动。Sorting Layer 顺序优先读取包内 Renderer 的层 ID 与序号；无法确定时明确报错。额外 UI 顶点通道不改变当前已核验、只消费位置 / 颜色 / UV 的无光照配方。
+World Canvas 保留源世界布局，沿用 `displayMatrix`；Overlay / Camera 的根布局由显示环境驱动。Sorting Layer 顺序优先读取包内 Renderer 的层 ID 与序号；缺失时使用宿主 `renderEnvironment.sortingLayers`，默认层始终为 0，仍无法确定时明确报错。额外 UI 顶点通道不改变当前已核验、只消费位置 / 颜色 / UV 的无光照配方。
+
+```ts
+const renderEnvironment = {
+  globalMipBias: 0, // 仅读取该输入的材质需要
+  sortingLayers: { [-123456]: -1, 789012: 1 }, // Unity Sorting Layer ID → 排序值
+};
+const effect = await runtime.instantiate(pack, { canvasEnvironment, renderEnvironment });
+effect.setRenderEnvironment(renderEnvironment);
+```
+
+排序值越大越晚绘制。映射只补包内缺失的信息，不覆盖已记录的层顺序；输入会拷贝，实例之间独立。`setRenderEnvironment` 整体替换配置，须同时保留仍必需的 mip bias 和层映射；缺少必需输入时保留原配置。
 
 遮罩增加额外绘制：每个受影响的 Sprite / 粒子 pass 前后绘制适用的 Sprite Mask；UIMask 使用进入 / 退出 pass。UI 层级、Sprite Mask 与宿主 Pixi mask 共用 8-bit stencil；存在 Sprite Mask 时保留一位，合计超出容量会报错。
 

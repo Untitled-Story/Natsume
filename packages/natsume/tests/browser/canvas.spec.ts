@@ -54,3 +54,22 @@ test('matches native Camera and World Canvas pixels and replaces display environ
     expect(s.max, label + ' pixels').toBeLessThanOrEqual(1);
   }
 });
+
+test('accepts missing sorting ranks from the host and replaces them atomically per instance', async ({
+  page,
+}) => {
+  await page.goto('/');
+  const result = await page.evaluate(
+    async (path) => (await import('/@fs' + path)).measureSortingLayers(),
+    new URL('./canvas-fixture.ts', import.meta.url).pathname,
+  );
+  expect(result).toEqual({
+    missing: false,
+    rejected: true,
+    initial: [0, 0, 255, 255],
+    isolated: [255, 0, 0, 255],
+    changed: [255, 0, 0, 255],
+    atomic: true,
+    valid: true,
+  });
+});

@@ -72,3 +72,38 @@ it.skipIf(!existsSync(path))(
     }
   },
 );
+
+it('copies sorting layer ranks and rejects malformed mappings', async () => {
+  const { copyRenderEnvironment } = await import('../src/rendering/render-environment.js');
+  const layers = { [-123]: -2, 456: 3 };
+  const copied = copyRenderEnvironment({ sortingLayers: layers })!;
+  layers[-123] = 99;
+  expect(copied.sortingLayers![-123]).toBe(-2);
+  expect(Object.isFrozen(copied.sortingLayers)).toBe(true);
+  for (const value of [
+    null,
+    [],
+    new Map(),
+    { '1.5': 2 },
+    { '2147483648': 2 },
+    { '01': 2 },
+    { 1: NaN },
+  ])
+    expect(() => copyRenderEnvironment({ sortingLayers: value as never })).toThrow();
+});
+
+it('uses package sorting ranks before host fallbacks and preserves the default layer', async () => {
+  const { canvasSortingRank } = await import('../src/rendering/canvas-sorting.js');
+  const { ComponentData: C } = await import('../src/format/generated/noa/ir/component-data.js');
+  const pack = {
+    components: [
+      { dataType: C.ParticleRenderer, data: { sourceSortingLayerId: 123, sortingLayerRank: 4 } },
+    ],
+  };
+  const environment = { sortingLayers: { 0: 99, 123: 99, [-456]: -3 } };
+  const rank = (id: number) => canvasSortingRank(pack as never, id, environment);
+  expect(rank(0)).toBe(0);
+  expect(rank(123)).toBe(4);
+  expect(rank(-456)).toBe(-3);
+  expect(rank(789)).toBeUndefined();
+});

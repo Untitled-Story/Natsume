@@ -379,11 +379,11 @@ export function checkCompatibility(
       const canvas = c.data as R<CanvasT>;
       rules.issues.push(...canvasEnvironmentSupport(canvas, canvasEnvironment));
       rules.require(
-        canvasSortingRank(pack, canvas.sortingLayerId) !== undefined,
+        canvasSortingRank(pack, canvas.sortingLayerId, options.renderEnvironment) !== undefined,
         'HOST',
-        'sortingLayerId',
+        'renderEnvironment.sortingLayers',
         canvas.sortingLayerId,
-        'Canvas sorting layer rank is absent from package renderer records',
+        'Canvas requires a sorting layer rank from package renderers or renderEnvironment.sortingLayers',
       );
     }
     if (c.dataType === C.UIImage) {

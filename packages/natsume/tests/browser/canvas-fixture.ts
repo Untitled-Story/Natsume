@@ -204,3 +204,106 @@ export async function measureCanvas(native: { cases: CanvasSample[] }) {
   app.destroy();
   return { results, error, atomic, overlay };
 }
+
+export async function measureSortingLayers() {
+  const { NodeT } = await import('../../src/format/generated/noa/ir/node.js');
+  const app = new Application();
+  await app.init({
+    preference: 'webgl',
+    preferWebGLVersion: 2,
+    width: 8,
+    height: 8,
+    autoStart: false,
+    antialias: false,
+  });
+  const runtime = new NatsumeRuntime(app.renderer as WebGLRenderer),
+    doc = minimalDocument();
+  doc.nodes.push(new NodeT(2, 'second', 0, true, structuredClone(doc.nodes[0]!.transform)));
+  doc.entries[0]!.roots.push(2);
+  doc.components = [];
+  for (const id of [1, 2])
+    doc.components.push(
+      new ComponentT(
+        id * 10,
+        id,
+        true,
+        C.RectLayout,
+        new RectLayoutT(
+          new Vec2T(0.5, 0.5),
+          new Vec2T(0.5, 0.5),
+          new Vec2T(0.5, 0.5),
+          new Vec3T(),
+          new Vec2T(8, 8),
+        ),
+      ),
+      new ComponentT(
+        id * 10 + 1,
+        id,
+        true,
+        C.Canvas,
+        Object.assign(new CanvasT(), { sortingLayerId: id * 100 }),
+      ),
+      new ComponentT(id * 10 + 2, id, true, C.CanvasRenderer, new CanvasRendererT()),
+      new ComponentT(
+        id * 10 + 3,
+        id,
+        true,
+        C.UIImage,
+        Object.assign(new UIImageT(), {
+          color: new ColorT(id === 1 ? 1 : 0, 0, id === 2 ? 1 : 0, 1),
+        }),
+      ),
+    );
+  const pack = new EffectPack(
+    doc,
+    { format: 'noa-package', version: 1, noir_version: [2, 0], document: 'scene.noir', files: [] },
+    new Map(),
+    new Map(),
+  );
+  const canvasEnvironment = { displays: { 0: { width: 8, height: 8 } } };
+  const missing = runtime.checkCompatibility(pack, { canvasEnvironment });
+  let rejected = false;
+  try {
+    await runtime.instantiate(pack, { canvasEnvironment });
+  } catch {
+    rejected = true;
+  }
+  const layers = { 100: -1, 200: 1 };
+  const effect = await runtime.instantiate(pack, {
+    canvasEnvironment,
+    renderEnvironment: { sortingLayers: layers },
+  });
+  const second = await runtime.instantiate(pack, {
+    canvasEnvironment,
+    renderEnvironment: { sortingLayers: { 100: 1, 200: -1 } },
+  });
+  layers[100] = 100;
+  const target = RenderTexture.create({ width: 8, height: 8 });
+  const color = (instance: typeof effect) => {
+    app.renderer.render({ container: instance.container, target, clear: true });
+    return Array.from(app.renderer.extract.pixels({ target }).pixels.slice(0, 4));
+  };
+  effect.play();
+  second.play();
+  const initial = color(effect),
+    isolated = color(second);
+  effect.setRenderEnvironment({ sortingLayers: { 100: 1, 200: -1 } });
+  const changed = color(effect);
+  let atomic = false;
+  try {
+    effect.setRenderEnvironment({ globalMipBias: 0 });
+  } catch {
+    atomic = JSON.stringify(color(effect)) === JSON.stringify(changed);
+  }
+  const valid = runtime.checkCompatibility(pack, {
+    canvasEnvironment,
+    renderEnvironment: { sortingLayers: { 100: 1, 200: -1 } },
+  }).compatible;
+  effect.destroy();
+  second.destroy();
+  pack.dispose();
+  runtime.destroy();
+  target.destroy(true);
+  app.destroy();
+  return { missing: missing.compatible, rejected, initial, isolated, changed, atomic, valid };
+}

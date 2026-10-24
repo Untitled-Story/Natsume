@@ -1,3 +1,4 @@
+import { canvasSortingRank } from '../rendering/canvas-sorting.js';
 import { createSpriteMasks } from './sprite-masks.js';
 import { createUIRenderers } from './ui-renderers.js';
 import { spriteMaterial } from '../rendering/sprite-material.js';
@@ -247,10 +248,16 @@ export class EffectInstance {
     for (const mesh of this.meshes) mesh.environment = next;
     this.render();
   }
-  /** Replaces source material inputs; invalid or missing required values leave the instance unchanged. */
+  /** Replaces material inputs and fallback sorting ranks; invalid or missing required values preserve the instance. */
   setRenderEnvironment(value: RenderEnvironment): void {
     this.assertAlive();
     const next = copyRenderEnvironment(value);
+    for (const canvas of this.simulation.scene.canvases.values())
+      check(
+        canvasSortingRank(this.simulation.pack, canvas.sortingLayerId, next) !== undefined,
+        'HOST',
+        'Canvas requires a sorting layer rank in renderEnvironment.sortingLayers',
+      );
     for (const mesh of this.meshes)
       assertSupport(
         materialSupport(
@@ -261,7 +268,15 @@ export class EffectInstance {
         ),
       );
     this.renderEnvironment = next;
-    for (const mesh of this.meshes) mesh.renderEnvironment = next;
+    for (const mesh of this.meshes) {
+      mesh.renderEnvironment = next;
+      if (mesh instanceof SceneMesh && mesh.canvasSortingLayerId !== undefined)
+        mesh.definition.sortingLayerRank = canvasSortingRank(
+          this.simulation.pack,
+          mesh.canvasSortingLayerId,
+          next,
+        )!;
+    }
     this.render();
   }
   /** Replaces display sizes and view matrices; invalid inputs preserve the current environment. */
@@ -483,6 +498,12 @@ export class EffectInstance {
   /** @internal */ addMesh(mesh: ParticleMesh | SceneMesh): void {
     mesh.environment = this.environment;
     mesh.renderEnvironment = this.renderEnvironment;
+    if (mesh instanceof SceneMesh && mesh.canvasSortingLayerId !== undefined)
+      mesh.definition.sortingLayerRank = canvasSortingRank(
+        this.simulation.pack,
+        mesh.canvasSortingLayerId,
+        this.renderEnvironment,
+      )!;
     this.passOrder.set(mesh, this.meshes.length);
     if (
       mesh instanceof SceneMesh &&

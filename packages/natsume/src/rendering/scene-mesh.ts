@@ -70,7 +70,7 @@ export class SceneMesh extends Mesh<Geometry, Shader> {
   alphaCutoff = -1;
   sortingDepth = 0;
   readonly definition: {
-    readonly sortingLayerRank: number;
+    sortingLayerRank: number;
     readonly sortingOrder: number;
     readonly sortingFudge: number;
   };
@@ -85,6 +85,7 @@ export class SceneMesh extends Mesh<Geometry, Shader> {
   private boundsCenter: readonly number[];
   geometryProvider: (() => R<MeshT> | undefined) | undefined;
   uiSortGroup: number | undefined;
+  canvasSortingLayerId: number | undefined;
   uiSequence = 0;
   uiOverlay = false;
   sortAtNode: SceneNode | undefined;

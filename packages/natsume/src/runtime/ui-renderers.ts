@@ -251,6 +251,7 @@ export async function createUIRenderers(
             alpha() * image.color!.a < 0.001
           );
         mesh.uiSortGroup = sortCanvas.id;
+        mesh.canvasSortingLayerId = sorting.sortingLayerId;
         mesh.uiSequence = pop ? sequence.get(node.id)!.exit : sequence.get(node.id)!.enter;
         mesh.uiStencil = true;
         mesh.uiOverlay = root.mode === 0;

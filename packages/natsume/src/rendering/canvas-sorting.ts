@@ -1,7 +1,12 @@
 import type { EffectPack } from '../pack.js';
+import type { RenderEnvironment } from './render-environment.js';
 import { ComponentData as C } from '../format/generated/noa/ir/component-data.js';
 /** Canvas stores layer IDs; other source renderers also serialize the project rank. */
-export function canvasSortingRank(pack: EffectPack, id: number): number | undefined {
+export function canvasSortingRank(
+  pack: EffectPack,
+  id: number,
+  environment?: RenderEnvironment,
+): number | undefined {
   if (id === 0) return 0;
   for (const c of pack.components) {
     if (
@@ -19,5 +24,5 @@ export function canvasSortingRank(pack: EffectPack, id: number): number | undefi
     if ((d.sortingLayerId ?? d.sourceSortingLayerId) === id)
       return d.sortingLayerRank ?? d.sortingLayerIndex;
   }
-  return undefined;
+  return environment?.sortingLayers?.[id];
 }
