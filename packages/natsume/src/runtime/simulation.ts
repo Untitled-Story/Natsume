@@ -290,6 +290,7 @@ export class Simulation {
         if (this.bindings.systems.has(e.id)) e.refreshAnimatedParameters();
         e.sync();
       }
+    if (this.initialized) this.subEmitters.warm();
   }
   play(): void {
     if (this.state === 'playing') return;

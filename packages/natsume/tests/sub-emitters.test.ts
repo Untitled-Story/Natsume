@@ -24,6 +24,7 @@ import { Space } from '../src/format/generated/noa/ir/space.js';
 import { ShapeModuleT } from '../src/format/generated/noa/ir/shape-module.js';
 import { ShapeGeometry } from '../src/format/generated/noa/ir/shape-geometry.js';
 import { BoxShapeT } from '../src/format/generated/noa/ir/box-shape.js';
+import type { ParticleSystemT } from '../src/format/generated/noa/ir/particle-system.js';
 
 const origin: ParticleSnapshot = {
   id: 0,
@@ -46,6 +47,7 @@ function fixture(
   probability = 1,
   kind = 0,
   slots?: SubEmitterT[],
+  lifecycle?: LifecycleCase,
 ) {
   const document = minimalDocument();
   document.nodes[0]!.transform!.position = new Vec3T(3, 4, 5);
@@ -93,19 +95,39 @@ function fixture(
   childSource.main!.space = space as Space;
   childSource.main!.playOnEnable = play;
   childSource.main!.durationSeconds = kind ? 0.2 : 2;
-  childSource.main!.loop = kind === 3;
+  childSource.main!.loop = kind === 3 || kind === 6;
   childSource.main!.startDelay = constant(kind === 5 ? 0.05 : 0);
   childSource.modules.push(
     new ParticleModuleT(
       M.EmissionModule,
       new EmissionModuleT(
-        constant(kind && kind !== 2 ? 30 : 0),
-        constant(0),
+        constant(kind && kind !== 2 && kind !== 6 ? 30 : 0),
+        constant(kind === 6 ? 10 : 0),
         !kind || kind === 2 ? [new BurstT(kind === 2 ? 0.05 : 0, constant(2), 1, 0, 1)] : [],
         emission,
       ),
     ),
   );
+  if (lifecycle) {
+    parentSource.main!.lifetime = constant(lifecycle.lifetime);
+    parentSource.main!.durationSeconds = 1;
+    parentSource.main!.prewarm = lifecycle.name === 'prewarm';
+    parentSource.main!.loop = lifecycle.name === 'prewarm';
+    const parentEmission = parentSource.modules.find((m) => m.dataType === M.EmissionModule)!
+      .data as EmissionModuleT;
+    parentEmission.rateOverTime = constant(lifecycle.name === 'prewarm' ? 10 : 0);
+    parentEmission.bursts =
+      lifecycle.name === 'prewarm' ? [] : [new BurstT(0, constant(1), 1, 0, 1)];
+    childSource.main!.durationSeconds = lifecycle.duration;
+    childSource.main!.lifetime = constant(lifecycle.childLifetime);
+    childSource.main!.maxParticles = 1000;
+    childSource.main!.loop = lifecycle.loop;
+    const childEmission = childSource.modules.find((m) => m.dataType === M.EmissionModule)!
+      .data as EmissionModuleT;
+    childEmission.rateOverTime = constant(lifecycle.name === 'prewarm' ? 0 : 30);
+    childEmission.bursts =
+      lifecycle.name === 'prewarm' ? [new BurstT(0, constant(2), 1, 0, 1)] : [];
+  }
   const parent = new Emitter(3, scene.nodes.get(1)!, parentSource, true, 12345, []);
   const child = new Emitter(4, scene.nodes.get(2)!, childSource, true, 54321, []);
   // Reverse insertion tests that scheduling follows edges rather than component IDs/order.
@@ -179,6 +201,42 @@ it('supports a shared target without cloning storage or overwriting its authored
   expect(new Set(Array.from(child.serials.slice(0, 4))).size).toBe(4);
 });
 
+it('propagates same-frame births through a DAG, respects target capacity and replays without stale channels', () => {
+  const { parent, child } = fixture();
+  const grandSource = particleSource();
+  grandSource.main!.playOnEnable = false;
+  grandSource.main!.maxParticles = 4;
+  grandSource.modules.push(
+    new ParticleModuleT(
+      M.EmissionModule,
+      new EmissionModuleT(constant(0), constant(0), [new BurstT(0, constant(3), 1, 0, 1)], false),
+    ),
+  );
+  (child.source as ParticleSystemT).modules.push(
+    new ParticleModuleT(M.SubEmittersModule, new SubEmittersModuleT([new SubEmitterT(5, 0, 0, 1)])),
+  );
+  parent.reset();
+  child.reset();
+  const grand = new Emitter(5, child.node, grandSource, true, 91, []);
+  const graph = new SubEmitterGraph(
+    new Map([
+      [5, grand],
+      [4, child],
+      [3, parent],
+    ]),
+  );
+  for (let round = 0; round < 2; round++) {
+    for (const e of graph.order) e.sync();
+    graph.step(1 / 60);
+    expect(child.count).toBe(2);
+    expect(grand.count).toBe(4);
+    expect(new Set(grand.serials.slice(0, 4)).size).toBe(4);
+    expect(Array.from(grand.subParentParticles!.slice(0, 4))).toEqual([0, 0, 0, 1]);
+    graph.clear();
+    for (const e of graph.order) e.reset();
+  }
+});
+
 interface NativeParticle {
   position: { x: number; y: number; z: number };
   size: { x: number; y: number; z: number };
@@ -197,9 +255,162 @@ interface NativeCase {
   kind: number;
   samples: { frame: number; child: NativeParticle[] }[];
 }
+interface LifecycleCase {
+  name: string;
+  inherit: number;
+  lifetime: number;
+  duration: number;
+  childLifetime: number;
+  loop: boolean;
+  samples: { frame: number; parent: NativeParticle[]; child: NativeParticle[] }[];
+}
 const nativePath = new URL(
   '../../../data/unity-baselines/sub-emitters/unity-2022.3.21f1.json',
   import.meta.url,
+);
+it.skipIf(!existsSync(nativePath))(
+  'retains target duration and lifetime in measured native Duration inheritance cases',
+  () => {
+    const { lifecycle } = JSON.parse(readFileSync(nativePath, 'utf8')) as {
+      lifecycle: LifecycleCase[];
+    };
+    let countError = 0;
+    for (const c of lifecycle.filter((c) => c.name === 'duration')) {
+      const { child, graph } = fixture(0, c.inherit, 0, false, false, 1, 0, undefined, c);
+      for (let frame = 1; frame <= 120; frame++) {
+        graph.step(1 / 60);
+        const sample = c.samples[frame]!;
+        const error = Math.abs(child.count - sample.child.length);
+        countError = Math.max(countError, error);
+        expect(
+          error,
+          `inherit=${c.inherit}, life=${c.lifetime}, duration=${c.duration}, loop=${c.loop}, frame=${frame}`,
+        ).toBeLessThanOrEqual(1);
+        for (let i = 0; i < child.count; i++)
+          expect(child.lifetimes[i]).toBeCloseTo(c.childLifetime, 6);
+      }
+    }
+    recordError(
+      'sub-emitter.duration.count',
+      countError,
+      'particles',
+      '24 cases, 120 frames; continuous-rate frame boundary differences',
+    );
+  },
+);
+it.skipIf(!existsSync(nativePath))(
+  'warms descendants of expired parents and bounds known birth/death boundary differences',
+  () => {
+    const { lifecycle } = JSON.parse(readFileSync(nativePath, 'utf8')) as {
+      lifecycle: LifecycleCase[];
+    };
+    let countError = 0,
+      ageError = 0,
+      boundaryFrames = 0,
+      parentCountError = 0,
+      frames = 0;
+    for (const c of lifecycle.filter((c) => c.name === 'prewarm')) {
+      const { parent, child, graph } = fixture(0, c.inherit, 0, false, false, 1, 0, undefined, c);
+      graph.warm();
+      for (let frame = 0; frame <= 120; frame++) {
+        if (frame > 0) graph.step(1 / 60);
+        const sample = c.samples[frame]!;
+        frames++;
+        parentCountError = Math.max(
+          parentCountError,
+          Math.abs(parent.count - sample.parent.length),
+        );
+        expect(Math.abs(parent.count - sample.parent.length)).toBeLessThanOrEqual(1);
+        const difference = Math.abs(child.count - sample.child.length);
+        countError = Math.max(countError, difference);
+        if (difference) boundaryFrames++;
+        expect(
+          difference,
+          `life=${c.lifetime}, childLife=${c.childLifetime}, frame=${frame}`,
+        ).toBeLessThanOrEqual(frame === 0 ? 0 : 2);
+        const actual = Array.from(child.ages.subarray(0, child.count)).sort((a, b) => a - b);
+        const expected = sample.child.map((p) => p.lifetime - p.remaining).sort((a, b) => a - b);
+        // A count mismatch is permitted only at birth/death, never in an interior cohort.
+        let a = 0,
+          b = 0;
+        while (a < actual.length && b < expected.length) {
+          if (Math.abs(actual[a]! - expected[b]!) > 1 / 60 + 2e-5 && actual[a]! < 1 / 60 + 2e-5) {
+            a++;
+            continue;
+          }
+          if (Math.abs(actual[a]! - expected[b]!) > 1 / 60 + 2e-5 && expected[b]! < 1 / 60 + 2e-5) {
+            b++;
+            continue;
+          }
+          const error = Math.abs(actual[a++]! - expected[b++]!);
+          ageError = Math.max(ageError, error);
+          expect(error, `life=${c.lifetime}, frame=${frame}`).toBeLessThan(1 / 60 + 2e-5);
+        }
+        for (const age of [...actual.slice(a), ...expected.slice(b)])
+          expect(
+            Math.abs(age - c.childLifetime),
+            `life=${c.lifetime}, frame=${frame}`,
+          ).toBeLessThan(1 / 60 + 2e-5);
+      }
+    }
+    recordError(
+      'sub-emitter.prewarm.count',
+      countError,
+      'particles',
+      `${boundaryFrames}/${frames} frames differ; initial child counts exact`,
+    );
+    recordError(
+      'sub-emitter.prewarm.age',
+      ageError,
+      'seconds',
+      `12 cases, ${frames} frames; unmatched endpoint cohorts excluded`,
+    );
+    recordError(
+      'sub-emitter.prewarm.parent-count',
+      parentCountError,
+      'particles',
+      `${frames} frames`,
+    );
+  },
+);
+it.skipIf(!existsSync(nativePath))(
+  'places distance births along the native parent path with partial-step age',
+  () => {
+    const { lifecycle } = JSON.parse(readFileSync(nativePath, 'utf8')) as {
+      lifecycle: LifecycleCase[];
+    };
+    let positionError = 0,
+      lifetimeError = 0;
+    for (const c of lifecycle.filter((c) => c.name === 'distance')) {
+      const { child, graph } = fixture(0, c.inherit, 0, false, false, 1, 6);
+      for (let frame = 1; frame <= 120; frame++) {
+        graph.step(1 / 60);
+        const sample = c.samples[frame]!;
+        expect(child.count, `frame=${frame}`).toBe(sample.child.length);
+        for (let i = 0; i < child.count; i++) {
+          const actual = particleSnapshot(child, i),
+            expected = sample.child[i]!;
+          for (const [axis, key] of (['x', 'y', 'z'] as const).entries()) {
+            const error = Math.abs(
+              actual.position[axis]! - origin.position[axis]! - expected.position[key],
+            );
+            positionError = Math.max(positionError, error);
+            expect(error, `frame=${frame}, particle=${i}`).toBeLessThan(2e-5);
+          }
+          const error = Math.abs(actual.remainingLifetime - expected.remaining);
+          lifetimeError = Math.max(lifetimeError, error);
+          expect(error, `frame=${frame}, particle=${i}`).toBeLessThan(2e-5);
+        }
+      }
+    }
+    recordError(
+      'sub-emitter.distance.position',
+      positionError,
+      'scene units',
+      '2 cases, 120 frames',
+    );
+    recordError('sub-emitter.distance.lifetime', lifetimeError, 'seconds', '2 cases, 120 frames');
+  },
 );
 it.skipIf(!existsSync(nativePath))(
   'matches native bursts and inheritance, while bounding measured continuous-rate frame differences',

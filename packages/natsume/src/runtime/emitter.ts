@@ -102,6 +102,8 @@ export class Emitter {
   onDeath: ((index: number) => void) | undefined;
   onClear: (() => void) | undefined;
   onAdvanced: ((seconds: number) => void) | undefined;
+  /** @internal A graph defers warming until all participating systems are initialized. */
+  onPrewarm: (() => void) | undefined;
   private subBirth:
     | { parent: ParticleSnapshot; properties: number; parentSystem: number }
     | undefined;
@@ -447,22 +449,48 @@ export class Emitter {
   }
   private prewarm(): void {
     if (!this.main.simulationSpeed || !this.prewarmSeconds) return;
+    if (this.onPrewarm) {
+      this.onPrewarm();
+      return;
+    }
+    this.pendingPrewarmTime = this.runPrewarm((seconds) => this.advance(seconds));
+  }
+
+  /** @internal Advance the complete history when descendants can outlive the source. */
+  prewarmGraph(advance: (seconds: number) => void, historyLifetime: number): number {
+    return this.runPrewarm(advance, true, historyLifetime);
+  }
+
+  /** @internal Graph warming already supplies local simulation seconds. */
+  advancePrewarm(seconds: number): void {
+    this.advance(seconds);
+  }
+
+  private runPrewarm(
+    advance: (seconds: number) => void,
+    retainHistory = false,
+    historyLifetime = this.maximumBirthLifetime,
+  ): number {
     // Native prewarm retains only the final maximum-lifetime window of rate births.
     this.warming = true;
-    this.warmStart = Math.max(0, this.prewarmSeconds - this.maximumBirthLifetime);
+    const duration = retainHistory
+      ? Math.ceil(historyLifetime / this.main.durationSeconds) * this.main.durationSeconds
+      : this.prewarmSeconds;
+    if (retainHistory) historyLifetime = duration;
+    const skip = Math.max(0, duration - historyLifetime);
+    this.warmStart = retainHistory ? 0 : skip;
     const fixedStep = Math.fround(0.02);
     try {
-      const skippedSteps = Math.ceil(this.warmStart / 0.02);
-      for (let i = 0; i < skippedSteps; i++)
-        this.advance(Math.min(0.02, this.warmStart - i * 0.02));
+      const skippedSteps = Math.ceil(skip / 0.02);
+      for (let i = 0; i < skippedSteps; i++) advance(Math.min(0.02, skip - i * 0.02));
       // Native prewarm drains complete 0.02 s steps from a Float32 lifetime window.
       // The remainder is consumed in whole substeps on the next update.
-      let remaining = Math.fround(this.maximumBirthLifetime);
+      let remaining = Math.fround(historyLifetime);
       while (remaining >= fixedStep) {
-        this.advance(fixedStep);
+        advance(fixedStep);
         remaining = Math.fround(remaining - fixedStep);
       }
-      this.pendingPrewarmTime = remaining > 1e-6 ? remaining : 0;
+      return remaining > 1e-6 ? remaining : 0;
     } finally {
       this.warming = false;
     }
@@ -747,11 +775,14 @@ export class Emitter {
     spacing = 0,
     remainder = 0,
     parentSystem = 0,
+    initialAge = 0,
   ): void {
     this.enableSubClock();
     this.subBirth = { parent, properties, parentSystem };
     try {
+      const first = this.count;
       this.emit(amount, phase, seconds, spacing, remainder);
+      if (initialAge > 0) this.advanceParticles(initialAge, first);
     } finally {
       this.subBirth = undefined;
     }
