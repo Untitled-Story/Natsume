@@ -9,7 +9,17 @@ public static class NatsumeSubEmitterProbe
     [Serializable] public class Particle { public Vector3 position,velocity,size,rotation; public Color color; public float lifetime,remaining; public uint seed; }
     [Serializable] public class Sample { public int frame; public Particle[] parent,child; }
     [Serializable] public class Case { public int eventType,inherit,space,kind; public bool emission,play; public float probability; public Sample[] samples; }
-    [Serializable] public class Output { public string unityVersion; public Case[] cases; }
+    [Serializable] public class Endpoint { public float remaining,step; public int count; public Particle[] particles; }
+    [Serializable] public class Output { public string unityVersion; public Case[] cases; public Endpoint[] endpoints; }
+    static Endpoint End(float remaining,float step) {
+        var go=new GameObject("endpoint");
+        try {
+            var ps=Make(go,false,false,false,1);ps.Simulate(0,false,true,false);
+            var particle=new ParticleSystem.Particle { position=Vector3.zero,velocity=Vector3.zero,startLifetime=1,remainingLifetime=remaining,startSize=1,startColor=Color.white,randomSeed=1 };
+            ps.SetParticles(new[]{particle},1);ps.Simulate(step,false,false,false);
+            return new Endpoint { remaining=remaining,step=step,count=ps.particleCount,particles=Read(ps) };
+        }finally{UnityEngine.Object.DestroyImmediate(go);}
+    }
     static Particle[] Read(ParticleSystem ps) {
         var particles=new ParticleSystem.Particle[ps.particleCount]; ps.GetParticles(particles);
         var result=new Particle[particles.Length];
@@ -37,7 +47,7 @@ public static class NatsumeSubEmitterProbe
             if(type==4)parent.TriggerSubEmitter(0);
             for(int frame=1;frame<=60;frame++){
                 parent.Simulate(1f/60,true,false,false);
-                if(frame==1||frame==2||frame==5||frame==6||frame==7||frame==12||frame==24||frame==36||frame==60)rows.Add(new Sample{frame=frame,parent=Read(parent),child=Read(child)});
+                rows.Add(new Sample{frame=frame,parent=Read(parent),child=Read(child)});
             }
             return new Case{kind=kind,eventType=type,inherit=inherit,space=space,emission=emission,play=play,probability=probability,samples=rows.ToArray()};
         }finally{UnityEngine.Object.DestroyImmediate(go);}
@@ -50,6 +60,8 @@ public static class NatsumeSubEmitterProbe
             cases.Add(Measure(type,0,0,emission,play,probability));
         foreach(int type in new[]{0,2,4})foreach(int inherit in new[]{0,16})foreach(int kind in new[]{1,2,3,5})
             cases.Add(Measure(type,inherit,0,true,false,1,kind));
-        var path=Environment.GetEnvironmentVariable("NATSUME_COMPAT_OUTPUT");Directory.CreateDirectory(Path.GetDirectoryName(path));File.WriteAllText(path,JsonUtility.ToJson(new Output{unityVersion=Application.unityVersion,cases=cases.ToArray()},true));
+        var endpoints=new List<Endpoint>();
+        foreach(float step in new[]{0.01f,1f/60,0.025f})foreach(float excess in new[]{-1e-5f,0f,1e-8f,1e-7f,1e-6f,1e-5f,0.001f})endpoints.Add(End(step+excess,step));
+        var path=Environment.GetEnvironmentVariable("NATSUME_COMPAT_OUTPUT");Directory.CreateDirectory(Path.GetDirectoryName(path));File.WriteAllText(path,JsonUtility.ToJson(new Output{unityVersion=Application.unityVersion,cases=cases.ToArray(),endpoints=endpoints.ToArray()},true));
     }catch(Exception e){Debug.LogException(e);EditorApplication.Exit(1);}}
 }

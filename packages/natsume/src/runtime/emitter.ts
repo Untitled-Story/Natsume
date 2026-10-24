@@ -65,6 +65,7 @@ export class Emitter {
   readonly startColors: Float32Array;
   readonly ages: Float32Array;
   readonly lifetimes: Float32Array;
+  private subAges: Float64Array | undefined;
   readonly serials: Uint32Array;
   readonly seed: number;
   readonly field: ParticleNoise['field'] | undefined;
@@ -95,6 +96,9 @@ export class Emitter {
   private readonly birth = new Float64Array(10);
   private readonly spriteShape: SpriteShapeSampler | undefined;
   private nextSerial = 0;
+  onBirth: ((index: number) => void) | undefined;
+  onDeath: ((index: number) => void) | undefined;
+  onClear: (() => void) | undefined;
   private subBirth: { parent: ParticleSnapshot; properties: number } | undefined;
   private time = 0;
   private burstTime = 0;
@@ -182,6 +186,9 @@ export class Emitter {
           break;
         case M.CustomDataModule:
           this.custom = m.data as R<CustomDataModuleT>;
+          break;
+        case M.SubEmittersModule:
+          // The instance graph owns cross-system scheduling.
           break;
         default:
           check(false, 'CAPABILITY', `System ${id}: unsupported particle module ${M[m.dataType]}`);
@@ -369,6 +376,7 @@ export class Emitter {
     return out;
   }
   reset(): void {
+    this.onClear?.();
     this.count = 0;
     this.noiseEvaluator?.reset();
     this.nextSerial = 0;
@@ -393,6 +401,7 @@ export class Emitter {
     this.emitting = true;
   }
   clear(): void {
+    this.onClear?.();
     this.count = 0;
   }
   sync(): void {
@@ -692,13 +701,16 @@ export class Emitter {
         for (let channel = 0; channel < 4; channel++)
           this.startColors[i * 4 + channel]! *= this.birth[6 + channel]!;
       if (this.subBirth) this.inheritSubBirth(i, this.subBirth.parent, this.subBirth.properties);
+      if (this.subAges) this.subAges[i] = 0;
       this.updateCustom(i, 0);
+      this.onBirth?.(i);
       const age = (amount - n - 1 + remainder) * spacing;
       if (age > 0) this.advanceParticles(age, i);
     }
   }
   /** Emits into this system's existing pool, including when automatic emission is disabled. */
   emitTriggeredBurst(parent: ParticleSnapshot, properties: number): void {
+    this.enableSubClock();
     this.subBirth = { parent, properties };
     try {
       for (const [index, burst] of (this.emission?.bursts ?? []).entries()) {
@@ -714,6 +726,29 @@ export class Emitter {
     } finally {
       this.subBirth = undefined;
     }
+  }
+  /** @internal An independent Birth channel feeds the target without changing its own clock. */
+  emitSubParticles(
+    amount: number,
+    phase: number,
+    seconds: number,
+    parent: ParticleSnapshot,
+    properties: number,
+    spacing = 0,
+    remainder = 0,
+  ): void {
+    this.enableSubClock();
+    this.subBirth = { parent, properties };
+    try {
+      this.emit(amount, phase, seconds, spacing, remainder);
+    } finally {
+      this.subBirth = undefined;
+    }
+  }
+  private enableSubClock(): void {
+    if (this.subAges) return;
+    this.subAges = new Float64Array(this.lifetimes.length);
+    for (let i = 0; i < this.count; i++) this.subAges[i] = this.ages[i]!;
   }
   private inheritSubBirth(index: number, parent: ParticleSnapshot, properties: number): void {
     const offset = index * 3,
@@ -785,8 +820,9 @@ export class Emitter {
   private advanceParticles(dt: number, first = 0): void {
     const limitDecay = this.limit ? Math.pow(1 - this.limit.dampen, dt * 30) : 1;
     for (let i = first; i < this.count; ) {
-      const age = this.ages[i]! + dt;
-      if (age >= this.lifetimes[i]!) {
+      const age = this.subAges ? this.subAges[i]! + Math.fround(dt) : this.ages[i]! + dt;
+      const dead = this.subAges ? age > this.lifetimes[i]! : age >= this.lifetimes[i]!;
+      if (dead && !this.onDeath) {
         this.remove(i);
         continue;
       }
@@ -1036,6 +1072,12 @@ export class Emitter {
       // Custom Data, like integrated rotation, samples the start of this simulation step.
       this.updateCustom(i, this.ages[i]! / this.lifetimes[i]!);
       this.ages[i] = age;
+      if (this.subAges) this.subAges[i] = age;
+      if (dead) {
+        this.onDeath?.(i);
+        this.remove(i);
+        continue;
+      }
       i++;
     }
   }
@@ -1120,6 +1162,7 @@ export class Emitter {
     const last = --this.count;
     if (i === last) return;
     for (const a of [this.ages, this.lifetimes, this.serials]) a[i] = a[last]!;
+    if (this.subAges) this.subAges[i] = this.subAges[last]!;
     for (const a of [this.positions, this.velocities, this.startSizes, this.rotations])
       a.copyWithin(i * 3, last * 3, last * 3 + 3);
     this.noiseSizes?.copyWithin(i * 3, last * 3, last * 3 + 3);
