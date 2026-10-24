@@ -294,3 +294,15 @@ Sprite Mask 自定义范围：后端点不含、前端点包含；多个遮罩�
 | 双实例共享 / 反复销毁 | 纹理不重复；实例、租约与保留像素归零 |
 
 Sprite Mask 每个受影响 pass 增加 2×适用遮罩数的绘制；UIMask 每层增加退出绘制。两层 UI Mask 与一个子 Graphic 的静态帧：**5 次绘制、0 次 bufferSubData**。静态 UI 几何缓存，布局或像素调整矩形变化时重建。
+
+## 拖尾参数
+
+Unity 2022.3.21f1；PerParticle / Ribbon，五种纹理模式，粒子寿命 0.5 s、尺寸 2、纹理缩放 (1.5, 0.75)。下列只比较已实现的参数关系，不包含历史点选择和完整拖尾几何。
+
+| 项目 | 范围 | 最大绝对误差 |
+| --- | --- | ---: |
+| UV | 624 对顶点采样；PerParticle 的四种非 Static 模式、Ribbon 五种模式 | **1.612×10⁻⁷ UV 单位** |
+| 宽度 | 346 对顶点采样；Width over Trail、Size Affects Width | **2.385×10⁻⁷ 场景单位** |
+| 颜色 | 同 346 对采样；两种颜色乘算、粒子颜色继承、8-bit 量化 | **3.368×10⁻⁶ /255** |
+
+lifetime 按粒子初始寿命乘算；Size Affects Lifetime 再乘最大尺寸轴。Ribbon 的 U 不使用 textureScale.x，V 围绕 0.5 缩放。

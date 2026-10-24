@@ -40,7 +40,7 @@ app.ticker.add(tick);
 
 `loadPack` 接受 URL、`Uint8Array` 或 `ArrayBuffer`。同一个资源包可以创建多个独立实例；实例提供 `play()`、`pause()`、`restart()` 和 `stop()` 控制播放，宿主以秒调用 `update()` 推进模拟。
 
-当前读取 NOAP v1、NOIR 2.0 和 NOMS 2.0；旧包需要用新版 Noa 重新编译。Sprite 描述符内联于 NOIR，通过资产 ID 引用图像和网格，没有独立文件。NOMS 保留源顶点属性、UV0–UV7 和三角形顺序，绘制能力仍受下方支持范围限制。
+当前读取 NOAP v1、NOIR 3.0 和 NOMS 2.0；旧包需要用新版 Noa 重新编译。Sprite 描述符内联于 NOIR，通过资产 ID 引用图像和网格，没有独立文件。NOMS 保留源顶点属性、UV0–UV7 和三角形顺序，绘制能力仍受下方支持范围限制。
 
 `loadPack` 校验结构与已知契约，可用于检查尚未支持绘制的包；未知必需能力直接报错。已知但未实现的必需能力由 `checkCompatibility` 和实例化明确阻止。
 
@@ -162,6 +162,17 @@ effect.setRenderEnvironment({ globalMipBias: -0.5 });
 ```
 
 偏移单位为 mip 层级，0 使用常规采样层级；setter 替换整个配置。已知无光照配方不消费阴影和光照 / 反射探针，相关设置会给出说明；Natsume 不生成三维光照环境。
+
+## 粒子状态查询
+
+```ts
+const particles = effect.getParticles(systemId);
+for (const particle of particles) {
+  console.log(particle.id, particle.position, particle.velocity);
+}
+```
+
+返回当前存活粒子的独立快照。位置、速度和尺寸采用 Unity 世界单位，旋转为模拟空间内的弧度；包含当前颜色、年龄、初始寿命和剩余寿命。ID 在该系统内保持到粒子死亡，数组压缩不改变 ID；重播后 ID 重新计数。
 
 ## 粒子绘制环境
 

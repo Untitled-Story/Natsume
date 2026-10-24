@@ -1,3 +1,4 @@
+import type { ParticleSnapshot } from './particle-snapshot.js';
 import { canvasSortingRank } from '../rendering/canvas-sorting.js';
 import { createSpriteMasks } from './sprite-masks.js';
 import { createUIRenderers } from './ui-renderers.js';
@@ -302,6 +303,17 @@ export class EffectInstance {
       'Initial display transform supports affine matrices',
     );
     mat4.copy(this.matrix, matrix as mat4);
+    this.render();
+  }
+  /** Copies live particles in Unity world units. IDs remain valid until death or restart. */
+  getParticles(systemId: number): readonly ParticleSnapshot[] {
+    this.assertAlive();
+    return this.simulation.getParticles(systemId);
+  }
+  /** Triggers a source sub-emitter slot for one live particle, or all live particles when omitted. */
+  emitSubEmitter(systemId: number, slot: number, particleId?: number): void {
+    this.assertAlive();
+    this.simulation.emitSubEmitter(systemId, slot, particleId);
     this.render();
   }
   getNode(id: number): NatsumeNode | undefined {

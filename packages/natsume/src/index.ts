@@ -37,3 +37,5 @@ export {
   type CanvasView,
   type CanvasEnvironment,
 } from './rendering/canvas-environment.js';
+
+export { type ParticleSnapshot } from './runtime/particle-snapshot.js';

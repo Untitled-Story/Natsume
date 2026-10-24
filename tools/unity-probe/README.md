@@ -18,6 +18,8 @@ pnpm probe:unity
 默认测量曲线与 Noise。其他模式每次选择一个：
 
 ```sh
+pnpm probe:unity --sub-emitters # 子发射器继承、触发时序、Burst 与连续发射
+pnpm probe:unity --trails       # 拖尾几何、纹理模式、宽度颜色与死亡边界
 pnpm probe:unity --animation    # 动画时钟、循环与多关键帧曲线
 pnpm probe:unity --events       # 类型化事件、循环端点与启停顺序
 pnpm probe:unity --boundaries   # 发射、运动、外观与 BakeMesh 边界

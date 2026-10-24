@@ -46,8 +46,13 @@ burstsLength():number {
   return offset ? this.bb!.__vector_len(this.bb_pos + offset) : 0;
 }
 
+enabled():boolean {
+  const offset = this.bb!.__offset(this.bb_pos, 10);
+  return offset ? !!this.bb!.readInt8(this.bb_pos + offset) : true;
+}
+
 static startEmissionModule(builder:flatbuffers.Builder) {
-  builder.startObject(3);
+  builder.startObject(4);
 }
 
 static addRateOverTime(builder:flatbuffers.Builder, rateOverTimeOffset:flatbuffers.Offset) {
@@ -74,6 +79,10 @@ static startBurstsVector(builder:flatbuffers.Builder, numElems:number) {
   builder.startVector(4, numElems, 4);
 }
 
+static addEnabled(builder:flatbuffers.Builder, enabled:boolean) {
+  builder.addFieldInt8(3, +enabled, +true);
+}
+
 static endEmissionModule(builder:flatbuffers.Builder):flatbuffers.Offset {
   const offset = builder.endObject();
   return offset;
@@ -84,7 +93,8 @@ unpack(): EmissionModuleT {
   return new EmissionModuleT(
     (this.rateOverTime() !== null ? this.rateOverTime()!.unpack() : null),
     (this.rateOverDistance() !== null ? this.rateOverDistance()!.unpack() : null),
-    this.bb!.createObjList<Burst, BurstT>(this.bursts.bind(this), this.burstsLength())
+    this.bb!.createObjList<Burst, BurstT>(this.bursts.bind(this), this.burstsLength()),
+    this.enabled()
   );
 }
 
@@ -93,6 +103,7 @@ unpackTo(_o: EmissionModuleT): void {
   _o.rateOverTime = (this.rateOverTime() !== null ? this.rateOverTime()!.unpack() : null);
   _o.rateOverDistance = (this.rateOverDistance() !== null ? this.rateOverDistance()!.unpack() : null);
   _o.bursts = this.bb!.createObjList<Burst, BurstT>(this.bursts.bind(this), this.burstsLength());
+  _o.enabled = this.enabled();
 }
 }
 
@@ -100,7 +111,8 @@ export class EmissionModuleT implements flatbuffers.IGeneratedObject {
 constructor(
   public rateOverTime: ScalarParameterT|null = null,
   public rateOverDistance: ScalarParameterT|null = null,
-  public bursts: (BurstT)[] = []
+  public bursts: (BurstT)[] = [],
+  public enabled: boolean = true
 ){}
 
 
@@ -113,6 +125,7 @@ pack(builder:flatbuffers.Builder): flatbuffers.Offset {
   EmissionModule.addRateOverTime(builder, rateOverTime);
   EmissionModule.addRateOverDistance(builder, rateOverDistance);
   EmissionModule.addBursts(builder, bursts);
+  EmissionModule.addEnabled(builder, this.enabled);
 
   return EmissionModule.endEmissionModule(builder);
 }

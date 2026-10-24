@@ -151,6 +151,16 @@ export function checkCompatibility(
       );
   global.require(entry, 'HOST', 'entryId', options.entryId, 'Unknown entry');
   global.require(
+    options.maxTrailPoints === undefined ||
+      (Number.isSafeInteger(options.maxTrailPoints) &&
+        options.maxTrailPoints > 0 &&
+        options.maxTrailPoints <= 0x7fffffff),
+    'HOST',
+    'maxTrailPoints',
+    options.maxTrailPoints,
+    'maxTrailPoints must be a positive integer no greater than 2147483647',
+  );
+  global.require(
     options.seed === undefined ||
       (Number.isInteger(options.seed) && options.seed >= 0 && options.seed <= 0xffffffff),
     'HOST',

@@ -1,3 +1,8 @@
+import { particleSnapshot, type ParticleSnapshot } from './particle-snapshot.js';
+import { TrailPointPool } from './trail-point-pool.js';
+import { ParticleModuleData } from '../format/generated/noa/ir/particle-module-data.js';
+import type { SubEmittersModuleT } from '../format/generated/noa/ir/sub-emitters-module.js';
+import { random } from './parameters.js';
 import type { CanvasEnvironment } from '../rendering/canvas-environment.js';
 import { visitAnimationEvents, type NatsumeAnimationEvent } from './animation-events.js';
 import { SUPPORTED_FEATURES } from '../format/semantics.js';
@@ -19,6 +24,8 @@ import { Scene, type LayoutSize } from './scene.js';
 import { Emitter, prewarmDuration, type Diagnostic } from './emitter.js';
 
 export interface SimulationOptions {
+  /** Maximum retained trail points per instance. Defaults to 65,536; overflow throws. */
+  readonly maxTrailPoints?: number;
   /** Host display and projection inputs for source Canvas components. */
   readonly canvasEnvironment?: CanvasEnvironment;
   readonly entryId?: number;
@@ -49,6 +56,7 @@ interface AnimationPlayer {
 }
 
 export class Simulation {
+  readonly trailPoints: TrailPointPool;
   readonly scene: Scene;
   readonly emitters = new Map<number, Emitter>();
   readonly diagnostics: Diagnostic[] = [];
@@ -80,6 +88,7 @@ export class Simulation {
     options: SimulationOptions = {},
   ) {
     check(!pack.disposed, 'DISPOSED', 'Pack has been disposed');
+    this.trailPoints = new TrailPointPool(options.maxTrailPoints);
     for (const feature of pack.document.features)
       check(
         !feature.required || SUPPORTED_FEATURES[String(feature.name)] === feature.revision,
@@ -189,6 +198,36 @@ export class Simulation {
         'CAPABILITY',
         'Unsupported entry action',
       );
+  }
+  getParticles(systemId: number): readonly ParticleSnapshot[] {
+    const emitter = this.emitters.get(systemId);
+    check(emitter, 'HOST', 'Unknown particle system');
+    return Array.from({ length: emitter.count }, (_, index) => particleSnapshot(emitter, index));
+  }
+  emitSubEmitter(systemId: number, slot: number, particleId?: number): void {
+    const emitter = this.emitters.get(systemId);
+    check(emitter, 'HOST', 'Unknown particle system');
+    const module = emitter.source.modules.find(
+      (m) => m.dataType === ParticleModuleData.SubEmittersModule,
+    );
+    const slots = (module?.data as R<SubEmittersModuleT> | undefined)?.emitters;
+    check(
+      Number.isInteger(slot) && slot >= 0 && slots && slot < slots.length,
+      'HOST',
+      'Unknown sub-emitter slot',
+    );
+    const edge = slots[slot]!;
+    const selected: number[] = [];
+    for (let index = 0; index < emitter.count; index++)
+      if (particleId === undefined || emitter.serials[index] === particleId) selected.push(index);
+    check(particleId === undefined || selected.length > 0, 'HOST', 'Particle is no longer alive');
+    if (!edge.systemComponentId) return;
+    const target = this.emitters.get(edge.systemComponentId);
+    check(target, 'CAPABILITY', 'Sub-emitter target is outside this instance');
+    for (const index of selected) {
+      if (random(emitter.seed, emitter.serials[index]!, 180 + slot) >= edge.probability) continue;
+      target.emitTriggeredBurst(particleSnapshot(emitter, index), edge.inheritProperties);
+    }
   }
   get particleCount(): number {
     let n = 0;
@@ -315,6 +354,7 @@ export class Simulation {
   }
   stop(mode: 'drain' | 'clear' = 'drain'): void {
     this.revision++;
+    if (mode === 'clear') this.trailPoints.clear();
     for (const e of this.emitters.values()) {
       e.emitting = false;
       if (mode === 'clear') e.clear();
@@ -324,6 +364,7 @@ export class Simulation {
   }
   restart(): void {
     this.revision++;
+    this.trailPoints.clear();
     this.time = 0;
     this.accumulator = 0;
     this.droppedSeconds = 0;

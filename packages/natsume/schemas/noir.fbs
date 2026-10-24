@@ -216,6 +216,8 @@ table MainModule {
 table EmissionModule {
   rate_over_time:ScalarParameter; rate_over_distance:ScalarParameter;
   bursts:[Burst];
+  // Automatic emission only; sub-emitter triggers retain the authored parameters.
+  enabled:bool = true;
 }
 // Shape modes are represented by semantic tables, never Unity enum values.
 enum ShapeSweep:ubyte { Random, Loop, PingPong, BurstSpread }

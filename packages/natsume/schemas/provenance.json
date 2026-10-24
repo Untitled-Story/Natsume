@@ -3,7 +3,7 @@
   "commit": "c2fdb50f93c4db0c4ae48478510ca86153ad4eca",
   "flatc": "25.12.19",
   "sha256": {
-    "noir.fbs": "393eeef48fe88434cd02b407400a7ef603bd494ba37f87222afe7678c90c0b9d",
+    "noir.fbs": "aad91565f29ed68d2235c9aa857327b1973c73c232846dc6ffc8ac29a83687aa",
     "mesh.fbs": "0b7bd3b6ab52b4faa918c4b2dac3981e65fb93371e334ef9b72b3515e69c332d",
     "noap.schema.json": "db2c906576a9d13b289091d60f6d6fdede31c5534b25dc2735ac9ff356b8ab66",
     "shader-data.schema.json": "cbb726f654bce66b7ef312a27907b0fe223944d264f09b55c6fb6d12682d08ef"

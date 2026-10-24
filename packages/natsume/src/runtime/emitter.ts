@@ -32,6 +32,7 @@ import { maximumLifetime, prewarmDuration } from './prewarm.js';
 export { prewarmDuration } from './prewarm.js';
 import { emitterSupport } from './emitter-support.js';
 import { assertSupport } from './support-checks.js';
+import type { ParticleSnapshot } from './particle-snapshot.js';
 
 export interface Diagnostic {
   readonly code: string;
@@ -94,6 +95,7 @@ export class Emitter {
   private readonly birth = new Float64Array(10);
   private readonly spriteShape: SpriteShapeSampler | undefined;
   private nextSerial = 0;
+  private subBirth: { parent: ParticleSnapshot; properties: number } | undefined;
   private time = 0;
   private burstTime = 0;
   private burstCycle = 0;
@@ -502,6 +504,7 @@ export class Emitter {
     }
   }
   private bursts(from: number, to: number): void {
+    if (this.emission?.enabled === false) return;
     if (from >= 0) this.repeatBursts(to - from);
     const duration = this.main.durationSeconds;
     const firstCycle = this.main.loop ? Math.max(0, Math.floor(from / duration)) : 0;
@@ -688,10 +691,56 @@ export class Emitter {
       if (this.spriteShape)
         for (let channel = 0; channel < 4; channel++)
           this.startColors[i * 4 + channel]! *= this.birth[6 + channel]!;
+      if (this.subBirth) this.inheritSubBirth(i, this.subBirth.parent, this.subBirth.properties);
       this.updateCustom(i, 0);
       const age = (amount - n - 1 + remainder) * spacing;
       if (age > 0) this.advanceParticles(age, i);
     }
+  }
+  /** Emits into this system's existing pool, including when automatic emission is disabled. */
+  emitTriggeredBurst(parent: ParticleSnapshot, properties: number): void {
+    this.subBirth = { parent, properties };
+    try {
+      for (const [index, burst] of (this.emission?.bursts ?? []).entries()) {
+        if (random(this.seed, parent.id, 130 + index) >= burst.probability) continue;
+        this.emit(
+          Math.max(
+            0,
+            Math.round(scalar(burst.count, 0, random(this.seed, parent.id, 150 + index))),
+          ),
+          0,
+        );
+      }
+    } finally {
+      this.subBirth = undefined;
+    }
+  }
+  private inheritSubBirth(index: number, parent: ParticleSnapshot, properties: number): void {
+    const offset = index * 3,
+      m = this.inverseSimulationMatrix;
+    // Shape offsets remain relative to the parent's position, without the target's translation.
+    const x = parent.position[0] - this.emitterMatrix[12]!;
+    const y = parent.position[1] - this.emitterMatrix[13]!;
+    const z = parent.position[2] - this.emitterMatrix[14]!;
+    this.positions[offset] = this.positions[offset]! + m[0]! * x + m[4]! * y + m[8]! * z;
+    this.positions[offset + 1] = this.positions[offset + 1]! + m[1]! * x + m[5]! * y + m[9]! * z;
+    this.positions[offset + 2] = this.positions[offset + 2]! + m[2]! * x + m[6]! * y + m[10]! * z;
+    if (properties & 1)
+      for (let channel = 0; channel < 4; channel++) {
+        const child = Math.round(
+          Math.max(0, Math.min(1, this.startColors[index * 4 + channel]!)) * 255,
+        );
+        const inherited = Math.round(Math.max(0, Math.min(1, parent.color[channel]!)) * 255);
+        this.startColors[index * 4 + channel] = Math.round((child * inherited) / 255) / 255;
+      }
+    for (let axis = 0; axis < 3; axis++) {
+      if (properties & 2)
+        this.startSizes[offset + axis] = this.startSizes[offset + axis]! * parent.size[axis]!;
+      if (properties & 4)
+        this.rotations[offset + axis] = this.rotations[offset + axis]! + parent.rotation[axis]!;
+    }
+    if (properties & 8)
+      this.lifetimes[index] = Math.max(1e-5, this.lifetimes[index]! * parent.remainingLifetime);
   }
   step(delta: number): void {
     if (!this.enabledLast) return;
@@ -1014,7 +1063,9 @@ export class Emitter {
           : Math.min(this.rateTime, this.main.durationSeconds)) / this.main.durationSeconds;
       const rate = Math.max(
         0,
-        scalar(this.emission?.rateOverTime, phase, random(this.seed, 0, 90)),
+        this.emission?.enabled === false
+          ? 0
+          : scalar(this.emission?.rateOverTime, phase, random(this.seed, 0, 90)),
       );
       const birthDt = this.warming
         ? Math.min(rateDt, Math.max(0, end - this.warmStart))
@@ -1045,11 +1096,13 @@ export class Emitter {
         (activeDt / dt) *
         Math.max(
           0,
-          scalar(
-            this.emission?.rateOverDistance,
-            (this.time % this.main.durationSeconds) / this.main.durationSeconds,
-            random(this.seed, 0, 91),
-          ),
+          this.emission?.enabled === false
+            ? 0
+            : scalar(
+                this.emission?.rateOverDistance,
+                (this.time % this.main.durationSeconds) / this.main.durationSeconds,
+                random(this.seed, 0, 91),
+              ),
         );
       const distanceAmount = Math.floor(this.distanceCarry + 1e-8);
       this.distanceCarry -= distanceAmount;
