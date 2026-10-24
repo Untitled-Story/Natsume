@@ -65,9 +65,10 @@ export function trailAppearance(
   widthRandom: number,
   trailRandom: number,
   outColor: Float32Array,
+  scratch = new Float32Array(4),
 ): number {
   color(trails.colorOverLifetime, particlePhase, lifetimeRandom, outColor);
-  const along = new Float32Array(4);
+  const along = scratch;
   color(trails.colorOverTrail, trailPhase, trailRandom, along);
   for (let i = 0; i < 4; i++) {
     let channel = Math.max(0, Math.min(255, Math.round(outColor[i]! * along[i]! * 255)));

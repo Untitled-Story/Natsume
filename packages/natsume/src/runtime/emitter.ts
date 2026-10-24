@@ -67,6 +67,8 @@ export class Emitter {
   readonly lifetimes: Float32Array;
   private subAges: Float64Array | undefined;
   readonly serials: Uint32Array;
+  subParentSystems: Uint32Array | undefined;
+  subParentParticles: Uint32Array | undefined;
   readonly seed: number;
   readonly field: ParticleNoise['field'] | undefined;
   readonly noiseSizes: Float32Array | undefined;
@@ -96,10 +98,13 @@ export class Emitter {
   private readonly birth = new Float64Array(10);
   private readonly spriteShape: SpriteShapeSampler | undefined;
   private nextSerial = 0;
-  onBirth: ((index: number) => void) | undefined;
+  onBirth: ((index: number, phase: number) => void) | undefined;
   onDeath: ((index: number) => void) | undefined;
   onClear: (() => void) | undefined;
-  private subBirth: { parent: ParticleSnapshot; properties: number } | undefined;
+  onAdvanced: ((seconds: number) => void) | undefined;
+  private subBirth:
+    | { parent: ParticleSnapshot; properties: number; parentSystem: number }
+    | undefined;
   private time = 0;
   private burstTime = 0;
   private burstCycle = 0;
@@ -188,6 +193,7 @@ export class Emitter {
           this.custom = m.data as R<CustomDataModuleT>;
           break;
         case M.SubEmittersModule:
+        case M.TrailsModule:
           // The instance graph owns cross-system scheduling.
           break;
         default:
@@ -597,6 +603,10 @@ export class Emitter {
         o = i * 3,
         serial = this.nextSerial++;
       this.serials[i] = serial;
+      if (this.subParentSystems) {
+        this.subParentSystems[i] = 0;
+        this.subParentParticles![i] = 0;
+      }
       const rnd = (ch: number) => random(this.seed, serial, ch),
         t = phase;
       this.ages[i] = 0;
@@ -703,15 +713,15 @@ export class Emitter {
       if (this.subBirth) this.inheritSubBirth(i, this.subBirth.parent, this.subBirth.properties);
       if (this.subAges) this.subAges[i] = 0;
       this.updateCustom(i, 0);
-      this.onBirth?.(i);
+      this.onBirth?.(i, phase);
       const age = (amount - n - 1 + remainder) * spacing;
       if (age > 0) this.advanceParticles(age, i);
     }
   }
   /** Emits into this system's existing pool, including when automatic emission is disabled. */
-  emitTriggeredBurst(parent: ParticleSnapshot, properties: number): void {
+  emitTriggeredBurst(parent: ParticleSnapshot, properties: number, parentSystem = 0): void {
     this.enableSubClock();
-    this.subBirth = { parent, properties };
+    this.subBirth = { parent, properties, parentSystem };
     try {
       for (const [index, burst] of (this.emission?.bursts ?? []).entries()) {
         if (random(this.seed, parent.id, 130 + index) >= burst.probability) continue;
@@ -736,9 +746,10 @@ export class Emitter {
     properties: number,
     spacing = 0,
     remainder = 0,
+    parentSystem = 0,
   ): void {
     this.enableSubClock();
-    this.subBirth = { parent, properties };
+    this.subBirth = { parent, properties, parentSystem };
     try {
       this.emit(amount, phase, seconds, spacing, remainder);
     } finally {
@@ -751,6 +762,13 @@ export class Emitter {
     for (let i = 0; i < this.count; i++) this.subAges[i] = this.ages[i]!;
   }
   private inheritSubBirth(index: number, parent: ParticleSnapshot, properties: number): void {
+    const parentSystem = this.subBirth!.parentSystem;
+    if (parentSystem) {
+      this.subParentSystems ??= new Uint32Array(this.lifetimes.length);
+      this.subParentParticles ??= new Uint32Array(this.lifetimes.length);
+      this.subParentSystems[index] = parentSystem;
+      this.subParentParticles[index] = parent.id;
+    }
     const offset = index * 3,
       m = this.inverseSimulationMatrix;
     // Shape offsets remain relative to the parent's position, without the target's translation.
@@ -816,6 +834,7 @@ export class Emitter {
     );
     this.advanceParticles(dt);
     this.advanceEmission(dt);
+    this.onAdvanced?.(dt);
   }
   private advanceParticles(dt: number, first = 0): void {
     const limitDecay = this.limit ? Math.pow(1 - this.limit.dampen, dt * 30) : 1;
@@ -1163,6 +1182,10 @@ export class Emitter {
     if (i === last) return;
     for (const a of [this.ages, this.lifetimes, this.serials]) a[i] = a[last]!;
     if (this.subAges) this.subAges[i] = this.subAges[last]!;
+    if (this.subParentSystems) {
+      this.subParentSystems[i] = this.subParentSystems[last]!;
+      this.subParentParticles![i] = this.subParentParticles![last]!;
+    }
     for (const a of [this.positions, this.velocities, this.startSizes, this.rotations])
       a.copyWithin(i * 3, last * 3, last * 3 + 3);
     this.noiseSizes?.copyWithin(i * 3, last * 3, last * 3 + 3);

@@ -17,6 +17,7 @@ public static class NatsumeTrailProbe
             var shape=p.shape;shape.enabled=false;var em=p.emission;em.enabled=false;
             var t=p.trails;t.enabled=true;t.mode=(ParticleSystemTrailMode)mode;t.ratio=1;t.lifetime=0.4f;t.minVertexDistance=0.1f;t.textureMode=(ParticleSystemTrailTextureMode)texture;t.textureScale=new Vector2(1.5f,0.75f);
             t.sizeAffectsLifetime=(flags&1)!=0;t.sizeAffectsWidth=(flags&2)!=0;t.inheritParticleColor=(flags&4)!=0;t.dieWithParticles=(flags&8)!=0;t.worldSpace=(flags&16)!=0;t.generateLightingData=true;
+            t.attachRibbonsToTransform=(flags&128)!=0;t.splitSubEmitterRibbons=(flags&256)!=0;
             t.colorOverLifetime=new ParticleSystem.MinMaxGradient(new Color(0.5f,0.6f,0.7f,0.5f));t.colorOverTrail=new ParticleSystem.MinMaxGradient(new Color(0.8f,0.6f,0.4f,0.9f));t.widthOverTrail=new ParticleSystem.MinMaxCurve(1,AnimationCurve.Linear(0,0.5f,1,1.5f));t.ribbonCount=2;
             var r=p.GetComponent<ParticleSystemRenderer>();r.enabled=true;r.trailMaterial=new Material(Shader.Find("Particles/Standard Unlit"));
             p.Simulate(0,false,true,false);
@@ -34,7 +35,7 @@ public static class NatsumeTrailProbe
     static Gradient Gradient(Color a,Color b){var g=new Gradient();g.SetKeys(new[]{new GradientColorKey(a,0),new GradientColorKey(b,1)},new[]{new GradientAlphaKey(a.a,0),new GradientAlphaKey(b.a,1)});return g;}
     public static void Run(){try{
         var cameraGo=new GameObject("camera");var camera=cameraGo.AddComponent<Camera>();camera.transform.position=new Vector3(0,0,-10);camera.orthographic=true;
-        var rows=new List<Case>();foreach(int mode in new[]{0,1})foreach(int texture in new[]{0,1,2,3,4})foreach(int flags in new[]{0,1,2,4,8,16,31,32,64})rows.Add(Measure(mode,texture,flags,camera));
+        var rows=new List<Case>();foreach(int mode in new[]{0,1})foreach(int texture in new[]{0,1,2,3,4})foreach(int flags in new[]{0,1,2,4,8,16,31,32,64,128,256})rows.Add(Measure(mode,texture,flags,camera));
         UnityEngine.Object.DestroyImmediate(cameraGo);var path=Environment.GetEnvironmentVariable("NATSUME_COMPAT_OUTPUT");Directory.CreateDirectory(Path.GetDirectoryName(path));File.WriteAllText(path,JsonUtility.ToJson(new Output{unityVersion=Application.unityVersion,cases=rows.ToArray()},true));
     }catch(Exception e){Debug.LogException(e);EditorApplication.Exit(1);}}
 }

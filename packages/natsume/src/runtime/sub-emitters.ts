@@ -21,6 +21,7 @@ interface BirthChannel {
   readonly bursts: Map<number, number>;
 }
 interface PendingBirth {
+  readonly parentSystem: number;
   readonly target: Emitter;
   readonly parent: ParticleSnapshot;
   readonly properties: number;
@@ -103,6 +104,7 @@ export class SubEmitterGraph {
       if (this.accept(source, index, edge, slot))
         this.emit({
           target,
+          parentSystem: source.id,
           parent: particleSnapshot(source, index),
           properties: edge.inheritProperties,
         });
@@ -153,6 +155,7 @@ export class SubEmitterGraph {
       if (edge.event !== Event.Death || !this.accept(source, index, edge, slot)) continue;
       this.enqueue(this.after, {
         target: this.emitters.get(edge.systemComponentId)!,
+        parentSystem: source.id,
         parent: particleSnapshot(source, index),
         properties: edge.inheritProperties,
       });
@@ -172,7 +175,8 @@ export class SubEmitterGraph {
   }
   private emit(birth: PendingBirth): void {
     if (!birth.target.enabled || !birth.target.node.activeInHierarchy) return;
-    if (birth.amount === undefined) birth.target.emitTriggeredBurst(birth.parent, birth.properties);
+    if (birth.amount === undefined)
+      birth.target.emitTriggeredBurst(birth.parent, birth.properties, birth.parentSystem);
     else
       birth.target.emitSubParticles(
         birth.amount,
@@ -182,6 +186,7 @@ export class SubEmitterGraph {
         birth.properties,
         birth.spacing,
         birth.remainder,
+        birth.parentSystem,
       );
   }
   private flush(queue: Map<number, PendingBirth[]>, id: number): void {
@@ -237,6 +242,7 @@ export class SubEmitterGraph {
             const inherited = { ...channel.previous, remainingLifetime: parent.remainingLifetime };
             this.enqueue(this.before, {
               target,
+              parentSystem: source.id,
               parent: inherited,
               properties: channel.edge.inheritProperties,
               amount: Math.round(
@@ -274,6 +280,7 @@ export class SubEmitterGraph {
       if (amount > 0)
         this.enqueue(this.after, {
           target,
+          parentSystem: source.id,
           parent,
           properties: channel.edge.inheritProperties,
           amount,

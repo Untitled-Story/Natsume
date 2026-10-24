@@ -21,6 +21,7 @@ const vertex = `#version 300 es
 in vec3 aPosition;
 in vec2 aUV;
 in vec4 aColor;
+in float aCustom;
 uniform mat4 uDisplayWorld;
 uniform mat4 uSourceWorld;
 uniform vec4 uTextureST;
@@ -31,6 +32,7 @@ uniform mat3 uTransformMatrix;
 uniform vec4 uWorldColorAlpha;
 uniform vec4 uColor;
 uniform vec4 uRendererColor;
+uniform float uUseCustom;
 uniform mat4 uUIClipMatrix;
 out vec2 vUV;
 out vec4 vColor;
@@ -47,7 +49,7 @@ void main(){
   gl_Position=vec4(p.xy,world.z,world.w);
   vec4 host=uColor*uWorldColorAlpha;
   vColor=aColor*uRendererColor*vec4(host.a>0.0?host.rgb/host.a:vec3(0.0),host.a);
-  vUV=aUV*uTextureST.xy+uTextureST.zw;vUV.y=1.0-vUV.y;vCustom=0.0;vDepth=max(0.0,dot(uDepth,uSourceWorld*vec4(aPosition,1.0)));vScreenUV=vec2(p.x/world.w*.5+.5,.5-p.y/world.w*.5);
+  vUV=aUV*uTextureST.xy+uTextureST.zw;vUV.y=1.0-vUV.y;vCustom=uUseCustom>0.5?aCustom:0.0;vDepth=max(0.0,dot(uDepth,uSourceWorld*vec4(aPosition,1.0)));vScreenUV=vec2(p.x/world.w*.5+.5,.5-p.y/world.w*.5);
 }`;
 
 /** Ordinary renderers map material slots to submeshes; surplus slots repeat the final submesh. */
@@ -63,6 +65,8 @@ export function sceneMaterialPasses(
 }
 
 export class SceneMesh extends Mesh<Geometry, Shader> {
+  /** @internal Dynamic effects may supply geometry already expressed in source world space. */
+  worldSpaceGeometry = false;
   override readonly renderPipeId = 'natsumeMaterials';
   canvasViewport: readonly number[] | undefined;
   spriteMaskPasses: readonly SceneMesh[] | undefined;
@@ -72,7 +76,7 @@ export class SceneMesh extends Mesh<Geometry, Shader> {
   readonly definition: {
     sortingLayerRank: number;
     readonly sortingOrder: number;
-    readonly sortingFudge: number;
+    sortingFudge: number;
   };
   readonly transform = mat4.create();
   renderEnvironment: RenderEnvironment | undefined;
@@ -105,17 +109,18 @@ export class SceneMesh extends Mesh<Geometry, Shader> {
     submesh: number,
     texture: Texture,
     pack: EffectPack,
+    private readonly vertexStride = 9,
   ) {
     const binding = materialDefinition.textures[0];
     const uv = meshUV(mesh, binding?.uvSet ?? 0);
-    const data = new Float32Array(mesh.positions.length * 9);
+    const data = new Float32Array(mesh.positions.length * vertexStride);
     for (let i = 0; i < mesh.positions.length; i++) {
       const p = mesh.positions[i]!,
         t = uv[i],
         c = mesh.colors[i];
       data.set(
         [p.x, p.y, p.z, t?.x ?? 0, t?.y ?? 0, c?.x ?? 1, c?.y ?? 1, c?.z ?? 1, c?.w ?? 1],
-        i * 9,
+        i * vertexStride,
       );
     }
     const part = mesh.submeshes[submesh]!;
@@ -128,9 +133,15 @@ export class SceneMesh extends Mesh<Geometry, Shader> {
     });
     const geometry = new Geometry({
       attributes: {
-        aPosition: { buffer: vb, format: 'float32x3', stride: 36, offset: 0 },
-        aUV: { buffer: vb, format: 'float32x2', stride: 36, offset: 12 },
-        aColor: { buffer: vb, format: 'float32x4', stride: 36, offset: 20 },
+        aPosition: { buffer: vb, format: 'float32x3', stride: vertexStride * 4, offset: 0 },
+        aUV: { buffer: vb, format: 'float32x2', stride: vertexStride * 4, offset: 12 },
+        aColor: { buffer: vb, format: 'float32x4', stride: vertexStride * 4, offset: 20 },
+        aCustom: {
+          buffer: vb,
+          format: 'float32',
+          stride: vertexStride * 4,
+          offset: vertexStride === 10 ? 36 : 0,
+        },
       },
       indexBuffer: ib,
     });
@@ -164,6 +175,7 @@ export class SceneMesh extends Mesh<Geometry, Shader> {
           uTextureST: { value: new Float32Array([1, 1, 0, 0]), type: 'vec4<f32>' },
           uDepth: { value: new Float32Array(4), type: 'vec4<f32>' },
           uModel: { value: code, type: 'f32' },
+          uUseCustom: { value: vertexStride === 10 ? 1 : 0, type: 'f32' },
           uMipBias: { value: 0, type: 'f32' },
           uUIAlphaClip: { value: 0, type: 'f32' },
           uMaskCutoff: { value: -1, type: 'f32' },
@@ -240,6 +252,32 @@ export class SceneMesh extends Mesh<Geometry, Shader> {
     this.boundsCenter = min.map((v, i) => (Number.isFinite(v) ? (v + max[i]!) * 0.5 : 0));
     this.onViewUpdate();
   }
+  /** @internal Updates reusable dynamic buffers without allocating source mesh objects. */
+  updateDynamicGeometry(
+    vertices: Float32Array,
+    indices: Uint32Array,
+    vertexCount: number,
+    indexCount: number,
+  ): void {
+    for (const [buffer, data] of [
+      [this.buffers[0]!, vertices],
+      [this.buffers[1]!, indices],
+    ] as const) {
+      if (buffer.data !== data) buffer.data = data;
+      else buffer.update();
+    }
+    this.geometry.indexCount = indexCount;
+    const min = [Infinity, Infinity, Infinity],
+      max = [-Infinity, -Infinity, -Infinity];
+    for (let i = 0; i < vertexCount; i++)
+      for (let axis = 0; axis < 3; axis++) {
+        const value = vertices[i * this.vertexStride + axis]!;
+        min[axis] = Math.min(min[axis]!, value);
+        max[axis] = Math.max(max[axis]!, value);
+      }
+    this.boundsCenter = min.map((v, i) => (Number.isFinite(v) ? (v + max[i]!) * 0.5 : 0));
+    this.onViewUpdate();
+  }
   prepareEnvironment(): void {
     const u = this.shader!.resources.colorUniforms.uniforms;
     u.uMipBias = this.needsMipBias ? (this.renderEnvironment?.globalMipBias ?? 0) : 0;
@@ -292,12 +330,14 @@ export class SceneMesh extends Mesh<Geometry, Shader> {
     if (geometry) this.updateGeometry(geometry);
     // Unity compensates odd negative object scale when classifying triangle faces.
     const cull = this.materialDefinition.renderState!.cull;
-    if (cull !== 0)
+    if (cull !== 0 && !this.worldSpaceGeometry)
       this.state.clockwiseFrontFace = (cull === 2) !== mat4.determinant(this.node.worldMatrix) < 0;
-    mat4.multiply(this.transform, matrix as mat4, this.node.worldMatrix);
+    if (this.worldSpaceGeometry) mat4.copy(this.transform, matrix as mat4);
+    else mat4.multiply(this.transform, matrix as mat4, this.node.worldMatrix);
     const u = this.shader!.resources.colorUniforms.uniforms;
     (u.uDisplayWorld as Float32Array).set(this.transform);
-    (u.uSourceWorld as Float32Array).set(this.node.worldMatrix);
+    if (this.worldSpaceGeometry) mat4.identity(u.uSourceWorld as mat4);
+    else (u.uSourceWorld as Float32Array).set(this.node.worldMatrix);
     u.uLinear = colorSpace === 'linear' ? 1 : 0;
     this.sortingDepth = this.sortAtPivot
       ? this.transform[14]!

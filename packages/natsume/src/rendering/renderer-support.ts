@@ -200,3 +200,56 @@ export function rendererSupport(
   );
   return r.issues;
 }
+
+/** Trails have an independent stream layout and do not inherit billboard alignment rules. */
+export function trailRendererSupport(
+  definition: R<ParticleRendererT>,
+  material: R<MaterialT>,
+  pack: EffectPack,
+  environment?: ParticleEnvironment,
+  renderEnvironment?: RenderEnvironment,
+): readonly SupportIssue[] {
+  const rules = new SupportChecks();
+  rules.issues.push(
+    ...materialSupport(material, pack, renderEnvironment),
+    ...rendererEnvironmentSupport(definition.environment),
+  );
+  const legacy =
+    material.model === MaterialModel.LegacyParticleAdditive ||
+    material.model === MaterialModel.LegacyParticleAlphaBlend;
+  rules.require(
+    !legacy || environment,
+    'HOST',
+    'particleEnvironment',
+    environment,
+    'Legacy trail materials require an explicit particleEnvironment',
+  );
+  const streams = definition.trailVertexStreams;
+  rules.require(
+    streams &&
+      [VertexSemantic.Position, VertexSemantic.Color, VertexSemantic.UV0].every((semantic) =>
+        streams.some(
+          (s) =>
+            s.semantic === semantic &&
+            s.components ===
+              (semantic === VertexSemantic.Position
+                ? 3
+                : semantic === VertexSemantic.Color
+                  ? 4
+                  : 2),
+        ),
+      ),
+    'CAPABILITY',
+    'trailVertexStreams',
+    streams,
+    'Trail material requires Position, Color and UV0 streams',
+  );
+  rules.require(
+    (material.textures[0]?.uvSet ?? 0) === 0,
+    'CAPABILITY',
+    'textures.uvSet',
+    material.textures[0]?.uvSet,
+    'Trails provide UV0 only',
+  );
+  return rules.issues;
+}

@@ -38,6 +38,7 @@ import { ParticleMesh, type SourceColorSpace } from '../rendering/particle-mesh.
 import { Simulation, type SimulationOptions } from './simulation.js';
 import type { SceneNode } from './scene.js';
 import { copyEnvironment, type ParticleEnvironment } from '../rendering/particle-environment.js';
+import { TrailMesh } from '../rendering/trail-mesh.js';
 import {
   checkCompatibility,
   NatsumeCompatibilityError,
@@ -645,6 +646,8 @@ export class EffectInstance {
     this.canvasPassOrder.clear();
     this.auxiliaryMeshes.length = 0;
     this.simulation.stop('clear');
+    this.simulation.subEmitters.clear();
+    this.simulation.trails.clear();
     this.simulation.emitters.clear();
     this.nodeViews.clear();
     this.eventHandlers.clear();
@@ -796,6 +799,21 @@ export class NatsumeRuntime {
             options.renderEnvironment,
             sheetTextures,
           );
+          masks.attach(mesh, data);
+          mesh.animationEnabled = () => simulation.bindings.enabled.get(id) ?? false;
+          instance.addMesh(mesh);
+        }
+        const trails = simulation.trails.get(emitter.id);
+        const trailMaterialId = data.materials[1];
+        if (trails && trailMaterialId && data.environment?.castShadows !== 3) {
+          const material =
+            simulation.bindings.materials.get(`${id}:1`) ??
+            pack.document.materials.find((m) => m.id === trailMaterialId)!;
+          const lease = this.acquireTexture(pack, material);
+          releases.push(lease.release);
+          const texture = await lease.promise;
+          check(!this.disposed, 'DISPOSED', 'Runtime was destroyed during instantiation');
+          const mesh = new TrailMesh(trails, data, material, texture, pack);
           masks.attach(mesh, data);
           mesh.animationEnabled = () => simulation.bindings.enabled.get(id) ?? false;
           instance.addMesh(mesh);

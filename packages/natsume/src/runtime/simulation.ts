@@ -1,6 +1,9 @@
 import { particleSnapshot, type ParticleSnapshot } from './particle-snapshot.js';
 import { TrailPointPool } from './trail-point-pool.js';
 import { SubEmitterGraph } from './sub-emitters.js';
+import { ParticleTrails } from './particle-trails.js';
+import { ParticleModuleData } from '../format/generated/noa/ir/particle-module-data.js';
+import type { TrailsModuleT } from '../format/generated/noa/ir/trails-module.js';
 import type { CanvasEnvironment } from '../rendering/canvas-environment.js';
 import { visitAnimationEvents, type NatsumeAnimationEvent } from './animation-events.js';
 import { SUPPORTED_FEATURES } from '../format/semantics.js';
@@ -56,6 +59,7 @@ interface AnimationPlayer {
 export class Simulation {
   readonly trailPoints: TrailPointPool;
   readonly subEmitters: SubEmitterGraph;
+  readonly trails = new Map<number, ParticleTrails>();
   readonly scene: Scene;
   readonly emitters = new Map<number, Emitter>();
   readonly diagnostics: Diagnostic[] = [];
@@ -164,6 +168,16 @@ export class Simulation {
         ),
       );
     this.subEmitters = new SubEmitterGraph(this.emitters);
+    for (const emitter of this.emitters.values()) {
+      const module = emitter.source.modules.find(
+        (m) => m.dataType === ParticleModuleData.TrailsModule,
+      );
+      if (module)
+        this.trails.set(
+          emitter.id,
+          new ParticleTrails(emitter, module.data as R<TrailsModuleT>, this.trailPoints),
+        );
+    }
     for (const animation of pack.document.animations)
       for (const track of animation.tracks) {
         const b = track.binding!;
@@ -332,17 +346,19 @@ export class Simulation {
   }
   stop(mode: 'drain' | 'clear' = 'drain'): void {
     this.revision++;
-    if (mode === 'clear') this.trailPoints.clear();
     for (const e of this.emitters.values()) {
       e.emitting = false;
       if (mode === 'clear') e.clear();
     }
-    this.state = mode === 'clear' || this.particleCount === 0 ? 'stopped' : 'draining';
+    if (mode === 'clear') this.trailPoints.clear();
+    this.state =
+      mode === 'clear' || (this.particleCount === 0 && this.trailPoints.count === 0)
+        ? 'stopped'
+        : 'draining';
     this.accumulator = 0;
   }
   restart(): void {
     this.revision++;
-    this.trailPoints.clear();
     this.subEmitters.clear();
     this.time = 0;
     this.accumulator = 0;
@@ -359,6 +375,7 @@ export class Simulation {
     this.state = 'idle';
     this.scene.reset();
     for (const e of this.emitters.values()) e.reset();
+    this.trailPoints.clear();
     this.scene.update();
     this.play();
   }
@@ -609,7 +626,8 @@ export class Simulation {
         this.droppedSeconds += excess;
         this.accumulator -= excess;
       }
-      if (this.state === 'draining' && this.particleCount === 0) this.state = 'stopped';
+      if (this.state === 'draining' && this.particleCount === 0 && this.trailPoints.count === 0)
+        this.state = 'stopped';
     } finally {
       this.updating = false;
     }

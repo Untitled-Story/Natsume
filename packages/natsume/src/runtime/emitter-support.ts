@@ -58,7 +58,8 @@ export function emitterSupport(
     const path = `modules.${index}`;
     rules.require(
       (module.dataType >= M.EmissionModule && module.dataType <= M.RotationBySpeedModule) ||
-        module.dataType === M.SubEmittersModule,
+        module.dataType === M.SubEmittersModule ||
+        module.dataType === M.TrailsModule,
       'CAPABILITY',
       `${path}.dataType`,
       module.dataType,

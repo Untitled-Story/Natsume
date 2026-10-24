@@ -16,9 +16,19 @@ export interface ParticleSnapshot {
   readonly lifetime: number;
   readonly remainingLifetime: number;
 }
+type Writable<T> = T extends readonly number[] ? [...T] : T;
+export type MutableParticleSnapshot = {
+  -readonly [K in keyof ParticleSnapshot]: Writable<ParticleSnapshot[K]>;
+};
 
 /** @internal Current module values, evaluated without changing simulation state. */
-export function particleSnapshot(e: Emitter, index: number, remainingStep = 0): ParticleSnapshot {
+export function particleSnapshot(
+  e: Emitter,
+  index: number,
+  remainingStep = 0,
+  reuse?: MutableParticleSnapshot,
+  scratch = new Float32Array(4),
+): MutableParticleSnapshot {
   const id = e.serials[index]!,
     o = index * 3,
     m = e.simulationMatrix;
@@ -30,8 +40,8 @@ export function particleSnapshot(e: Emitter, index: number, remainingStep = 0): 
     vy = v[o + 1]!,
     vz = v[o + 2]!;
   const phase = Math.max(0, Math.min(1, e.ages[index]! / e.lifetimes[index]!));
-  const c = new Float32Array(4),
-    size: [number, number, number] = [0, 0, 0];
+  const c = scratch,
+    size: [number, number, number] = reuse?.size ?? [0, 0, 0];
   color(e.colorModule?.color ?? null, phase, random(e.seed, id, 53), c);
   for (let axis = 0; axis < 4; axis++) c[axis] = c[axis]! * e.startColors[index * 4 + axis]!;
   for (let axis = 0; axis < 3; axis++) {
@@ -51,23 +61,28 @@ export function particleSnapshot(e: Emitter, index: number, remainingStep = 0): 
       (e.noiseSizes?.[o + axis] ?? 1) *
       e.particleScale[axis]!;
   }
-  return {
-    id,
-    position: [
-      m[0]! * x + m[4]! * y + m[8]! * z + m[12]!,
-      m[1]! * x + m[5]! * y + m[9]! * z + m[13]!,
-      m[2]! * x + m[6]! * y + m[10]! * z + m[14]!,
-    ],
-    velocity: [
-      m[0]! * vx + m[4]! * vy + m[8]! * vz,
-      m[1]! * vx + m[5]! * vy + m[9]! * vz,
-      m[2]! * vx + m[6]! * vy + m[10]! * vz,
-    ],
-    size,
-    rotation: [e.rotations[o]!, e.rotations[o + 1]!, e.rotations[o + 2]!],
-    color: [c[0]!, c[1]!, c[2]!, c[3]!],
-    age: e.ages[index]!,
-    lifetime: e.lifetimes[index]!,
-    remainingLifetime: Math.max(0, e.lifetimes[index]! - e.ages[index]! - remainingStep),
-  };
+  const state =
+    reuse ??
+    ({
+      id,
+      position: [0, 0, 0],
+      velocity: [0, 0, 0],
+      size,
+      rotation: [0, 0, 0],
+      color: [0, 0, 0, 0],
+      age: 0,
+      lifetime: 0,
+      remainingLifetime: 0,
+    } as MutableParticleSnapshot);
+  state.id = id;
+  for (let axis = 0; axis < 3; axis++) {
+    state.position[axis] = m[axis]! * x + m[4 + axis]! * y + m[8 + axis]! * z + m[12 + axis]!;
+    state.velocity[axis] = m[axis]! * vx + m[4 + axis]! * vy + m[8 + axis]! * vz;
+    state.rotation[axis] = e.rotations[o + axis]!;
+  }
+  for (let axis = 0; axis < 4; axis++) state.color[axis] = c[axis]!;
+  state.age = e.ages[index]!;
+  state.lifetime = e.lifetimes[index]!;
+  state.remainingLifetime = Math.max(0, state.lifetime - state.age - remainingStep);
+  return state;
 }

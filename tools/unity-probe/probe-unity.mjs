@@ -306,7 +306,7 @@ await new Promise((accept, reject) => {
 const current = JSON.parse(await readFile(baseline, 'utf8'));
 assert.equal(current.unityVersion, version);
 if (subEmitters || trails) {
-  assert.equal(current.cases.length, subEmitters ? 102 : 90);
+  assert.equal(current.cases.length, subEmitters ? 102 : 110);
   if (process.argv.includes('--update-fixtures'))
     await saveJson(
       resolve(

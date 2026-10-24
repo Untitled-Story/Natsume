@@ -39,7 +39,7 @@ import { ComponentData as C } from '../format/generated/noa/ir/component-data.js
 import { CameraPolicy } from '../format/generated/noa/ir/camera-policy.js';
 import { ColorSpace } from '../format/generated/noa/ir/color-space.js';
 import { copyEnvironment } from '../rendering/particle-environment.js';
-import { rendererSupport } from '../rendering/renderer-support.js';
+import { rendererSupport, trailRendererSupport } from '../rendering/renderer-support.js';
 import { emitterSupport } from './emitter-support.js';
 import { prewarmDuration } from './prewarm.js';
 import { SupportChecks, type SupportIssue } from './support-checks.js';
@@ -531,6 +531,9 @@ export function checkCompatibility(
         'Renderer system is outside entry',
       );
       const slots = [...particleMaterialSlots(definition)];
+      const hasTrails = system?.modules.some((m) => m.dataType === ParticleModuleData.TrailsModule);
+      if (hasTrails && definition.materials[1] && definition.environment?.castShadows !== 3)
+        slots.push(1);
       for (const slot of slots) {
         const material = pack.document.materials.find((m) => m.id === definition.materials[slot]);
         rules.require(
@@ -542,19 +545,24 @@ export function checkCompatibility(
         );
         if (system && material) {
           rules.issues.push(
-            ...rendererSupport(
-              definition,
-              material,
-              pack,
-              system.main!.maxParticles,
-              env,
-              options.renderEnvironment,
-            ),
+            ...(slot === 1
+              ? trailRendererSupport(definition, material, pack, env, options.renderEnvironment)
+              : rendererSupport(
+                  definition,
+                  material,
+                  pack,
+                  system.main!.maxParticles,
+                  env,
+                  options.renderEnvironment,
+                )),
           );
-          vertices += system.main!.maxParticles * rendererVertexStride(definition, pack);
-          const sheet = system.modules.find(
-            (m) => m.dataType === ParticleModuleData.TextureSheetModule,
-          )?.data as R<TextureSheetModuleT> | undefined;
+          vertices +=
+            slot === 1 ? 0 : system.main!.maxParticles * rendererVertexStride(definition, pack);
+          const sheet =
+            slot === 1
+              ? undefined
+              : (system.modules.find((m) => m.dataType === ParticleModuleData.TextureSheetModule)
+                  ?.data as R<TextureSheetModuleT> | undefined);
           if (sheet?.mode === 1)
             for (const frame of sheet.spriteAssetIds) {
               const sprite = pack.document.assets.find((a) => a.id === frame)!.sprite!;
