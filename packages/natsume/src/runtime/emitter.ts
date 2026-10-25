@@ -241,7 +241,8 @@ export class Emitter {
       check(pack, 'CAPABILITY', 'Sprite emission requires source assets');
       this.spriteShape = new SpriteShapeSampler(pack, this.shape.geometry as R<SpriteShapeT>);
     }
-    if (this.sheet?.timeMode === SheetTime.Speed) this.renderVelocities = new Float32Array(cap * 3);
+    if (this.velocityModule || this.sheet?.timeMode === SheetTime.Speed)
+      this.renderVelocities = new Float32Array(cap * 3);
     this.startSizes = new Float32Array(cap * 3);
     this.rotations = new Float32Array(cap * 3);
     this.startColors = new Float32Array(cap * 4);

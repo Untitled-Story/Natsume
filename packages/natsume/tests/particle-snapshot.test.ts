@@ -71,6 +71,27 @@ it('validates host trigger targets before changing particle storage', () => {
   expect(simulation.particleCount).toBe(0);
 });
 
+it('reports lifecycle velocity before any renderer or sub-emitter attaches', () => {
+  const document = minimalDocument();
+  const source = particleSource('motion-linear');
+  source.modules.push(
+    new ParticleModuleT(
+      M.EmissionModule,
+      new EmissionModuleT(constant(0), constant(0), [new BurstT(0, constant(1), 1, 0, 1)]),
+    ),
+  );
+  document.components = [new ComponentT(3, 1, true, ComponentData.ParticleSystem, source)];
+  const pack = new EffectPack(document, { files: [] } as never, new Map(), new Map());
+  const simulation = new Simulation(pack);
+  simulation.play();
+  simulation.update(1 / 60);
+  const particle = simulation.getParticles(3)[0]!;
+  expect(particle.velocity).toEqual([1, 2, 3]);
+  expect(particle.position[0]).toBeCloseTo(1 / 60);
+  expect(particle.position[1]).toBeCloseTo(2 / 60);
+  expect(particle.position[2]).toBeCloseTo(3 / 60);
+});
+
 it('copies world-space state and evaluates authored lifetime size without changing the particle', () => {
   const d = minimalDocument();
   d.nodes[0]!.transform!.position!.x = 3;
