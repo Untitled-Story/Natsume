@@ -253,6 +253,7 @@ interface NativeCase {
   play: boolean;
   probability: number;
   kind: number;
+  stopMode: number;
   samples: { frame: number; child: NativeParticle[] }[];
 }
 interface LifecycleCase {
@@ -268,6 +269,66 @@ const nativePath = new URL(
   '../../../data/unity-baselines/sub-emitters/unity-2022.3.21f1.json',
   import.meta.url,
 );
+it.skipIf(!existsSync(nativePath))(
+  'retains live-parent Birth channels while native emission stops or a target pool clears',
+  () => {
+    const { drain } = JSON.parse(readFileSync(nativePath, 'utf8')) as { drain: NativeCase[] };
+    let countError = 0;
+    for (const c of drain) {
+      const { parent, child, graph } = fixture(c.eventType, 0, 0, true, false, 1, 1);
+      for (let frame = 1; frame <= 60; frame++) {
+        if (frame === 6) {
+          const targetOnly = c.stopMode % 3 === 2;
+          for (const e of targetOnly
+            ? [child]
+            : c.stopMode % 3 === 1
+              ? [parent, child]
+              : [parent]) {
+            if (c.stopMode < 6) e.emitting = false;
+            if (c.stopMode >= 3) e.clear();
+          }
+        }
+        graph.step(1 / 60);
+        const error = Math.abs(child.count - c.samples[frame]!.child.length);
+        countError = Math.max(countError, error);
+        expect(
+          error,
+          `event=${c.eventType}, stop=${c.stopMode}, frame=${frame}`,
+        ).toBeLessThanOrEqual(1);
+      }
+      expect(child.count).toBe(0);
+    }
+    recordError('sub-emitter.stop.count', countError, 'particles', '18 cases, 60 frames');
+  },
+);
+it('preserves an incoming Birth clock when clearing a target that also owns sub-emitters', () => {
+  const { parent, child } = fixture(0, 0, 0, true, false, 1, 1);
+  const grandSource = particleSource();
+  grandSource.main!.playOnEnable = false;
+  (child.source as ParticleSystemT).modules.push(
+    new ParticleModuleT(M.SubEmittersModule, new SubEmittersModuleT([new SubEmitterT(5, 0, 0, 1)])),
+  );
+  const grand = new Emitter(5, child.node, grandSource, true, 91, []);
+  const graph = new SubEmitterGraph(
+    new Map([
+      [3, parent],
+      [4, child],
+      [5, grand],
+    ]),
+  );
+  // Restart so the replacement graph receives the initial parent Birth.
+  parent.reset();
+  for (const e of graph.order) e.sync();
+  for (let i = 0; i < 5; i++) graph.step(1 / 60);
+  expect(child.count).toBe(2);
+  child.clear();
+  expect(child.count).toBe(0);
+  for (let i = 0; i < 5; i++) graph.step(1 / 60);
+  expect(child.count).toBeGreaterThan(1);
+  parent.clear();
+  expect(child.count).toBe(0);
+  expect(grand.count).toBe(0);
+});
 it.skipIf(!existsSync(nativePath))(
   'retains target duration and lifetime in measured native Duration inheritance cases',
   () => {

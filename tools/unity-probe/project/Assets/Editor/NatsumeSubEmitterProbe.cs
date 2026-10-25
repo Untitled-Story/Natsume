@@ -8,10 +8,10 @@ public static class NatsumeSubEmitterProbe
 {
     [Serializable] public class Particle { public Vector3 position,velocity,size,rotation; public Color color; public float lifetime,remaining; public uint seed; }
     [Serializable] public class Sample { public int frame; public Particle[] parent,child; }
-    [Serializable] public class Case { public int eventType,inherit,space,kind; public bool emission,play; public float probability; public Sample[] samples; }
+    [Serializable] public class Case { public int eventType,inherit,space,kind,stopMode; public bool emission,play; public float probability; public Sample[] samples; }
     [Serializable] public class Endpoint { public float remaining,step; public int count; public Particle[] particles; }
     [Serializable] public class Lifecycle { public string name; public int inherit; public float lifetime,duration,childLifetime; public bool loop; public Sample[] samples; }
-    [Serializable] public class Output { public string unityVersion; public Case[] cases; public Endpoint[] endpoints; public Lifecycle[] lifecycle; }
+    [Serializable] public class Output { public string unityVersion; public Case[] cases,drain; public Endpoint[] endpoints; public Lifecycle[] lifecycle; }
     static Endpoint End(float remaining,float step) {
         var go=new GameObject("endpoint");
         try {
@@ -33,7 +33,7 @@ public static class NatsumeSubEmitterProbe
         var sh=p.shape;sh.enabled=false;var e=p.emission;e.enabled=emission;e.rateOverTime=0;e.SetBursts(new[]{new ParticleSystem.Burst(0,2)});p.GetComponent<ParticleSystemRenderer>().enabled=false;
         return p;
     }
-    static Case Measure(int type,int inherit,int space,bool emission,bool play,float probability,int kind=0) {
+    static Case Measure(int type,int inherit,int space,bool emission,bool play,float probability,int kind=0,int stopMode=-1) {
         var go=new GameObject("parent");var childGO=new GameObject("child");childGO.transform.SetParent(go.transform);go.transform.position=new Vector3(3,4,5);childGO.transform.localPosition=new Vector3(7,8,9);
         try {
             var parent=Make(go,true,false,false,0);var child=Make(childGO,false,emission,play,space);
@@ -47,10 +47,15 @@ public static class NatsumeSubEmitterProbe
             rows.Add(new Sample{frame=0,parent=Read(parent),child=Read(child)});
             if(type==4)parent.TriggerSubEmitter(0);
             for(int frame=1;frame<=60;frame++){
+                if(frame==6 && stopMode>=0){
+                    if(stopMode>=6){if(stopMode%3==2)child.Clear(false);else parent.Clear(stopMode%3==1);}
+                    else {var behavior=stopMode>=3?ParticleSystemStopBehavior.StopEmittingAndClear:ParticleSystemStopBehavior.StopEmitting;
+                    if(stopMode%3==2)child.Stop(false,behavior);else parent.Stop(stopMode%3==1,behavior);}
+                }
                 parent.Simulate(1f/60,true,false,false);
                 rows.Add(new Sample{frame=frame,parent=Read(parent),child=Read(child)});
             }
-            return new Case{kind=kind,eventType=type,inherit=inherit,space=space,emission=emission,play=play,probability=probability,samples=rows.ToArray()};
+            return new Case{kind=kind,stopMode=stopMode,eventType=type,inherit=inherit,space=space,emission=emission,play=play,probability=probability,samples=rows.ToArray()};
         }finally{UnityEngine.Object.DestroyImmediate(go);}
     }
     static Lifecycle Life(string name,int inherit,float lifetime,float duration,bool loop,float childLifetime=0.8f) {
@@ -86,6 +91,7 @@ public static class NatsumeSubEmitterProbe
         foreach(float life in new[]{0.1f,0.5f,2f})lifecycle.Add(Life("prewarm",0,life,0.2f,false));
         foreach(float life in new[]{0.1f,0.5f,2f})foreach(float childLife in new[]{0.2f,2f,4f})lifecycle.Add(Life("prewarm",0,life,0.2f,false,childLife));
         foreach(int inherit in new[]{0,16})lifecycle.Add(Life("distance",inherit,0.5f,0.2f,true));
-        var path=Environment.GetEnvironmentVariable("NATSUME_COMPAT_OUTPUT");Directory.CreateDirectory(Path.GetDirectoryName(path));File.WriteAllText(path,JsonUtility.ToJson(new Output{unityVersion=Application.unityVersion,cases=cases.ToArray(),endpoints=endpoints.ToArray(),lifecycle=lifecycle.ToArray()},true));
+        var drain=new List<Case>();foreach(int type in new[]{0,2})foreach(int stopMode in new[]{0,1,2,3,4,5,6,7,8})drain.Add(Measure(type,0,0,true,false,1,1,stopMode));
+        var path=Environment.GetEnvironmentVariable("NATSUME_COMPAT_OUTPUT");Directory.CreateDirectory(Path.GetDirectoryName(path));File.WriteAllText(path,JsonUtility.ToJson(new Output{unityVersion=Application.unityVersion,cases=cases.ToArray(),drain=drain.ToArray(),endpoints=endpoints.ToArray(),lifecycle=lifecycle.ToArray()},true));
     }catch(Exception e){Debug.LogException(e);EditorApplication.Exit(1);}}
 }

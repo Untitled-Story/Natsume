@@ -51,6 +51,7 @@ export class SubEmitterGraph {
   private readonly queuedDistance = new Map<number, number>();
   private advancing: Emitter | undefined;
   private warmingStep = false;
+  private clearing = false;
 
   constructor(private readonly emitters: ReadonlyMap<number, Emitter>) {
     const indegree = new Map<number, number>();
@@ -249,8 +250,7 @@ export class SubEmitterGraph {
     this.warmRequests.delete(emitter);
     this.warmRemainders.delete(emitter);
     for (let i = this.channels.length - 1; i >= 0; i--)
-      if (this.channels[i]!.source.id === id || this.channels[i]!.target.id === id)
-        this.channels.splice(i, 1);
+      if (this.channels[i]!.source.id === id) this.channels.splice(i, 1);
     this.before.delete(id);
     this.after.delete(id);
     this.queuedDistance.delete(id);
@@ -260,6 +260,16 @@ export class SubEmitterGraph {
         if (remaining.length) queue.set(target, remaining);
         else queue.delete(target);
       }
+    if (!this.clearing) {
+      this.clearing = true;
+      try {
+        // Unity clears connected sub-emitter pools even when Clear(withChildren) is false.
+        for (const target of this.descendants.get(id) ?? [])
+          if (target !== id) this.emitters.get(target)!.clear();
+      } finally {
+        this.clearing = false;
+      }
+    }
   }
   private enqueue(queue: Map<number, PendingBirth[]>, birth: PendingBirth): void {
     let births = queue.get(birth.target.id);

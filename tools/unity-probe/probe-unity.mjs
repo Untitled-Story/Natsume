@@ -310,6 +310,7 @@ if (subEmitters || trails) {
   if (subEmitters) {
     assert.equal(current.lifecycle.length, 38);
     assert.equal(current.endpoints.length, 21);
+    assert.equal(current.drain.length, 18);
   }
   if (process.argv.includes('--update-fixtures'))
     await saveJson(
