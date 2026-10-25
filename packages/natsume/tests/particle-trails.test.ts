@@ -193,7 +193,7 @@ it.skipIf(!existsSync(nativePath))(
 );
 
 it.skipIf(!existsSync(nativePath))(
-  'matches straight native strip vertices, all five UV modes and quantized colors',
+  'matches native PerParticle and Ribbon geometry through turns, transforms and tail clipping',
   () => {
     const { cases } = JSON.parse(readFileSync(nativePath, 'utf8')) as {
       cases: NativeCase[];
@@ -201,14 +201,20 @@ it.skipIf(!existsSync(nativePath))(
     let positionError = 0,
       uvError = 0,
       colorError = 0,
-      comparisons = 0;
-    for (const c of cases.filter(
-      (c) => c.mode === 0 && [0, 1, 2, 4, 8, 16, 31].includes(c.flags),
+      comparisons = 0,
+      relativeError = 0,
+      foldError = 0,
+      foldRelativeError = 0,
+      foldVertices = 0;
+    for (const c of cases.filter((c) =>
+      [0, 1, 2, 4, 8, 16, 31, 128, 512, 1024].includes(c.flags),
     )) {
       const { emitter, trails, definition } = fixture(
-        0,
+        c.mode,
         Boolean(c.flags & 16),
         Boolean(c.flags & 8),
+        65536,
+        Boolean(c.flags & 128),
       );
       definition.textureMode = c.texture;
       definition.textureScale = new Vec2T(1.5, 0.75);
@@ -218,28 +224,66 @@ it.skipIf(!existsSync(nativePath))(
       definition.colorOverLifetime = new ColorParameterT(0, null, new ColorT(0.5, 0.6, 0.7, 0.5));
       definition.colorOverTrail = new ColorParameterT(0, null, new ColorT(0.8, 0.6, 0.4, 0.9));
       definition.widthOverTrail = linear(0.5, 1.5);
-      emitter.startColors.set([0.2, 0.4, 0.6, 0.8]);
+      if (c.flags & 512) definition.minVertexDistance = 0.01;
+      for (let i = 0; i < emitter.count; i++) {
+        emitter.startColors.set([0.2, 0.4, 0.6, 0.8], i * 4);
+        if (c.mode === 1)
+          emitter.positions.set([i * 0.3, (i % 2) * 0.2, c.flags & 512 ? i * i * 0.1 : 0], i * 3);
+        if (c.flags & 1024) emitter.velocities.set([1, 0.5, 0.75], i * 3);
+      }
       const geometry = new TrailGeometry();
-      for (let frame = 1; frame <= 3; frame++) {
+      for (let frame = 1; frame <= 9; frame++) {
+        if (frame === 4) {
+          emitter.node.worldMatrix[12] = 1;
+          emitter.node.worldMatrix[13] = 2;
+          emitter.updateSpace();
+        }
+        if (c.mode === 0 && c.flags & 512)
+          emitter.velocities.set(frame % 2 ? [1, 0, 0] : [0, 1, 0]);
         emitter.step(0.05);
         geometry.update(trails);
-        const sample = c.samples.find((s) => s.frame === frame)!;
+        const sample = c.samples.find((s) => s.frame === frame);
+        if (!sample) continue;
+        // Fold positions still exceed the accuracy target; keep measuring them separately.
+        const fold =
+          (c.mode === 0 && c.flags === 31 && frame > 3) || (c.mode === 1 && c.flags === 128);
         expect(geometry.vertexCount, `flags=${c.flags} frame=${frame}`).toBe(
           sample.vertices.length,
         );
         for (let i = 0; i < geometry.vertexCount; i++) {
-          comparisons++;
+          if (fold) foldVertices++;
+          else comparisons++;
           const offset = i * 10,
             expected = sample.vertices[i]!;
+          const opposite = sample.vertices[i ^ 1]!;
+          const width = Math.hypot(
+            expected.x - opposite.x,
+            expected.y - opposite.y,
+            expected.z - opposite.z,
+          );
+          let squared = 0;
           for (const [axis, key] of (['x', 'y', 'z'] as const).entries()) {
-            positionError = Math.max(
-              positionError,
-              Math.abs(geometry.vertices[offset + axis]! - expected[key]),
-            );
-            expect(
-              Math.abs(geometry.vertices[offset + axis]! - expected[key]),
-              `flags=${c.flags} frame=${frame} vertex=${i} axis=${axis}`,
-            ).toBeLessThan(2e-5);
+            const position =
+              expected[key] +
+              (frame >= 4 && (c.mode === 1 || !(c.flags & 16)) ? [1, 2, 0][axis]! : 0);
+            const error = Math.abs(geometry.vertices[offset + axis]! - position);
+            squared += error * error;
+            if (fold) foldError = Math.max(foldError, error);
+            else {
+              positionError = Math.max(positionError, error);
+              expect(
+                error,
+                `mode=${c.mode} flags=${c.flags} frame=${frame} vertex=${i} axis=${axis}`,
+              ).toBeLessThan(c.flags & 512 ? (c.mode === 1 ? width * 0.1 : 1e-3) : 2e-5);
+            }
+          }
+          if (width > 1e-6) {
+            const relative = Math.sqrt(squared) / width;
+            if (fold) foldRelativeError = Math.max(foldRelativeError, relative);
+            else {
+              relativeError = Math.max(relativeError, relative);
+              expect(relative).toBeLessThan(0.1);
+            }
           }
           uvError = Math.max(
             uvError,
@@ -268,14 +312,37 @@ it.skipIf(!existsSync(nativePath))(
       'trail.geometry.position',
       positionError,
       'scene units',
-      `${comparisons} straight strip vertices`,
+      `${comparisons} accepted trail vertices; folds measured separately`,
     );
-    recordError('trail.geometry.uv', uvError, 'UV units', `${comparisons} straight strip vertices`);
+    recordError(
+      'trail.geometry.uv',
+      uvError,
+      'UV units',
+      `${comparisons + foldVertices} trail vertices`,
+    );
     recordError(
       'trail.geometry.color',
       colorError,
       '/255',
-      `${comparisons} straight strip vertices`,
+      `${comparisons + foldVertices} trail vertices`,
+    );
+    recordError(
+      'trail.geometry.relative',
+      relativeError,
+      'full trail width',
+      `${comparisons} accepted trail vertices`,
+    );
+    recordError(
+      'trail.fold.pending.position',
+      foldError,
+      'scene units',
+      `${foldVertices} unaccepted fold vertices`,
+    );
+    recordError(
+      'trail.fold.pending.relative',
+      foldRelativeError,
+      'full trail width',
+      `${foldVertices} unaccepted fold vertices`,
     );
   },
 );

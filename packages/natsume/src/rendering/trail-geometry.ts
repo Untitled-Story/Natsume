@@ -2,6 +2,7 @@ import type { ParticleTrails, TrailRecord } from '../runtime/particle-trails.js'
 import { trailAppearance, trailUV } from '../runtime/trail-parameters.js';
 import { random } from '../runtime/parameters.js';
 import { TrailTextureMode } from '../format/generated/noa/ir/trail-texture-mode.js';
+import { TrailMode } from '../format/generated/noa/ir/trail-mode.js';
 
 /** Reusable world-space strips. Extra stream data is generated even for unlit materials. */
 export class TrailGeometry {
@@ -12,6 +13,7 @@ export class TrailGeometry {
   vertexCount = 0;
   indexCount = 0;
   private points = new Float64Array(0);
+  private directions = new Float64Array(0);
   private readonly records: TrailRecord[] = [];
   private readonly strips: [number, number][] = [];
   private readonly tint = new Float32Array(4);
@@ -53,6 +55,7 @@ export class TrailGeometry {
         this.points[o + 3] = length;
       }
       const base = this.vertexCount;
+      this.smoothDirections(first, end, definition.mode === TrailMode.Ribbon);
       for (let i = first; i < end; i++) {
         const o = i * 4;
         let previous = Math.max(first, i - 1) * 4,
@@ -66,17 +69,25 @@ export class TrailGeometry {
         const x = this.points[o]!,
           y = this.points[o + 1]!,
           z = this.points[o + 2]!;
-        const tx = this.points[next]! - this.points[previous]!,
-          ty = this.points[next + 1]! - this.points[previous + 1]!,
-          tz = this.points[next + 2]! - this.points[previous + 2]!;
-        const tl = Math.hypot(tx, ty, tz);
-        const tangent = tl > 1e-10 ? [tx / tl, ty / tl, tz / tl] : [1, 0, 0];
+        const d = i * 3,
+          p = Math.max(first, i - 1) * 3;
+        const tx = this.directions[d]!,
+          ty = this.directions[d + 1]!,
+          tz = this.directions[d + 2]!;
+        let ax = tx + this.directions[p]!,
+          ay = ty + this.directions[p + 1]!,
+          az = tz + this.directions[p + 2]!;
+        if (Math.hypot(ax, ay, az) < 1e-10) {
+          ax = this.directions[p]!;
+          ay = this.directions[p + 1]!;
+          az = this.directions[p + 2]!;
+        }
         const rx = viewPosition ? x - viewPosition[0]! : 0,
           ry = viewPosition ? y - viewPosition[1]! : 0,
           rz = viewPosition ? z - viewPosition[2]! : 1;
-        let sx = ry * tangent[2]! - rz * tangent[1]!,
-          sy = rz * tangent[0]! - rx * tangent[2]!,
-          sz = rx * tangent[1]! - ry * tangent[0]!;
+        let sx = ry * az - rz * ay,
+          sy = rz * ax - rx * az,
+          sz = rx * ay - ry * ax;
         const sideLength = Math.hypot(sx, sy, sz);
         if (sideLength > 1e-10) {
           sx /= sideLength;
@@ -133,9 +144,14 @@ export class TrailGeometry {
           this.streams[a] = -rx / rl;
           this.streams[a + 1] = -ry / rl;
           this.streams[a + 2] = -rz / rl;
-          this.streams[a + 3] = tangent[0]!;
-          this.streams[a + 4] = tangent[1]!;
-          this.streams[a + 5] = tangent[2]!;
+          const tangentDot = (tx * rx + ty * ry + tz * rz) / (rl * rl);
+          const px = tx - rx * tangentDot,
+            py = ty - ry * tangentDot,
+            pz = tz - rz * tangentDot;
+          const pl = Math.hypot(px, py, pz) || 1;
+          this.streams[a + 3] = px / pl;
+          this.streams[a + 4] = py / pl;
+          this.streams[a + 5] = pz / pl;
           this.streams[a + 6] = 1;
           for (let axis = 0; axis < 3; axis++) {
             this.streams[a + 7 + axis] = this.points[previous + axis]!;
@@ -157,6 +173,83 @@ export class TrailGeometry {
     const next = new Float64Array(Math.max(256, this.points.length * 2, count * 4));
     next.set(this.points);
     this.points = next;
+    this.directions = new Float64Array((next.length / 4) * 3);
+  }
+
+  /** Recursive angle bisectors keep turns smooth without extending the strip's width. */
+  private smoothDirections(first: number, end: number, ribbon: boolean): void {
+    let x = 1,
+      y = 0,
+      z = 0;
+    for (let i = first + 1; i < end; i++) {
+      const a = first * 4,
+        b = i * 4;
+      const dx = this.points[b]! - this.points[a]!,
+        dy = this.points[b + 1]! - this.points[a + 1]!,
+        dz = this.points[b + 2]! - this.points[a + 2]!;
+      const length = Math.hypot(dx, dy, dz);
+      if (length > 1e-10) {
+        x = dx / length;
+        y = dy / length;
+        z = dz / length;
+        break;
+      }
+    }
+    let capX = x,
+      capY = y,
+      capZ = z;
+    const head = first * 4,
+      anchor = head + 4;
+    const duplicateHead =
+      this.points[head] === this.points[anchor] &&
+      this.points[head + 1] === this.points[anchor + 1] &&
+      this.points[head + 2] === this.points[anchor + 2];
+    for (let i = first; i < end; i++) {
+      if (!ribbon && i === first) {
+        // The moving head uses its current direction; stored anchors smooth the history.
+      } else if (i + 2 < end) {
+        const a = (i + (ribbon || duplicateHead ? 1 : 0)) * 4,
+          b = a + 4;
+        let dx = this.points[b]! - this.points[a]!,
+          dy = this.points[b + 1]! - this.points[a + 1]!,
+          dz = this.points[b + 2]! - this.points[a + 2]!;
+        let length = Math.hypot(dx, dy, dz);
+        // Clipped endpoints can differ only by Float32 rounding. Keep the last real edge.
+        if (length < 1e-6) {
+          const p = i * 4,
+            n = p + 4;
+          dx = this.points[n]! - this.points[p]!;
+          dy = this.points[n + 1]! - this.points[p + 1]!;
+          dz = this.points[n + 2]! - this.points[p + 2]!;
+          length = Math.hypot(dx, dy, dz);
+        }
+        if (length > 1e-6) {
+          const nx = dx / length,
+            ny = dy / length,
+            nz = dz / length;
+          const sum = Math.hypot(x + nx, y + ny, z + nz);
+          if (sum > 1e-10) {
+            x = (x + nx) / sum;
+            y = (y + ny) / sum;
+            z = (z + nz) / sum;
+            capX = x;
+            capY = y;
+            capZ = z;
+          } else {
+            capX = nx;
+            capY = ny;
+            capZ = nz;
+          }
+        }
+      } else {
+        x = capX;
+        y = capY;
+        z = capZ;
+      }
+      this.directions[i * 3] = x;
+      this.directions[i * 3 + 1] = y;
+      this.directions[i * 3 + 2] = z;
+    }
   }
   private reserveVertices(count: number): void {
     if (this.vertices.length >= count * 10) return;
