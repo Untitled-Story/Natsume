@@ -7,7 +7,7 @@ import type { SubEmittersModuleT } from '../format/generated/noa/ir/sub-emitters
 import type { Emitter } from './emitter.js';
 import { particleSnapshot, type ParticleSnapshot } from './particle-snapshot.js';
 import { random, scalar } from './parameters.js';
-import { maximumLifetime } from './prewarm.js';
+import { graphPrewarmEstimate } from './prewarm.js';
 
 interface BirthChannel {
   readonly source: Emitter;
@@ -151,21 +151,18 @@ export class SubEmitterGraph {
     let work = 0;
     for (const root of this.warmRequests) {
       const scope = this.descendants.get(root.id)!;
-      const history = Math.max(
-        ...this.order.filter((e) => scope.has(e.id)).map((e) => maximumLifetime(e.main)),
-      );
-      work +=
-        this.order.reduce((sum, e) => sum + (scope.has(e.id) ? e.main.maxParticles : 0), 0) *
-        Math.ceil(
-          (Math.ceil(history / root.main.durationSeconds) * root.main.durationSeconds) / 0.02,
-        );
+      work += graphPrewarmEstimate(
+        root.main,
+        this.order.filter((e) => scope.has(e.id)).map((e) => e.source),
+      ).work;
       check(work <= 40_000_000, 'LIMIT', 'Instance graph prewarm work exceeds playback budget');
     }
     for (const root of this.warmRequests) {
       this.warmRequests.delete(root);
       const scope = this.descendants.get(root.id)!;
-      const history = Math.max(
-        ...this.order.filter((e) => scope.has(e.id)).map((e) => maximumLifetime(e.main)),
+      const { history } = graphPrewarmEstimate(
+        root.main,
+        this.order.filter((e) => scope.has(e.id)).map((e) => e.source),
       );
       const remaining = root.prewarmGraph(
         (seconds) => this.stepScope(seconds / root.main.simulationSpeed, scope, root, seconds),

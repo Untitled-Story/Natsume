@@ -41,7 +41,7 @@ import { ColorSpace } from '../format/generated/noa/ir/color-space.js';
 import { copyEnvironment } from '../rendering/particle-environment.js';
 import { rendererSupport, trailRendererSupport } from '../rendering/renderer-support.js';
 import { emitterSupport } from './emitter-support.js';
-import { prewarmDuration } from './prewarm.js';
+import { instancePrewarmWork } from './prewarm.js';
 import { SupportChecks, type SupportIssue } from './support-checks.js';
 
 /** A blocking configuration or an explicit approximation for the selected entry. */
@@ -313,10 +313,10 @@ export function checkCompatibility(
     capacity,
     'Total particle capacity exceeds playback limit',
   );
-  const work = systems.reduce((sum, c) => {
-    const main = (c.data as R<ParticleSystemT>).main!;
-    return sum + (c.enabled ? main.maxParticles * Math.ceil(prewarmDuration(main) * 60) : 0);
-  }, 0);
+  const work = instancePrewarmWork(
+    systemMap,
+    new Set(systems.filter((c) => c.enabled).map((c) => c.id)),
+  );
   global.require(
     work <= 40_000_000,
     'LIMIT',

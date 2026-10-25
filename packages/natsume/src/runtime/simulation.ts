@@ -22,7 +22,8 @@ import { ComponentData } from '../format/generated/noa/ir/component-data.js';
 import { ActionKind } from '../format/generated/noa/ir/action-kind.js';
 import { CameraPolicy } from '../format/generated/noa/ir/camera-policy.js';
 import { Scene, type LayoutSize } from './scene.js';
-import { Emitter, prewarmDuration, type Diagnostic } from './emitter.js';
+import { Emitter, type Diagnostic } from './emitter.js';
+import { instancePrewarmWork } from './prewarm.js';
 
 export interface SimulationOptions {
   /** Maximum retained trail points per instance. Defaults to 65,536; overflow throws. */
@@ -140,15 +141,10 @@ export class Simulation {
       'Total particle capacity exceeds playback limit',
     );
     check(
-      systems.reduce((sum, c) => {
-        const main = (c.data as R<ParticleSystemT>).main!;
-        return (
-          sum +
-          (c.enabled && main.prewarm && main.loop
-            ? main.maxParticles * Math.ceil(prewarmDuration(main) * 60)
-            : 0)
-        );
-      }, 0) <= 40_000_000,
+      instancePrewarmWork(
+        new Map(systems.map((c) => [c.id, c.data as R<ParticleSystemT>])),
+        new Set(systems.filter((c) => c.enabled).map((c) => c.id)),
+      ) <= 40_000_000,
       'LIMIT',
       'Instance prewarm work exceeds playback budget',
     );
