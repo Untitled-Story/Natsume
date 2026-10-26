@@ -2,6 +2,7 @@ import type { DeepReadonly as R } from '../pack.js';
 import type { ParticleSystemT } from '../format/generated/noa/ir/particle-system.js';
 import type { EmissionModuleT } from '../format/generated/noa/ir/emission-module.js';
 import type { NoiseModuleT } from '../format/generated/noa/ir/noise-module.js';
+import type { SubEmittersModuleT } from '../format/generated/noa/ir/sub-emitters-module.js';
 import type { ShapeModuleT } from '../format/generated/noa/ir/shape-module.js';
 import { ParticleModuleData as M } from '../format/generated/noa/ir/particle-module-data.js';
 import { Space } from '../format/generated/noa/ir/space.js';
@@ -46,6 +47,22 @@ export function emitterSupport(
     main.durationSeconds,
     'Playback requires duration >= 1/60 second',
   );
+  if (
+    main.prewarm &&
+    main.loop &&
+    !constantZero(main.startDelay) &&
+    source.modules.some(
+      (module) =>
+        module.dataType === M.SubEmittersModule &&
+        (module.data as R<SubEmittersModuleT>).emitters.some((edge) => edge.systemComponentId),
+    )
+  )
+    rules.warn(
+      'DELAYED_GRAPH_PREWARM',
+      'main.prewarm',
+      true,
+      'Natsume continues playback after delayed graph prewarm; Unity 2022.3 can stall in multi-level configurations.',
+    );
   const steps = Math.ceil(prewarmDuration(main) * 60);
   rules.require(
     steps <= 36_000 && main.maxParticles * steps <= 10_000_000,

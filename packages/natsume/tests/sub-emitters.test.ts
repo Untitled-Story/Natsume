@@ -1,3 +1,4 @@
+import { emitterSupport } from '../src/runtime/emitter-support.js';
 import { existsSync, readFileSync } from 'node:fs';
 import { recordError } from './measurement.js';
 import { expect, it } from 'vitest';
@@ -584,3 +585,17 @@ it.skipIf(!existsSync(nativePath))(
       );
   },
 );
+
+it('reports continued playback for delayed graph prewarm without blocking it', () => {
+  const source = particleSource();
+  source.main!.prewarm = source.main!.loop = true;
+  source.main!.startDelay = constant(0.15);
+  source.modules.push(
+    new ParticleModuleT(M.SubEmittersModule, new SubEmittersModuleT([new SubEmitterT(4, 0, 0, 1)])),
+  );
+  const report = () => emitterSupport(source, undefined, false);
+  expect(report().filter((i) => i.code === 'DELAYED_GRAPH_PREWARM')).toHaveLength(1);
+  expect(report().some((i) => i.severity === 'error')).toBe(false);
+  source.main!.startDelay = constant(0);
+  expect(report().some((i) => i.code === 'DELAYED_GRAPH_PREWARM')).toBe(false);
+});
