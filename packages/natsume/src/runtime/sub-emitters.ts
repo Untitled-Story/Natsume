@@ -72,6 +72,7 @@ export class SubEmitterGraph {
             'CAPABILITY',
             'Sub-emitter target is outside this instance',
           );
+          emitters.get(edge.systemComponentId)!.enableSubClock();
           indegree.set(edge.systemComponentId, indegree.get(edge.systemComponentId)! + 1);
         }
       source.onBirth = (index) => this.birth(source, index);

@@ -201,6 +201,21 @@ it('supports a shared target without cloning storage or overwriting its authored
   expect(new Set(Array.from(child.serials.slice(0, 4))).size).toBe(4);
 });
 
+it('replays automatic target particles with the same clock after a later triggered birth', () => {
+  const { parent, child, graph } = fixture(4, 0, 0, true, true);
+  const snapshot = () => Array.from(child.ages.subarray(0, child.count));
+  for (let i = 0; i < 30; i++) graph.step(1 / 60);
+  const first = snapshot();
+  child.emitTriggeredBurst(origin, 0, parent.id);
+  graph.clear();
+  parent.reset();
+  child.reset();
+  for (const e of graph.order) e.sync();
+  for (let i = 0; i < 30; i++) graph.step(1 / 60);
+  expect(snapshot()).toEqual(first);
+  expect(Array.from(child.subParentSystems!.subarray(0, child.count))).toEqual([0, 0]);
+});
+
 it('propagates same-frame births through a DAG, respects target capacity and replays without stale channels', () => {
   const { parent, child } = fixture();
   const grandSource = particleSource();

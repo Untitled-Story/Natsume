@@ -788,7 +788,8 @@ export class Emitter {
       this.subBirth = undefined;
     }
   }
-  private enableSubClock(): void {
+  /** @internal Selects the graph clock before automatic or triggered births can begin. */
+  enableSubClock(): void {
     if (this.subAges) return;
     this.subAges = new Float64Array(this.lifetimes.length);
     for (let i = 0; i < this.count; i++) this.subAges[i] = this.ages[i]!;
