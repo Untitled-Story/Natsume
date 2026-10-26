@@ -1,8 +1,9 @@
 import type { ParticleTrails, TrailRecord } from '../runtime/particle-trails.js';
 import { trailAppearance, trailUV } from '../runtime/trail-parameters.js';
-import { random } from '../runtime/parameters.js';
+import { random, scalar } from '../runtime/parameters.js';
 import { TrailTextureMode } from '../format/generated/noa/ir/trail-texture-mode.js';
 import { TrailMode } from '../format/generated/noa/ir/trail-mode.js';
+import { ScalarMode } from '../format/generated/noa/ir/scalar-mode.js';
 
 /** Reusable world-space strips. Extra stream data is generated even for unlit materials. */
 export class TrailGeometry {
@@ -55,7 +56,7 @@ export class TrailGeometry {
         this.points[o + 3] = length;
       }
       const base = this.vertexCount;
-      this.smoothDirections(first, end, definition.mode === TrailMode.Ribbon);
+      const baseWidth = this.smoothDirections(first, end, trails);
       for (let i = first; i < end; i++) {
         const o = i * 4;
         let previous = Math.max(first, i - 1) * 4,
@@ -119,11 +120,35 @@ export class TrailGeometry {
           this.tint,
           this.scratch,
         );
+        // Bound miter growth by the incoming segment and the authored base width.
+        let miter = 1;
+        if (definition.mode === TrailMode.Ribbon && i > first && i + 1 < end && baseWidth > 0) {
+          const incoming = Math.hypot(
+            x - this.points[o - 4]!,
+            y - this.points[o - 3]!,
+            z - this.points[o - 2]!,
+          );
+          const dx = this.points[o + 4]! - x,
+            dy = this.points[o + 5]! - y,
+            dz = this.points[o + 6]! - z;
+          const cx = ry * dz - rz * dy,
+            cy = rz * dx - rx * dz,
+            cz = rx * dy - ry * dx;
+          const projected = Math.hypot(cx, cy, cz);
+          const dot = projected > 1e-10 ? Math.abs((sx * cx + sy * cy + sz * cz) / projected) : 1;
+          miter = Math.max(
+            1,
+            Math.min(
+              1 / Math.max(1e-10, dot),
+              Math.max(1, Math.min(3, (1.5 * incoming) / baseWidth)),
+            ),
+          );
+        }
         for (const side of [0, 1] as const) {
           const vertex = this.vertexCount++,
             v = vertex * 10,
             a = vertex * 15;
-          const half = width * (side === 0 ? 0.5 : -0.5);
+          const half = width * miter * (side === 0 ? 0.5 : -0.5);
           const uv = trailUV(
             definition,
             this.points[o + 3]!,
@@ -176,8 +201,17 @@ export class TrailGeometry {
     this.directions = new Float64Array((next.length / 4) * 3);
   }
 
-  /** Recursive angle bisectors keep turns smooth without extending the strip's width. */
-  private smoothDirections(first: number, end: number, ribbon: boolean): void {
+  /** Segment length relative to width controls how much adjacent tangents share a turn. */
+  private smoothDirections(first: number, end: number, trails: ParticleTrails): number {
+    const ribbon = trails.definition.mode === TrailMode.Ribbon;
+    const width = trails.definition.widthOverTrail;
+    const record = this.records[first]!;
+    const baseWidth = Math.abs(
+      (width?.mode === ScalarMode.Curve || width?.mode === ScalarMode.TwoCurves
+        ? width.multiplier
+        : scalar(width, 0, random(trails.emitter.seed, record.id, 193), 1)) *
+        (trails.definition.sizeAffectsWidth ? Math.max(...record.particle.size) : 1),
+    );
     let x = 1,
       y = 0,
       z = 0;
@@ -204,11 +238,24 @@ export class TrailGeometry {
       this.points[head] === this.points[anchor] &&
       this.points[head + 1] === this.points[anchor + 1] &&
       this.points[head + 2] === this.points[anchor + 2];
+    let lookAhead = ribbon || duplicateHead ? 1 : 0;
     for (let i = first; i < end; i++) {
-      if (!ribbon && i === first) {
+      if (!ribbon && !lookAhead && i + 2 < end) {
+        const p = (i + 1) * 4;
+        const length = Math.hypot(
+          this.points[p + 4]! - this.points[p]!,
+          this.points[p + 5]! - this.points[p + 1]!,
+          this.points[p + 6]! - this.points[p + 2]!,
+        );
+        if (length > baseWidth && length < 2 * baseWidth) lookAhead = 1;
+      }
+      let outX = x,
+        outY = y,
+        outZ = z;
+      if (!ribbon && !lookAhead && i === first) {
         // The moving head uses its current direction; stored anchors smooth the history.
       } else if (i + 2 < end) {
-        const a = (i + (ribbon || duplicateHead ? 1 : 0)) * 4,
+        const a = (i + lookAhead) * 4,
           b = a + 4;
         let dx = this.points[b]! - this.points[a]!,
           dy = this.points[b + 1]! - this.points[a + 1]!,
@@ -227,11 +274,24 @@ export class TrailGeometry {
           const nx = dx / length,
             ny = dy / length,
             nz = dz / length;
-          const sum = Math.hypot(x + nx, y + ny, z + nz);
+          const weight = lookAhead
+            ? Math.max(0, Math.min(0.5, 1 - length / (2 * (baseWidth || 1))))
+            : 0.5;
+          const ox = x * (1 - weight) + nx * weight,
+            oy = y * (1 - weight) + ny * weight,
+            oz = z * (1 - weight) + nz * weight;
+          const sum = Math.hypot(ox, oy, oz);
           if (sum > 1e-10) {
-            x = (x + nx) / sum;
-            y = (y + ny) / sum;
-            z = (z + nz) / sum;
+            outX = ox / sum;
+            outY = oy / sum;
+            outZ = oz / sum;
+            const cx = x * weight + nx * (1 - weight),
+              cy = y * weight + ny * (1 - weight),
+              cz = z * weight + nz * (1 - weight);
+            const cl = Math.hypot(cx, cy, cz) || 1;
+            x = cx / cl;
+            y = cy / cl;
+            z = cz / cl;
             capX = x;
             capY = y;
             capZ = z;
@@ -245,11 +305,15 @@ export class TrailGeometry {
         x = capX;
         y = capY;
         z = capZ;
+        outX = x;
+        outY = y;
+        outZ = z;
       }
-      this.directions[i * 3] = x;
-      this.directions[i * 3 + 1] = y;
-      this.directions[i * 3 + 2] = z;
+      this.directions[i * 3] = outX;
+      this.directions[i * 3 + 1] = outY;
+      this.directions[i * 3 + 2] = outZ;
     }
+    return baseWidth;
   }
   private reserveVertices(count: number): void {
     if (this.vertices.length >= count * 10) return;

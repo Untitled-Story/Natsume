@@ -135,7 +135,11 @@ export class ParticleTrails {
       !this.emitter.subParentSystems?.[index]
     )
       return;
-    if (random(this.emitter.seed, id, 190) >= this.definition.ratio) return;
+    if (
+      this.definition.mode === TrailMode.PerParticle &&
+      random(this.emitter.seed, id, 190) >= this.definition.ratio
+    )
+      return;
     // The first sample is taken after integration, rather than at the birth position.
     this.live.set(id, phase);
     if (this.definition.mode === TrailMode.Ribbon) this.sample(index);

@@ -8,7 +8,7 @@ public static class NatsumeTrailProbe
 {
     [Serializable] public class Sample { public int frame,count; public Vector3[] vertices,normals,repeatVertices,freshVertices; public Vector4[] tangents; public Vector2[] uv; public Color32[] colors; public int[] indices; }
     [Serializable] public class Case { public int mode,texture,flags; public float lifetime,distance,size; public Sample[] samples; }
-    [Serializable] public class Output { public string unityVersion; public Case[] cases; }
+    [Serializable] public class Output { public string unityVersion; public Case[] cases; public NatsumeTrailFoldProbe.Case[] folds; }
     static Case Measure(int mode,int texture,int flags,Camera camera) {
         var go=new GameObject("trail");var mesh=new Mesh();
         try {
@@ -41,6 +41,6 @@ public static class NatsumeTrailProbe
     public static void Run(){try{
         var cameraGo=new GameObject("camera");var camera=cameraGo.AddComponent<Camera>();camera.transform.position=new Vector3(0,0,-10);camera.orthographic=true;
         var rows=new List<Case>();foreach(int mode in new[]{0,1})foreach(int texture in new[]{0,1,2,3,4})foreach(int flags in new[]{0,1,2,4,8,16,31,32,64,128,256,512,1024})rows.Add(Measure(mode,texture,flags,camera));
-        UnityEngine.Object.DestroyImmediate(cameraGo);var path=Environment.GetEnvironmentVariable("NATSUME_COMPAT_OUTPUT");Directory.CreateDirectory(Path.GetDirectoryName(path));File.WriteAllText(path,JsonUtility.ToJson(new Output{unityVersion=Application.unityVersion,cases=rows.ToArray()},true));
+        var folds=NatsumeTrailFoldProbe.Measure(camera);UnityEngine.Object.DestroyImmediate(cameraGo);var path=Environment.GetEnvironmentVariable("NATSUME_COMPAT_OUTPUT");Directory.CreateDirectory(Path.GetDirectoryName(path));File.WriteAllText(path,JsonUtility.ToJson(new Output{unityVersion=Application.unityVersion,cases=rows.ToArray(),folds=folds},true));
     }catch(Exception e){Debug.LogException(e);EditorApplication.Exit(1);}}
 }

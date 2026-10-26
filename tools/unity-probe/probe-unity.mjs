@@ -307,6 +307,7 @@ const current = JSON.parse(await readFile(baseline, 'utf8'));
 assert.equal(current.unityVersion, version);
 if (subEmitters || trails) {
   assert.equal(current.cases.length, subEmitters ? 102 : 130);
+  if (trails) assert.equal(current.folds.length, 984);
   if (subEmitters) {
     assert.equal(current.lifecycle.length, 38);
     assert.equal(current.endpoints.length, 21);

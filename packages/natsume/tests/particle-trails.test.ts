@@ -125,6 +125,17 @@ it('groups Ribbon using stable particle IDs and removes dead records without ret
   expect(pool.count).toBe(0);
 });
 
+it('uses ratio only for per-particle trails, including after restart', () => {
+  for (const mode of [0, 1]) {
+    const { emitter, definition, trails } = fixture(mode);
+    definition.ratio = 0;
+    emitter.reset();
+    emitter.sync();
+    emitter.step(0.01);
+    expect(trails.records.size).toBe(mode === 1 ? 5 : 0);
+  }
+});
+
 it('accounts for transform attachment points in the budget and omits unattached particles from split ribbons', () => {
   const a = fixture(1, false, false, 65536, true);
   expect(centers(a.trails).map((s) => s.length)).toEqual([4, 3]);
@@ -150,6 +161,112 @@ interface NativeCase {
 const nativePath = new URL(
   '../../../data/unity-baselines/trails/unity-2022.3.21f1.json',
   import.meta.url,
+);
+it.skipIf(!existsSync(nativePath))(
+  'matches independently sampled attached folds across width and particle-size multipliers',
+  () => {
+    const { folds } = JSON.parse(readFileSync(nativePath, 'utf8')) as {
+      folds: {
+        spacing: number;
+        ratio: number;
+        shift: number;
+        width: number;
+        sizeWidth: boolean;
+        vertices: { x: number; y: number; z: number }[];
+      }[];
+    };
+    let maximum = 0,
+      relative = 0,
+      compared = 0;
+    expect(folds).toHaveLength(984);
+    for (const c of folds) {
+      const { emitter, trails, definition } = fixture(1, false, false, 65536, true);
+      definition.sizeAffectsWidth = c.sizeWidth;
+      definition.ratio = c.ratio;
+      emitter.reset();
+      emitter.sync();
+      definition.widthOverTrail = linear(0.5, 1.5);
+      definition.widthOverTrail.multiplier = c.width;
+      emitter.velocities.fill(0);
+      for (let i = 0; i < emitter.count; i++)
+        emitter.positions.set(
+          [
+            Math.fround(Math.fround(i * Math.fround(c.spacing)) + c.shift),
+            (i % 2) * Math.fround(0.2),
+            0,
+          ],
+          i * 3,
+        );
+      emitter.step(1e-6);
+      const geometry = new TrailGeometry();
+      geometry.update(trails);
+      expect(geometry.vertexCount).toBe(c.vertices.length);
+      const degenerate = new Set<number>();
+      let start = 0;
+      for (const strip of centers(trails)) {
+        const a = strip[0]!,
+          b = strip[1]!;
+        const direction = b.map((v, axis) => v - a[axis]!);
+        const collinear = strip.every((p) => {
+          const d = p.map((v, axis) => v - a[axis]!);
+          return (
+            Math.hypot(
+              direction[1]! * d[2]! - direction[2]! * d[1]!,
+              direction[2]! * d[0]! - direction[0]! * d[2]!,
+              direction[0]! * d[1]! - direction[1]! * d[0]!,
+            ) < 1e-8
+          );
+        });
+        if (collinear) for (let j = start; j < start + strip.length * 2; j++) degenerate.add(j);
+        start += strip.length * 2;
+      }
+      for (let i = 0; i < geometry.vertexCount; i++) {
+        const expected = c.vertices[i]!,
+          opposite = c.vertices[i ^ 1]!;
+        const width = Math.hypot(
+          expected.x - opposite.x,
+          expected.y - opposite.y,
+          expected.z - opposite.z,
+        );
+        let squared = 0;
+        for (const [axis, key] of (['x', 'y', 'z'] as const).entries()) {
+          const error = Math.abs(geometry.vertices[i * 10 + axis]! - expected[key]);
+          squared += error * error;
+        }
+        // Exact collinear reversals have no unique left/right orientation. Native
+        // Float32 normalization can exchange an otherwise identical vertex pair.
+        const offset = i * 10,
+          swapped = Math.hypot(
+            geometry.vertices[offset]! - opposite.x,
+            geometry.vertices[offset + 1]! - opposite.y,
+            geometry.vertices[offset + 2]! - opposite.z,
+          );
+        const distance = degenerate.has(i)
+          ? Math.min(Math.sqrt(squared), swapped)
+          : Math.sqrt(squared);
+        maximum = Math.max(maximum, distance);
+        const error = distance / width;
+        relative = Math.max(relative, error);
+        expect(
+          error,
+          `shift=${c.shift} width=${c.width} size=${c.sizeWidth} vertex=${i}`,
+        ).toBeLessThan(0.1);
+        compared++;
+      }
+    }
+    recordError(
+      'trail.fold.independent.position',
+      maximum,
+      'scene units',
+      `${folds.length} cases, ${compared} vertices`,
+    );
+    recordError(
+      'trail.fold.independent.relative',
+      relative,
+      'full trail width',
+      `${folds.length} cases, ${compared} vertices`,
+    );
+  },
 );
 it.skipIf(!existsSync(nativePath))(
   'matches native live-history centers and lifetime tail clipping',
@@ -244,7 +361,7 @@ it.skipIf(!existsSync(nativePath))(
         geometry.update(trails);
         const sample = c.samples.find((s) => s.frame === frame);
         if (!sample) continue;
-        // Fold positions still exceed the accuracy target; keep measuring them separately.
+        // Keep the previously divergent folds as an independently bounded measurement.
         const fold =
           (c.mode === 0 && c.flags === 31 && frame > 3) || (c.mode === 1 && c.flags === 128);
         expect(geometry.vertexCount, `flags=${c.flags} frame=${frame}`).toBe(
@@ -268,8 +385,10 @@ it.skipIf(!existsSync(nativePath))(
               (frame >= 4 && (c.mode === 1 || !(c.flags & 16)) ? [1, 2, 0][axis]! : 0);
             const error = Math.abs(geometry.vertices[offset + axis]! - position);
             squared += error * error;
-            if (fold) foldError = Math.max(foldError, error);
-            else {
+            if (fold) {
+              foldError = Math.max(foldError, error);
+              expect(error).toBeLessThan(2e-5);
+            } else {
               positionError = Math.max(positionError, error);
               expect(
                 error,
@@ -279,8 +398,10 @@ it.skipIf(!existsSync(nativePath))(
           }
           if (width > 1e-6) {
             const relative = Math.sqrt(squared) / width;
-            if (fold) foldRelativeError = Math.max(foldRelativeError, relative);
-            else {
+            if (fold) {
+              foldRelativeError = Math.max(foldRelativeError, relative);
+              expect(relative).toBeLessThan(0.1);
+            } else {
               relativeError = Math.max(relativeError, relative);
               expect(relative).toBeLessThan(0.1);
             }
@@ -332,17 +453,12 @@ it.skipIf(!existsSync(nativePath))(
       'full trail width',
       `${comparisons} accepted trail vertices`,
     );
+    recordError('trail.fold.position', foldError, 'scene units', `${foldVertices} fold vertices`);
     recordError(
-      'trail.fold.pending.position',
-      foldError,
-      'scene units',
-      `${foldVertices} unaccepted fold vertices`,
-    );
-    recordError(
-      'trail.fold.pending.relative',
+      'trail.fold.relative',
       foldRelativeError,
       'full trail width',
-      `${foldVertices} unaccepted fold vertices`,
+      `${foldVertices} fold vertices`,
     );
   },
 );
