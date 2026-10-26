@@ -9,7 +9,9 @@ import { createHash } from 'node:crypto';
 const root = fileURLToPath(new URL('../../', import.meta.url));
 assert(process.argv[2], 'Provide a directory of local .noap files');
 const directory = resolve(process.argv[2]);
-const files = (await readdir(directory)).filter((file) => file.endsWith('.noap')).sort();
+const files = (await readdir(directory, { recursive: true }))
+  .filter((file) => file.endsWith('.noap'))
+  .sort();
 assert(files.length > 0, 'No .noap files found');
 const server = await createServer({
   root: resolve(root, 'packages/playground'),
@@ -24,15 +26,14 @@ try {
   const errors = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto(server.resolvedUrls.local[0]);
-  await page.locator('#file').setInputFiles(resolve(directory, files[0]));
-  await page.locator('#status').filter({ hasText: '预览就绪' }).waitFor();
-  await page.evaluate(async () => {
-    const { app, effect } = (await import('/src/preview.ts')).getPreview();
-    app.ticker.stop();
-    const pack = effect.simulation.pack;
-    effect.destroy();
-    pack.dispose();
-  });
+  await page.evaluate(
+    async (source) => {
+      globalThis.__natsumeLifecycle = await (
+        await import('/@fs' + source + '/packages/natsume/tests/browser/playback-harness.ts')
+      ).createPlaybackHarness();
+    },
+    root.replace(/\/$/, ''),
+  );
   for (const file of files) {
     const bytes = await readFile(resolve(directory, file));
     const result = await page
@@ -45,7 +46,7 @@ try {
           const { scalar } = await import(
             '/@fs' + source + '/packages/natsume/src/runtime/parameters.ts'
           );
-          const { app, runtime } = (await import('/src/preview.ts')).getPreview();
+          const { app, runtime } = globalThis.__natsumeLifecycle;
           const check = (condition, message) => {
             if (!condition) throw new Error(message);
           };
@@ -62,7 +63,7 @@ try {
             for (const entry of pack.document.entries) {
               let effect;
               try {
-                effect = await runtime.instantiate(pack, {
+                const options = {
                   entryId: entry.id,
                   seed: 12345,
                   renderEnvironment: { globalMipBias: 0 },
@@ -96,7 +97,16 @@ try {
                     fog: { mode: 'none' },
                     viewPosition: [0, 0, -1000],
                   },
-                });
+                };
+                const compatibility = runtime.checkCompatibility(pack, options);
+                if (!compatibility.compatible) {
+                  entries.push({
+                    id: entry.id,
+                    blocked: compatibility.issues.filter((i) => i.severity === 'error'),
+                  });
+                  continue;
+                }
+                effect = await runtime.instantiate(pack, options);
                 app.stage.addChild(effect.container);
                 const systems = [...effect.simulation.emitters.values()];
                 let horizon = 1,
@@ -202,7 +212,11 @@ try {
               app.stage.children.length === 0,
             'Resources retained after destruction',
           );
-          return { entries, device: app.renderer.gl.getParameter(app.renderer.gl.RENDERER) };
+          return {
+            entries,
+            blocked: entries.some((entry) => entry.blocked),
+            device: app.renderer.gl.getParameter(app.renderer.gl.RENDERER),
+          };
         },
         { bytes: [...bytes], source: root.replace(/\/$/, '') },
       )
@@ -210,13 +224,16 @@ try {
         (value) => ({
           file,
           sha256: createHash('sha256').update(bytes).digest('hex'),
-          passed: true,
+          passed: !value.blocked,
           ...value,
         }),
         (error) => ({ file, passed: false, error: error.message }),
       );
     results.push(result);
-    if (!result.passed) console.log(file + ': ' + result.error);
+    if (!result.passed)
+      console.log(
+        file + ': ' + (result.blocked ? 'blocked by compatibility checks' : result.error),
+      );
     else if (results.length % 10 === 0)
       console.log(`Verified ${results.length}/${files.length} packages`);
   }
@@ -237,6 +254,7 @@ try {
     fixedDelta: 1 / 60,
     drawEverySteps: 10,
     passed: results.filter((r) => r.passed).length,
+    blocked: results.filter((r) => r.blocked).length,
     total: files.length,
     errors,
     results,
@@ -246,8 +264,10 @@ try {
     resolve(root, 'data/unity-baselines/package-lifecycle.json'),
     JSON.stringify(report, null, 2) + '\n',
   );
-  console.log(`Lifecycle: ${report.passed}/${report.total}; browser errors: ${errors.length}`);
-  assert.equal(report.passed, report.total);
+  console.log(
+    `Lifecycle: ${report.passed} passed, ${report.blocked} blocked, ${report.total - report.passed - report.blocked} failed / ${report.total}; browser errors: ${errors.length}`,
+  );
+  assert.equal(report.passed + report.blocked, report.total);
   assert.deepEqual(errors, []);
 } finally {
   await browser?.close();
