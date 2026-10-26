@@ -22,6 +22,8 @@ const tool = dirname(fileURLToPath(import.meta.url));
 const root = resolve(tool, '../..');
 const version = '2022.3.21f1';
 const subEmitters = process.argv.includes('--sub-emitters');
+const playback = process.argv.includes('--playback');
+assert(!playback || subEmitters, '--playback requires --sub-emitters');
 const trails = process.argv.includes('--trails');
 const spriteMasks = process.argv.includes('--sprite-masks');
 const uiMasks = process.argv.includes('--ui-masks');
@@ -99,7 +101,9 @@ const output = resolve(
   root,
   'data/unity-baselines',
   subEmitters
-    ? 'sub-emitters'
+    ? playback
+      ? 'sub-emitter-playback'
+      : 'sub-emitters'
     : trails
       ? 'trails'
       : spriteMasks
@@ -227,7 +231,9 @@ const child = spawn(
     project,
     '-executeMethod',
     subEmitters
-      ? 'NatsumeSubEmitterProbe.Run'
+      ? playback
+        ? 'NatsumeSubEmitterPlaybackProbe.Run'
+        : 'NatsumeSubEmitterProbe.Run'
       : trails
         ? 'NatsumeTrailProbe.Run'
         : spriteMasks
@@ -289,7 +295,7 @@ const child = spawn(
                                                                 : fitting
                                                                   ? 'NatsumeNoiseFitProbe.Run'
                                                                   : 'NatsumeProbe.Run',
-    ...(stretch || bindings ? [] : ['-quit']),
+    ...(stretch || bindings || playback ? [] : ['-quit']),
     '-logFile',
     log,
   ],
@@ -305,6 +311,17 @@ await new Promise((accept, reject) => {
 });
 const current = JSON.parse(await readFile(baseline, 'utf8'));
 assert.equal(current.unityVersion, version);
+if (playback) {
+  assert.equal(current.cases.length, 44);
+  for (const c of current.cases) assert.equal(c.samples.length, 181);
+  if (process.argv.includes('--update-fixtures'))
+    await saveJson(
+      resolve(root, 'data/unity-baselines/fixtures/unity-sub-emitter-playback.json'),
+      JSON.stringify(current, null, 2) + '\n',
+    );
+  console.log(`Player-loop observations: ${current.cases.length}`);
+  process.exit(0);
+}
 if (subEmitters || trails) {
   assert.equal(current.cases.length, subEmitters ? 102 : 130);
   if (trails) assert.equal(current.folds.length, 984);
