@@ -22,6 +22,9 @@ import { RenderMode } from '../src/format/generated/noa/ir/render-mode.js';
 import { BlendFactor } from '../src/format/generated/noa/ir/blend-factor.js';
 import { RectLayoutT } from '../src/format/generated/noa/ir/rect-layout.js';
 import { Vec2T } from '../src/format/generated/noa/ir/vec2.js';
+import { TrailsModuleT } from '../src/format/generated/noa/ir/trails-module.js';
+import { ParticleModuleT } from '../src/format/generated/noa/ir/particle-module.js';
+import { ParticleModuleData as M } from '../src/format/generated/noa/ir/particle-module-data.js';
 import { Vec3T } from '../src/format/generated/noa/ir/vec3.js';
 
 const context: CompatibilityContext = {
@@ -348,4 +351,32 @@ it('ignores the trail material slot and checks every particle material pass', ()
   expect(
     checkCompatibility(missing.pack(), {}, context).issues.some((i) => i.field === 'materials.0'),
   ).toBe(false);
+});
+
+it('budgets shared trail points across duplicate renderer passes and includes their opaque materials', () => {
+  const report = (points: number, duplicate: boolean, opaque = false) => {
+    const f = fixture();
+    f.source.modules.push(new ParticleModuleT(M.TrailsModule, new TrailsModuleT()));
+    f.renderer.materials = [5, 5];
+    if (duplicate)
+      f.doc.components.push(new ComponentT(8, 1, true, 4, structuredClone(f.renderer)));
+    if (opaque) {
+      const trailMaterial = structuredClone(f.material);
+      trailMaterial.id = 7;
+      f.material.renderQueue = trailMaterial.renderQueue = 2000;
+      f.doc.materials.push(trailMaterial);
+      f.renderer.materials[1] = 7;
+    }
+    return checkCompatibility(f.pack(), { maxTrailPoints: points }, context);
+  };
+  const exceeds = (points: number, duplicate: boolean) =>
+    report(points, duplicate).issues.some(
+      (i) => i.code === 'LIMIT' && i.field === 'maxParticles*vertices',
+    );
+  expect(exceeds(250000, false)).toBe(false);
+  expect(exceeds(250000, true)).toBe(true);
+  expect(exceeds(65536, true)).toBe(false);
+  expect(report(65536, false, true).issues.some((i) => i.code === 'OPAQUE_MATERIAL_IDENTITY')).toBe(
+    true,
+  );
 });

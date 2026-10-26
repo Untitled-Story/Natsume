@@ -334,6 +334,7 @@ export function checkCompatibility(
   append(global.issues);
   let vertices = 0,
     pixels = 0;
+  const trailPassCounts = new Map<number, number>();
   const materials = new Set<number | string>();
   let uiScene: Scene | undefined;
   for (const c of components) {
@@ -532,8 +533,13 @@ export function checkCompatibility(
       );
       const slots = [...particleMaterialSlots(definition)];
       const hasTrails = system?.modules.some((m) => m.dataType === ParticleModuleData.TrailsModule);
-      if (hasTrails && definition.materials[1] && definition.environment?.castShadows !== 3)
+      if (hasTrails && definition.materials[1] && definition.environment?.castShadows !== 3) {
         slots.push(1);
+        trailPassCounts.set(
+          definition.systemComponentId,
+          (trailPassCounts.get(definition.systemComponentId) ?? 0) + 1,
+        );
+      }
       for (const slot of slots) {
         const material = pack.document.materials.find((m) => m.id === definition.materials[slot]);
         rules.require(
@@ -720,7 +726,7 @@ export function checkCompatibility(
     const renderer = c.data as R<ParticleRendererT> | R<MeshRendererT>;
     const slots =
       c.dataType === C.ParticleRenderer
-        ? particleMaterialSlots(renderer as R<ParticleRendererT>)
+        ? [...particleMaterialSlots(renderer as R<ParticleRendererT>)]
         : sceneMaterialPasses(
             renderer as R<MeshRendererT>,
             pack.getMesh(
@@ -730,6 +736,17 @@ export function checkCompatibility(
               ).meshAssetId,
             ),
           ).map((p) => p.slot);
+    if (c.dataType === C.ParticleRenderer) {
+      const particle = renderer as R<ParticleRendererT>;
+      if (
+        particle.materials[1] &&
+        particle.environment?.castShadows !== 3 &&
+        systemMap
+          .get(particle.systemComponentId)
+          ?.modules.some((m) => m.dataType === ParticleModuleData.TrailsModule)
+      )
+        slots.push(1);
+    }
     for (const slot of slots) {
       const material = pack.document.materials.find((m) => m.id === renderer.materials[slot]);
       if (!material || material.renderQueue > 2500) continue;
@@ -747,6 +764,11 @@ export function checkCompatibility(
         [...ids],
         `Opaque group ${key} uses package material declaration order; Unity transient material identities are not serialized.`,
       );
+  // Histories share one point pool; only the largest pass multiplicity can
+  // multiply its full capacity at once.
+  let maxTrailPasses = 0;
+  for (const count of trailPassCounts.values()) maxTrailPasses = Math.max(maxTrailPasses, count);
+  vertices += 2 * (options.maxTrailPoints ?? 65_536) * maxTrailPasses;
   totals.require(
     vertices <= 1_000_000,
     'LIMIT',
