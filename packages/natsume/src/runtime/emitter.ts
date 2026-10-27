@@ -1,3 +1,8 @@
+import {
+  advanceLifetimeProgress,
+  lifetimeProgressAge,
+  reciprocalLifetime,
+} from './particle-clock.js';
 import { mat4, quat, vec3 } from 'gl-matrix';
 import { check } from '../errors.js';
 import { SpriteShapeSampler } from './sprite-shape.js';
@@ -65,6 +70,8 @@ export class Emitter {
   readonly startColors: Float32Array;
   readonly ages: Float32Array;
   readonly lifetimes: Float32Array;
+  private lifetimeProgress: Float32Array | undefined;
+  private inverseLifetimes: Float32Array | undefined;
   private subAges: Float64Array | undefined;
   readonly serials: Uint32Array;
   subParentSystems: Uint32Array | undefined;
@@ -462,6 +469,19 @@ export class Emitter {
     return this.runPrewarm(advance, true, historyLifetime);
   }
 
+  /** @internal Player-loop warm cohorts retain the native percentage-lifetime precision. */
+  enableLifetimeProgress(): void {
+    this.enableSubClock();
+    if (this.lifetimeProgress) return;
+    this.lifetimeProgress = new Float32Array(this.lifetimes.length);
+    this.inverseLifetimes = new Float32Array(this.lifetimes.length);
+    for (let i = 0; i < this.count; i++) {
+      this.inverseLifetimes[i] = reciprocalLifetime(this.lifetimes[i]!);
+      this.lifetimes[i] = Math.fround(1 / this.inverseLifetimes[i]!);
+      this.lifetimeProgress[i] = Math.fround((this.ages[i]! / this.lifetimes[i]!) * 100);
+    }
+  }
+
   /** @internal Graph warming already supplies local simulation seconds. */
   advancePrewarm(seconds: number): void {
     this.advance(seconds);
@@ -741,6 +761,11 @@ export class Emitter {
           this.startColors[i * 4 + channel]! *= this.birth[6 + channel]!;
       if (this.subBirth) this.inheritSubBirth(i, this.subBirth.parent, this.subBirth.properties);
       if (this.subAges) this.subAges[i] = 0;
+      if (this.lifetimeProgress) {
+        this.lifetimeProgress[i] = 0;
+        this.inverseLifetimes![i] = reciprocalLifetime(this.lifetimes[i]!);
+        this.lifetimes[i] = Math.fround(1 / this.inverseLifetimes![i]!);
+      }
       this.updateCustom(i, 0);
       this.onBirth?.(i, phase);
       const age = (amount - n - 1 + remainder) * spacing;
@@ -872,8 +897,23 @@ export class Emitter {
   private advanceParticles(dt: number, first = 0): void {
     const limitDecay = this.limit ? Math.pow(1 - this.limit.dampen, dt * 30) : 1;
     for (let i = first; i < this.count; ) {
-      const age = this.subAges ? this.subAges[i]! + Math.fround(dt) : this.ages[i]! + dt;
-      const dead = this.subAges ? age > this.lifetimes[i]! : age >= this.lifetimes[i]!;
+      const progress = this.lifetimeProgress
+        ? advanceLifetimeProgress(this.lifetimeProgress[i]!, dt, this.inverseLifetimes![i]!)
+        : undefined;
+      if (progress !== undefined) this.lifetimeProgress![i] = progress;
+      const elapsed = this.subAges ? this.subAges[i]! + Math.fround(dt) : 0;
+      const age =
+        progress !== undefined
+          ? lifetimeProgressAge(progress, this.lifetimes[i]!)
+          : this.subAges
+            ? elapsed
+            : this.ages[i]! + dt;
+      const dead =
+        progress !== undefined
+          ? progress > 100
+          : this.subAges
+            ? age > this.lifetimes[i]!
+            : age >= this.lifetimes[i]!;
       if (dead && !this.onDeath) {
         this.remove(i);
         continue;
@@ -1124,7 +1164,7 @@ export class Emitter {
       // Custom Data, like integrated rotation, samples the start of this simulation step.
       this.updateCustom(i, this.ages[i]! / this.lifetimes[i]!);
       this.ages[i] = age;
-      if (this.subAges) this.subAges[i] = age;
+      if (this.subAges) this.subAges[i] = elapsed;
       if (dead) {
         this.onDeath?.(i);
         this.remove(i);
@@ -1215,6 +1255,10 @@ export class Emitter {
     if (i === last) return;
     for (const a of [this.ages, this.lifetimes, this.serials]) a[i] = a[last]!;
     if (this.subAges) this.subAges[i] = this.subAges[last]!;
+    if (this.lifetimeProgress) {
+      this.lifetimeProgress[i] = this.lifetimeProgress[last]!;
+      this.inverseLifetimes![i] = this.inverseLifetimes![last]!;
+    }
     if (this.subParentSystems) {
       this.subParentSystems[i] = this.subParentSystems[last]!;
       this.subParentParticles![i] = this.subParentParticles![last]!;
