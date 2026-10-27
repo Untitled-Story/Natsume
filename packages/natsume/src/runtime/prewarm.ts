@@ -36,22 +36,57 @@ export function prewarmDuration(main: NonNullable<R<ParticleSystemT>['main']>): 
   return Math.ceil(maximumLifetime(main) / main.durationSeconds) * main.durationSeconds;
 }
 
-/** Connected warming retains the longest authored lifetime across its shared pools. */
+/** Connected warm history follows the longest authored lifetime path, not a sum of siblings. */
 export function graphPrewarmEstimate(
-  main: NonNullable<R<ParticleSystemT>['main']>,
-  systems: Iterable<R<ParticleSystemT>>,
+  rootId: number,
+  systems: ReadonlyMap<number, R<ParticleSystemT>>,
 ): { history: number; work: number } {
-  let history = 0,
-    capacity = 0;
-  for (const system of systems) {
-    history = Math.max(history, maximumLifetime(system.main!));
-    capacity += system.main!.maxParticles;
+  const edges = (id: number) =>
+    (
+      systems.get(id)!.modules.find((m) => m.dataType === M.SubEmittersModule)?.data as
+        | R<SubEmittersModuleT>
+        | undefined
+    )?.emitters ?? [];
+  const scope = new Set([rootId]);
+  for (const id of scope)
+    for (const edge of edges(id))
+      if (systems.has(edge.systemComponentId)) scope.add(edge.systemComponentId);
+  const degrees = new Map([...scope].map((id) => [id, 0]));
+  let capacity = 0;
+  for (const id of scope) {
+    capacity += systems.get(id)!.main!.maxParticles;
+    for (const edge of edges(id))
+      if (scope.has(edge.systemComponentId))
+        degrees.set(edge.systemComponentId, degrees.get(edge.systemComponentId)! + 1);
   }
+  const order = [...scope].filter((id) => degrees.get(id) === 0);
+  for (let i = 0; i < order.length; i++)
+    for (const edge of edges(order[i]!))
+      if (scope.has(edge.systemComponentId)) {
+        const degree = degrees.get(edge.systemComponentId)! - 1;
+        degrees.set(edge.systemComponentId, degree);
+        if (degree === 0) order.push(edge.systemComponentId);
+      }
+  // Propagate accumulated prefixes: Float32 addition is not associative.
+  // Shared descendants retain the longest incoming path without expanding the DAG.
+  const paths = new Map([[rootId, Math.fround(maximumLifetime(systems.get(rootId)!.main!))]]);
+  let history = 0;
+  for (const id of order) {
+    const prefix = paths.get(id);
+    if (prefix === undefined) continue;
+    history = Math.max(history, prefix);
+    for (const edge of edges(id)) {
+      const target = systems.get(edge.systemComponentId);
+      if (!target) continue;
+      const next = Math.fround(prefix + Math.fround(maximumLifetime(target.main!)));
+      paths.set(edge.systemComponentId, Math.max(paths.get(edge.systemComponentId) ?? 0, next));
+    }
+  }
+  if (order.length !== scope.size) history = Infinity;
+  const duration = systems.get(rootId)!.main!.durationSeconds;
   return {
     history,
-    work:
-      capacity *
-      Math.ceil((Math.ceil(history / main.durationSeconds) * main.durationSeconds) / 0.02),
+    work: capacity * (Math.ceil((Math.ceil(history / duration) * duration) / 0.02) + 2),
   };
 }
 
@@ -74,14 +109,7 @@ export function instancePrewarmWork(
       work += main.maxParticles * Math.ceil(prewarmDuration(main) * 60);
       continue;
     }
-    const scope = new Set([id]);
-    for (const current of scope)
-      for (const edge of edges(systems.get(current)!))
-        if (systems.has(edge.systemComponentId)) scope.add(edge.systemComponentId);
-    work += graphPrewarmEstimate(
-      main,
-      [...scope].map((target) => systems.get(target)!),
-    ).work;
+    work += graphPrewarmEstimate(id, systems).work;
   }
   return work;
 }
