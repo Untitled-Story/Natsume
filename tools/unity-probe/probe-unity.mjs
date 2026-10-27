@@ -24,10 +24,20 @@ const version = '2022.3.21f1';
 const subEmitters = process.argv.includes('--sub-emitters');
 const sharedSubEmitters = process.argv.includes('--shared');
 const sharedSingle = process.argv.includes('--single');
+const workerArgument = process.argv.indexOf('--job-workers');
+const jobWorkers = workerArgument < 0 ? undefined : Number(process.argv[workerArgument + 1]);
+assert(
+  workerArgument < 0 || (Number.isInteger(jobWorkers) && jobWorkers >= 0 && jobWorkers <= 128),
+  '--job-workers requires an integer from 0 to 128',
+);
 assert(!sharedSingle || sharedSubEmitters, '--single requires --shared');
 assert(
   !sharedSingle || !process.argv.includes('--update-fixtures'),
   'A single shared case must not replace the complete fixture',
+);
+assert(
+  !sharedSubEmitters || !process.argv.includes('--update-fixtures') || jobWorkers === 0,
+  'Shared golden data requires --job-workers 0',
 );
 const playback = process.argv.includes('--playback') || sharedSubEmitters;
 const subTransforms = process.argv.includes('--transforms');
@@ -225,6 +235,7 @@ const child = spawn(
   [
     '-batchmode',
     '-noUpm',
+    ...(jobWorkers === undefined ? [] : ['-job-worker-count', String(jobWorkers)]),
     ...(trails ||
     spriteMasks ||
     uiMasks ||
@@ -355,13 +366,15 @@ if (subTransforms) {
   process.exit(0);
 }
 if (sharedSubEmitters) {
+  if (jobWorkers !== undefined) assert.equal(current.jobWorkers, jobWorkers);
   assert.equal(current.cases.length, sharedSingle ? 1 : 72);
   for (const c of current.cases) assert.equal(c.samples.length, 121);
-  if (process.argv.includes('--update-fixtures'))
+  if (process.argv.includes('--update-fixtures')) {
     await saveJson(
       resolve(root, 'data/unity-baselines/fixtures/unity-sub-emitter-shared.json'),
       JSON.stringify(current, null, 2) + '\n',
     );
+  }
   console.log(`Shared child observations: ${current.cases.length}`);
   process.exit(0);
 }

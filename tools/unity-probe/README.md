@@ -22,6 +22,7 @@ pnpm probe:unity --sub-emitters # 子发射器继承、触发时序、Burst 与�
 pnpm probe:unity --sub-emitters --playback # 实际 Play 的预热、分支和启动延迟
 pnpm probe:unity --sub-emitters --shared # 实际 Play 的共享目标、重复槽与停止行为
 pnpm probe:unity --sub-emitters --shared --single # 独立进程重复检查同一共享案例
+pnpm probe:unity --sub-emitters --shared --job-workers 0 --update-fixtures # 串行共享目标对照
 pnpm probe:unity --trails       # 拖尾几何、纹理模式、宽度颜色与死亡边界
 pnpm probe:unity --animation    # 动画时钟、循环与多关键帧曲线
 pnpm probe:unity --events       # 类型化事件、循环端点与启停顺序
@@ -56,6 +57,8 @@ pnpm probe:unity --prefab-layout # 原始 prefab 布局
 脚本将 `project/` 模板复制到仓库的 `data/unity-probe/` 后运行。该目录是专用临时工程，请勿放入业务工程。测量结果和 Editor 日志写入 `data/unity-baselines/`，均由 Git 忽略。部分模式需要图形设备。UI 探针从指定 Editor 安装中复制 UGUI Runtime 到忽略的临时工程；不分发 Unity 源码。
 
 `--noise-fit` 需要先准备 `data/unity-baselines/noise-fit-input.json`。`--prefab-layout` 默认使用相邻 Noa 项目的 `data/scenario/effect/kirakira_01_rip/`；可通过 `NATSUME_PREFAB_SOURCE` 指定其他同结构资源目录。
+
+`--job-workers N` 指定 Unity 后台工作线程数。共享子发射器在并行更新时存在重跑差异，只有 `--job-workers 0` 可更新该模式的回归基准。设置 `NATSUME_SHARED_MARKERS=1` 可给两个父系统添加左右位置标记；输出保留子粒子位置和种子以追踪来源。
 
 `--scene-materials` 另外生成受控多 submesh Prefab。用相邻 Noa 编译后，浏览器测试检查真实导出几何、材质动画与实例生命周期：
 
