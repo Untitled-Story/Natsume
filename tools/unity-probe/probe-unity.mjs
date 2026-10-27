@@ -22,7 +22,8 @@ const tool = dirname(fileURLToPath(import.meta.url));
 const root = resolve(tool, '../..');
 const version = '2022.3.21f1';
 const subEmitters = process.argv.includes('--sub-emitters');
-const playback = process.argv.includes('--playback');
+const sharedSubEmitters = process.argv.includes('--shared');
+const playback = process.argv.includes('--playback') || sharedSubEmitters;
 const subTransforms = process.argv.includes('--transforms');
 assert(
   !subTransforms || (subEmitters && !playback),
@@ -108,9 +109,11 @@ const output = resolve(
   subEmitters
     ? subTransforms
       ? 'sub-emitter-transforms'
-      : playback
-        ? 'sub-emitter-playback'
-        : 'sub-emitters'
+      : sharedSubEmitters
+        ? 'sub-emitter-shared'
+        : playback
+          ? 'sub-emitter-playback'
+          : 'sub-emitters'
     : trails
       ? 'trails'
       : spriteMasks
@@ -240,9 +243,11 @@ const child = spawn(
     subEmitters
       ? subTransforms
         ? 'NatsumeSubEmitterTransformProbe.Run'
-        : playback
-          ? 'NatsumeSubEmitterPlaybackProbe.Run'
-          : 'NatsumeSubEmitterProbe.Run'
+        : sharedSubEmitters
+          ? 'NatsumeSubEmitterSharedPlaybackProbe.Run'
+          : playback
+            ? 'NatsumeSubEmitterPlaybackProbe.Run'
+            : 'NatsumeSubEmitterProbe.Run'
       : trails
         ? 'NatsumeTrailProbe.Run'
         : spriteMasks
@@ -332,6 +337,17 @@ if (subTransforms) {
       JSON.stringify(current, null, 2) + '\n',
     );
   console.log(`Inheritance transform observations: ${current.cases.length}`);
+  process.exit(0);
+}
+if (sharedSubEmitters) {
+  assert.equal(current.cases.length, 72);
+  for (const c of current.cases) assert.equal(c.samples.length, 121);
+  if (process.argv.includes('--update-fixtures'))
+    await saveJson(
+      resolve(root, 'data/unity-baselines/fixtures/unity-sub-emitter-shared.json'),
+      JSON.stringify(current, null, 2) + '\n',
+    );
+  console.log(`Shared child observations: ${current.cases.length}`);
   process.exit(0);
 }
 if (playback) {
