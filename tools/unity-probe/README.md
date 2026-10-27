@@ -21,6 +21,7 @@ pnpm probe:unity
 pnpm probe:unity --sub-emitters # 子发射器继承、触发时序、Burst 与连续发射
 pnpm probe:unity --sub-emitters --playback # 实际 Play 的预热、分支和启动延迟
 pnpm probe:unity --sub-emitters --shared # 实际 Play 的共享目标、重复槽与停止行为
+pnpm probe:unity --sub-emitters --shared --single # 独立进程重复检查同一共享案例
 pnpm probe:unity --trails       # 拖尾几何、纹理模式、宽度颜色与死亡边界
 pnpm probe:unity --animation    # 动画时钟、循环与多关键帧曲线
 pnpm probe:unity --events       # 类型化事件、循环端点与启停顺序

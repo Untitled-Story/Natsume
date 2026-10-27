@@ -35,11 +35,14 @@ public sealed class NatsumeSubEmitterSharedPlaybackProbe : MonoBehaviour
         var s = source.subEmitters; s.enabled = true;
         s.AddSubEmitter(target, ParticleSystemSubEmitterType.Birth, (ParticleSystemSubEmitterProperties)inherit);
     }
-    static float[] Ages(ParticleSystem ps) {
-        var particles=new ParticleSystem.Particle[ps.particleCount];ps.GetParticles(particles);
+    static float[] Read(ParticleSystem ps, out int count, out int invalid) {
+        var particles=new ParticleSystem.Particle[ps.main.maxParticles];count=ps.GetParticles(particles);
         var ages=new List<float>();
-        foreach(var p in particles) {float age=p.startLifetime-p.remainingLifetime;if(!float.IsNaN(age)&&!float.IsInfinity(age))ages.Add(age);}
-        return ages.ToArray();
+        for(int i=0;i<count;i++) {
+            float age=particles[i].startLifetime-particles[i].remainingLifetime;
+            if(!float.IsNaN(age)&&!float.IsInfinity(age))ages.Add(age);
+        }
+        invalid=count-ages.Count;return ages.ToArray();
     }
     Output output = new Output(); int frame, startup; bool begun;
     public static void Run() {
@@ -73,13 +76,21 @@ public sealed class NatsumeSubEmitterSharedPlaybackProbe : MonoBehaviour
         output.cases.Add(row);Record(row,0);
     }
     void Begin() {
+        if(Environment.GetEnvironmentVariable("NATSUME_SHARED_SINGLE")=="1") {
+            Configure(.15f,.13f,16,false,0);return;
+        }
         foreach(float life in new[] { .15f, .55f, 1.05f }) foreach(float duration in new[] { .13f, .37f })
         foreach(int inherit in new[] { 0, 16 }) foreach(bool automatic in new[] { false, true }) foreach(int clearFrame in new[] { 0, 12 })
             Configure(life,duration,inherit,automatic,clearFrame);
         foreach(int topology in new[]{0,1,2}) foreach(bool automatic in new[]{false,true}) foreach(int stopMode in new[]{1,2,3,4})
             Configure(.55f,2f,0,automatic,0,topology,stopMode);
     }
-    void Record(Case c,int index) { var ages=Ages(c.child); c.samples.Add(new Sample {frame=index,a=c.a.particleCount,b=c.b.particleCount,child=c.child.particleCount,childTime=c.child.time,childAge=ages,invalidAgeCount=c.child.particleCount-ages.Length,playingA=c.a.isPlaying,emittingA=c.a.isEmitting,playingB=c.b.isPlaying,timeA=c.a.time}); }
+    void Record(Case c,int index) {
+        int a,b,count,invalid,unused;
+        Read(c.a,out a,out unused);Read(c.b,out b,out unused);
+        var ages=Read(c.child,out count,out invalid);
+        c.samples.Add(new Sample {frame=index,a=a,b=b,child=count,childTime=c.child.time,childAge=ages,invalidAgeCount=invalid,playingA=c.a.isPlaying,emittingA=c.a.isEmitting,playingB=c.b.isPlaying,timeA=c.a.time});
+    }
     void Update() {
         if(!begun)return;
         frame++;

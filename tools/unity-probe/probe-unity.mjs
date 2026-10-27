@@ -23,6 +23,12 @@ const root = resolve(tool, '../..');
 const version = '2022.3.21f1';
 const subEmitters = process.argv.includes('--sub-emitters');
 const sharedSubEmitters = process.argv.includes('--shared');
+const sharedSingle = process.argv.includes('--single');
+assert(!sharedSingle || sharedSubEmitters, '--single requires --shared');
+assert(
+  !sharedSingle || !process.argv.includes('--update-fixtures'),
+  'A single shared case must not replace the complete fixture',
+);
 const playback = process.argv.includes('--playback') || sharedSubEmitters;
 const subTransforms = process.argv.includes('--transforms');
 assert(
@@ -110,7 +116,9 @@ const output = resolve(
     ? subTransforms
       ? 'sub-emitter-transforms'
       : sharedSubEmitters
-        ? 'sub-emitter-shared'
+        ? sharedSingle
+          ? 'sub-emitter-shared-single'
+          : 'sub-emitter-shared'
         : playback
           ? 'sub-emitter-playback'
           : 'sub-emitters'
@@ -313,7 +321,14 @@ const child = spawn(
     '-logFile',
     log,
   ],
-  { stdio: 'inherit', env: { ...process.env, NATSUME_COMPAT_OUTPUT: baseline } },
+  {
+    stdio: 'inherit',
+    env: {
+      ...process.env,
+      NATSUME_COMPAT_OUTPUT: baseline,
+      ...(sharedSubEmitters ? { NATSUME_SHARED_SINGLE: sharedSingle ? '1' : '0' } : {}),
+    },
+  },
 );
 await new Promise((accept, reject) => {
   child.once('error', reject);
@@ -340,7 +355,7 @@ if (subTransforms) {
   process.exit(0);
 }
 if (sharedSubEmitters) {
-  assert.equal(current.cases.length, 72);
+  assert.equal(current.cases.length, sharedSingle ? 1 : 72);
   for (const c of current.cases) assert.equal(c.samples.length, 121);
   if (process.argv.includes('--update-fixtures'))
     await saveJson(
