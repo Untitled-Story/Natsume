@@ -156,8 +156,8 @@ export class SubEmitterGraph {
     for (const root of this.warmRequests) {
       const scope = this.descendants.get(root.id)!;
       work += graphPrewarmEstimate(
-        root.main,
-        this.order.filter((e) => scope.has(e.id)).map((e) => e.source),
+        root.id,
+        new Map(this.order.filter((e) => scope.has(e.id)).map((e) => [e.id, e.source])),
       ).work;
       check(work <= 40_000_000, 'LIMIT', 'Instance graph prewarm work exceeds playback budget');
     }
@@ -165,8 +165,8 @@ export class SubEmitterGraph {
       this.warmRequests.delete(root);
       const scope = this.descendants.get(root.id)!;
       const { history } = graphPrewarmEstimate(
-        root.main,
-        this.order.filter((e) => scope.has(e.id)).map((e) => e.source),
+        root.id,
+        new Map(this.order.filter((e) => scope.has(e.id)).map((e) => [e.id, e.source])),
       );
       const remaining = root.prewarmGraph(
         (seconds) => this.stepScope(seconds / root.main.simulationSpeed, scope, root, seconds),
