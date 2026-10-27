@@ -174,6 +174,24 @@ for (const particle of particles) {
 
 返回当前存活粒子的独立快照。位置、速度和尺寸采用 Unity 世界单位，旋转为模拟空间内的弧度；包含当前颜色、年龄、初始寿命和剩余寿命。ID 在该系统内保持到粒子死亡，数组压缩不改变 ID；重播后 ID 重新计数。
 
+宿主检测到碰撞、触发或需要手动发射时，通知源系统的子发射器槽：
+
+```ts
+const particle = effect.getParticles(systemId)[0];
+if (particle) effect.emitSubEmitter(systemId, slot, particle.id);
+effect.emitSubEmitter(systemId, slot); // 对所有存活粒子触发
+```
+
+`systemId` 为源 ParticleSystem 组件 ID，`slot` 为源包中的零起始槽序号，空槽不发射。Birth / Death 由运行时自动触发；Collision / Trigger / Manual 由宿主通知，Natsume 不执行碰撞检测。失效粒子 ID 或不存在的系统 / 槽会报错。
+
+拖尾历史使用实例共享、可复用的点池：
+
+```ts
+const effect = await runtime.instantiate(pack, { maxTrailPoints: 65_536 });
+```
+
+`maxTrailPoints` 默认 65,536，包含存活粒子与死亡后残留的历史点。超限时报错，宿主可提高上限；不会静默截断拖尾。
+
 ## 粒子绘制环境
 
 Legacy Additive / Alpha Blended 材质需要显式提供环境。普通二维预览可关闭雾效；未提供 `depth` 时使用 `effect.container.zIndex`，负值按零处理：

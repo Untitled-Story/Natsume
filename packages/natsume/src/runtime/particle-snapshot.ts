@@ -28,6 +28,7 @@ export function particleSnapshot(
   remainingStep = 0,
   reuse?: MutableParticleSnapshot,
   scratch = new Float32Array(4),
+  worldSize = true,
 ): MutableParticleSnapshot {
   const id = e.serials[index]!,
     o = index * 3,
@@ -59,7 +60,7 @@ export function particleSnapshot(
           )
         : 1) *
       (e.noiseSizes?.[o + axis] ?? 1) *
-      e.particleScale[axis]!;
+      (worldSize ? e.particleScale[axis]! : 1);
   }
   const state =
     reuse ??
@@ -85,4 +86,9 @@ export function particleSnapshot(
   state.lifetime = e.lifetimes[index]!;
   state.remainingLifetime = Math.max(0, state.lifetime - state.age - remainingStep);
   return state;
+}
+
+/** @internal Unity inherits current module size before applying either system's transform scale. */
+export function particleInheritanceSnapshot(e: Emitter, index: number): MutableParticleSnapshot {
+  return particleSnapshot(e, index, 0, undefined, undefined, false);
 }

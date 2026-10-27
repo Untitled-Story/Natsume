@@ -23,6 +23,11 @@ const root = resolve(tool, '../..');
 const version = '2022.3.21f1';
 const subEmitters = process.argv.includes('--sub-emitters');
 const playback = process.argv.includes('--playback');
+const subTransforms = process.argv.includes('--transforms');
+assert(
+  !subTransforms || (subEmitters && !playback),
+  '--transforms requires --sub-emitters without --playback',
+);
 assert(!playback || subEmitters, '--playback requires --sub-emitters');
 const trails = process.argv.includes('--trails');
 const spriteMasks = process.argv.includes('--sprite-masks');
@@ -101,9 +106,11 @@ const output = resolve(
   root,
   'data/unity-baselines',
   subEmitters
-    ? playback
-      ? 'sub-emitter-playback'
-      : 'sub-emitters'
+    ? subTransforms
+      ? 'sub-emitter-transforms'
+      : playback
+        ? 'sub-emitter-playback'
+        : 'sub-emitters'
     : trails
       ? 'trails'
       : spriteMasks
@@ -231,9 +238,11 @@ const child = spawn(
     project,
     '-executeMethod',
     subEmitters
-      ? playback
-        ? 'NatsumeSubEmitterPlaybackProbe.Run'
-        : 'NatsumeSubEmitterProbe.Run'
+      ? subTransforms
+        ? 'NatsumeSubEmitterTransformProbe.Run'
+        : playback
+          ? 'NatsumeSubEmitterPlaybackProbe.Run'
+          : 'NatsumeSubEmitterProbe.Run'
       : trails
         ? 'NatsumeTrailProbe.Run'
         : spriteMasks
@@ -311,6 +320,20 @@ await new Promise((accept, reject) => {
 });
 const current = JSON.parse(await readFile(baseline, 'utf8'));
 assert.equal(current.unityVersion, version);
+if (subTransforms) {
+  assert.equal(current.cases.length, 90);
+  for (const c of current.cases) {
+    assert.equal(c.initial.length, 2);
+    assert.equal(c.advanced.length, 2);
+  }
+  if (process.argv.includes('--update-fixtures'))
+    await saveJson(
+      resolve(root, 'data/unity-baselines/fixtures/unity-sub-emitter-transforms.json'),
+      JSON.stringify(current, null, 2) + '\n',
+    );
+  console.log(`Inheritance transform observations: ${current.cases.length}`);
+  process.exit(0);
+}
 if (playback) {
   assert.equal(current.cases.length, 44);
   for (const c of current.cases) assert.equal(c.samples.length, 181);

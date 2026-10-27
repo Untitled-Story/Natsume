@@ -39,6 +39,7 @@ pnpm probe:unity --meshes       # 多 Mesh、队列 / 系统排序、原生雾�
 pnpm probe:unity --canvas       # 三种 Canvas 布局、视口、像素与 Pixel Perfect
 pnpm probe:unity --images       # Image 填充、裁边网格、平铺顶点上限
 pnpm probe:unity --ui-masks     # 嵌套 UI 遮罩、软裁切与 CanvasGroup
+pnpm probe:unity --sub-emitters --transforms --update-fixtures # 非均匀缩放 / 三维旋转与子发射器继承
 pnpm probe:unity --sprite-masks # Sprite / 粒子遮罩、阈值、排序范围
 pnpm probe:unity --sprite-shapes # Sprite placement、空引用、Donut 分布与扫描
 pnpm probe:unity --sprite-rendering # Sprite 翻转、pivot、九宫格、连续 / Adaptive 平铺

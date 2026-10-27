@@ -5,7 +5,10 @@ import { SubEmitterEvent as Event } from '../format/generated/noa/ir/sub-emitter
 import type { SubEmitterT } from '../format/generated/noa/ir/sub-emitter.js';
 import type { SubEmittersModuleT } from '../format/generated/noa/ir/sub-emitters-module.js';
 import type { Emitter } from './emitter.js';
-import { particleSnapshot, type ParticleSnapshot } from './particle-snapshot.js';
+import {
+  particleInheritanceSnapshot as particleSnapshot,
+  type ParticleSnapshot,
+} from './particle-snapshot.js';
 import { random, scalar } from './parameters.js';
 import { graphPrewarmEstimate } from './prewarm.js';
 
