@@ -84,6 +84,8 @@ export const SUPPORTED_FEATURES: Readonly<Record<string, number>> = Object.freez
       'particle.renderer-none',
       'particle.mesh-distribution',
       'particle.emission',
+      'particle.sub-emitters',
+      'particle.trails',
       'particle.shape.circle',
       'particle.shape.sphere',
       'particle.shape.hemisphere',
@@ -117,11 +119,7 @@ export const SUPPORTED_FEATURES: Readonly<Record<string, number>> = Object.freez
 /** Recognized source contracts; recognition alone does not enable playback. */
 export const KNOWN_FEATURES: Readonly<Record<string, number>> = Object.freeze({
   ...SUPPORTED_FEATURES,
-  ...Object.fromEntries(
-    ['particle.sub-emitters', 'particle.trails', 'timeline.director', 'timeline.graph'].map(
-      (name) => [name, 1],
-    ),
-  ),
+  ...Object.fromEntries(['timeline.director', 'timeline.graph'].map((name) => [name, 1])),
 });
 
 export function validateDocument(document: DocumentT): void {
