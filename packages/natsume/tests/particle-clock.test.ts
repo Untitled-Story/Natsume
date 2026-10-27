@@ -25,6 +25,13 @@ it('retains exact percentage endpoints and distinguishes the following step', ()
   expect(advanceLifetimeProgress(100, 1 / 60, 1)).toBeGreaterThan(100);
 });
 
+it('quantizes incoming seconds before the native percentage multiply', () => {
+  expect(advanceLifetimeProgress(0, 1 / 60, 5)).toBe(8.333333969116211);
+  expect(advanceLifetimeProgress(0, 1 / 60, 5)).toBe(
+    advanceLifetimeProgress(0, Math.fround(1 / 60), 5),
+  );
+});
+
 for (const c of native.cases.filter((c) => c.warm && !c.delay && c.firstEvent === 2))
   it(`matches player-loop lifetime progression from zero age (${c.rootLifetime}/${c.childLifetime})`, () => {
     const initial = c.samples[0]!.child.find((p) => p.age === 0);

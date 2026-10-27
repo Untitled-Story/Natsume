@@ -14,7 +14,9 @@ export function advanceLifetimeProgress(
   seconds: number,
   inverseLifetime: number,
 ): number {
-  return Math.fround(progress + Math.fround(Math.fround(seconds * 100) * inverseLifetime));
+  return Math.fround(
+    progress + Math.fround(Math.fround(Math.fround(seconds) * 100) * inverseLifetime),
+  );
 }
 
 /** Converts percentage age through the native remaining-lifetime representation. */
