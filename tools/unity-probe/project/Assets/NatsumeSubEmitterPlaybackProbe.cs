@@ -18,7 +18,8 @@ public sealed class NatsumeSubEmitterPlaybackProbe : MonoBehaviour
     [Serializable] public sealed class Sample
     {
         public int frame;
-        public float delta, time;
+        public float delta, time, playerTime;
+        public double playerTimeDouble;
         public bool playing, emitting;
         public Particle[] parent, child, grand;
     }
@@ -158,6 +159,7 @@ public sealed class NatsumeSubEmitterPlaybackProbe : MonoBehaviour
     {
         c.samples.Add(new Sample {
             frame = index, delta = Time.deltaTime, time = c.parent.time,
+            playerTime = Time.time, playerTimeDouble = Time.timeAsDouble,
             playing = c.parent.isPlaying, emitting = c.parent.isEmitting,
             parent = Read(c.parent), child = Read(c.child), grand = Read(c.grand)
         });
