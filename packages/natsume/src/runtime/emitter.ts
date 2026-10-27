@@ -74,6 +74,8 @@ export class Emitter {
   private lifetimeProgress: Float32Array | undefined;
   private inverseLifetimes: Float32Array | undefined;
   private subAges: Float64Array | undefined;
+  /** @internal Historical survival is evaluated before connected prewarm births are integrated. */
+  deferPrewarmParticles = false;
   readonly serials: Uint32Array;
   subParentSystems: Uint32Array | undefined;
   subParentParticles: Uint32Array | undefined;
@@ -120,6 +122,7 @@ export class Emitter {
   private burstCycle = 0;
   private readonly burstRepeats = new Map<number, number>();
   private carry = 0;
+  private nativeRateCarry = 0;
   private warming = false;
   private warmStart = 0;
   private rateTime = 0;
@@ -404,6 +407,7 @@ export class Emitter {
     this.burstTime = this.burstCycle = 0;
     this.burstRepeats.clear();
     this.carry = 0;
+    this.nativeRateCarry = 0;
     this.distanceCarry = 0;
     this.distanceStarted = this.delaySeconds > 0;
     this.lastEmissionPosition.set([
@@ -440,6 +444,7 @@ export class Emitter {
       this.burstTime = this.burstCycle = 0;
       this.burstRepeats.clear();
       this.carry = 0;
+      this.nativeRateCarry = 0;
       this.distanceCarry = 0;
       this.distanceStarted = this.delaySeconds > 0;
       this.lastEmissionPosition.set([
@@ -466,8 +471,31 @@ export class Emitter {
   }
 
   /** @internal Advance the complete history when descendants can outlive the source. */
-  prewarmGraph(advance: (seconds: number) => void, historyLifetime: number): number {
-    return this.runPrewarm(advance, true, historyLifetime);
+  prewarmGraph(
+    advance: (seconds: number, remaining: number) => void,
+    historyLifetime: number,
+  ): number {
+    this.warming = true;
+    const duration =
+      Math.ceil(historyLifetime / this.main.durationSeconds) * this.main.durationSeconds;
+    // Play starts at time zero; its prewarm window has no fixed-step remainder.
+    const history = Math.fround(historyLifetime);
+    const skip = Math.max(0, Math.fround(duration - historyLifetime));
+    this.warmStart = 0;
+    this.time = Math.fround(skip % this.main.durationSeconds);
+    this.rateTime = this.time;
+    const substep = Math.fround(history / Math.ceil(Math.fround(history / Math.fround(0.03))));
+    try {
+      let remaining = history;
+      while (remaining > 1e-6) {
+        const delta = Math.min(substep, remaining);
+        advance(delta, remaining);
+        remaining = Math.fround(remaining - delta);
+      }
+      return 0;
+    } finally {
+      this.warming = false;
+    }
   }
 
   /** @internal Integration time before remaining-lifetime getter rounding. */
@@ -494,24 +522,44 @@ export class Emitter {
     }
   }
 
+  /** @internal Queued graph births do not receive the target's whole first integration step. */
+  offsetPrewarmBirths(first: number, seconds: number): void {
+    for (let i = first; i < this.count; i++) {
+      if (this.lifetimeProgress)
+        this.lifetimeProgress[i] = Math.fround(
+          advanceLifetimeProgress(this.lifetimeProgress[i]!, -seconds, this.inverseLifetimes![i]!),
+        );
+      const age = this.lifetimeProgress ? this.progressAge(i) : this.ages[i]! - seconds;
+      this.ages[i] = age;
+      if (this.subAges) this.subAges[i] = Math.fround(this.subAges[i]! - seconds);
+    }
+  }
+
+  /** @internal Restores a surviving virtual birth, then integrates only its native substep remainder. */
+  finishPrewarmParticle(index: number, age: number, birth: () => void): void {
+    this.ages[index] = 0;
+    if (this.subAges) this.subAges[index] = 0;
+    if (this.lifetimeProgress) this.lifetimeProgress[index] = 0;
+    birth();
+    this.advanceParticles(age, index, index + 1);
+  }
+
+  /** @internal Samples visible trail history after deferred particle integration. */
+  finishPrewarmTrails(seconds: number): void {
+    this.onAdvanced?.(seconds);
+  }
+
   /** @internal Graph warming already supplies local simulation seconds. */
   advancePrewarm(seconds: number): void {
     this.advance(seconds);
   }
 
-  private runPrewarm(
-    advance: (seconds: number) => void,
-    retainHistory = false,
-    historyLifetime = this.maximumBirthLifetime,
-  ): number {
-    // Native prewarm retains only the final maximum-lifetime window of rate births.
+  private runPrewarm(advance: (seconds: number) => void): number {
+    // Native standalone prewarm retains only the final maximum-lifetime window.
     this.warming = true;
-    const duration = retainHistory
-      ? Math.ceil(historyLifetime / this.main.durationSeconds) * this.main.durationSeconds
-      : this.prewarmSeconds;
-    if (retainHistory) historyLifetime = duration;
-    const skip = Math.max(0, duration - historyLifetime);
-    this.warmStart = retainHistory ? 0 : skip;
+    const historyLifetime = this.maximumBirthLifetime;
+    const skip = Math.max(0, this.prewarmSeconds - historyLifetime);
+    this.warmStart = skip;
     const fixedStep = Math.fround(0.02);
     try {
       const skippedSteps = Math.ceil(skip / 0.02);
@@ -653,11 +701,17 @@ export class Emitter {
     seconds = this.time,
     spacing = 0,
     remainder = 0,
+    nativeBirthDelta?: number,
   ): void {
     const capacity = this.ages.length;
     // Skip births already beyond every authored lifetime; bound saturated-step work.
     const first =
-      spacing > 0 ? Math.max(0, amount - Math.ceil(this.maximumBirthLifetime / spacing) - 1) : 0;
+      spacing > 0
+        ? Math.max(
+            0,
+            amount - Math.ceil(this.maximumBirthLifetime / (spacing * (nativeBirthDelta ?? 1))) - 1,
+          )
+        : 0;
     this.nextSerial += first;
     for (let n = first; n < amount && n < first + capacity * 2 && this.count < capacity; n++) {
       const i = this.count++,
@@ -781,7 +835,19 @@ export class Emitter {
       if (this.birthStepSeconds) this.birthStepSeconds[i] = NaN;
       this.updateCustom(i, 0);
       this.onBirth?.(i, phase);
-      const age = (amount - n - 1 + remainder) * spacing;
+      const age =
+        nativeBirthDelta !== undefined
+          ? Math.fround(
+              nativeBirthDelta *
+                Math.min(
+                  1,
+                  Math.max(
+                    Math.fround(1e-6),
+                    Math.fround(Math.fround(amount - n - 1 + remainder) * spacing),
+                  ),
+                ),
+            )
+          : (amount - n - 1 + remainder) * spacing;
       if (age > 0) this.advanceParticles(age, i);
     }
   }
@@ -905,11 +971,15 @@ export class Emitter {
     );
     this.advanceParticles(dt);
     this.advanceEmission(dt);
-    this.onAdvanced?.(dt);
+    if (!this.deferPrewarmParticles) this.onAdvanced?.(dt);
   }
-  private advanceParticles(seconds: number, first = 0): void {
+  /** Native particle time is a Float32 percentage; 0.01 is multiplied before lifetime. */
+  private progressAge(index: number): number {
+    return lifetimeProgressAge(this.lifetimeProgress![index]!, this.lifetimes[index]!);
+  }
+  private advanceParticles(seconds: number, first = 0, end = this.count): void {
     const commonDecay = this.limit ? Math.pow(1 - this.limit.dampen, seconds * 30) : 1;
-    for (let i = first; i < this.count; ) {
+    for (let i = first; i < Math.min(this.count, end); ) {
       let dt = seconds;
       if (this.birthStepSeconds && !Number.isNaN(this.birthStepSeconds[i]!)) {
         dt = this.birthStepSeconds[i]!;
@@ -921,12 +991,16 @@ export class Emitter {
         ? advanceLifetimeProgress(this.lifetimeProgress[i]!, dt, this.inverseLifetimes![i]!)
         : undefined;
       if (progress !== undefined) this.lifetimeProgress![i] = progress;
-      const elapsed = this.subAges ? this.subAges[i]! + Math.fround(dt) : 0;
+      const elapsed = this.subAges
+        ? this.deferPrewarmParticles
+          ? Math.fround(this.subAges[i]! + Math.fround(dt))
+          : this.subAges[i]! + Math.fround(dt)
+        : 0;
       const age =
         progress !== undefined
-          ? lifetimeProgressAge(progress, this.lifetimes[i]!)
+          ? this.progressAge(i)
           : this.subAges
-            ? elapsed
+            ? this.subAges[i]! + Math.fround(dt)
             : this.ages[i]! + dt;
       const dead =
         progress !== undefined
@@ -934,6 +1008,15 @@ export class Emitter {
           : this.subAges
             ? age > this.lifetimes[i]!
             : age >= this.lifetimes[i]!;
+      if (this.deferPrewarmParticles) {
+        this.ages[i] = age;
+        if (this.subAges) this.subAges[i] = elapsed;
+        if (dead) {
+          this.onDeath?.(i);
+          this.remove(i);
+        } else i++;
+        continue;
+      }
       if (dead && !this.onDeath) {
         this.remove(i);
         continue;
@@ -1195,7 +1278,7 @@ export class Emitter {
   }
   private advanceEmission(dt: number): void {
     if (this.emitting && this.started) {
-      const end = this.time + dt;
+      const end = this.lifetimeProgress ? Math.fround(this.time + Math.fround(dt)) : this.time + dt;
       const previousRateTime = this.rateTime;
       this.rateTime = Math.fround(this.rateTime + Math.fround(dt));
       const rateDt = this.rateTime - previousRateTime;
@@ -1226,19 +1309,34 @@ export class Emitter {
         : !this.main.loop && this.rateTime >= this.main.durationSeconds
           ? 0
           : rateDt;
-      // Prewarm retains reciprocal precision and rounds the birth ratio at its
-      // Float32 boundary; live emission uses a Float32 interval instead.
-      const spacing = rate > 0 ? (this.warming ? 1 / rate : Math.fround(1 / rate)) : 0;
-      if (spacing > 0 && this.rateSpacing > 0 && spacing !== this.rateSpacing)
-        this.carry *= spacing / this.rateSpacing;
-      if (spacing > 0) this.rateSpacing = spacing;
-      this.carry += spacing > 0 ? birthDt : 0;
-      const amount =
-        spacing > 0
-          ? Math.floor(this.warming ? Math.fround(this.carry / spacing) : this.carry / spacing)
-          : 0;
-      this.carry -= amount * spacing;
-      this.emit(amount, phase, end, spacing, spacing > 0 ? this.carry / spacing : 0);
+      if (this.lifetimeProgress) {
+        const integral =
+          this.main.loop && this.rateTime < previousRateTime
+            ? Math.fround(
+                Math.fround(Math.fround(this.main.durationSeconds - previousRateTime) * rate) +
+                  Math.fround(this.rateTime * rate),
+              )
+            : Math.fround(Math.fround(birthDt) * Math.fround(rate));
+        this.nativeRateCarry = Math.fround(this.nativeRateCarry + integral);
+        const amount = Math.floor(this.nativeRateCarry);
+        this.nativeRateCarry = Math.fround(this.nativeRateCarry - amount);
+        const ratio = integral >= Math.fround(0.0001) ? Math.fround(1 / integral) : 1;
+        this.emit(amount, phase, end, ratio, this.nativeRateCarry, Math.fround(dt));
+      } else {
+        // Prewarm retains reciprocal precision and rounds the birth ratio at its
+        // Float32 boundary; live emission uses a Float32 interval instead.
+        const spacing = rate > 0 ? (this.warming ? 1 / rate : Math.fround(1 / rate)) : 0;
+        if (spacing > 0 && this.rateSpacing > 0 && spacing !== this.rateSpacing)
+          this.carry *= spacing / this.rateSpacing;
+        if (spacing > 0) this.rateSpacing = spacing;
+        this.carry += spacing > 0 ? birthDt : 0;
+        const amount =
+          spacing > 0
+            ? Math.floor(this.warming ? Math.fround(this.carry / spacing) : this.carry / spacing)
+            : 0;
+        this.carry -= amount * spacing;
+        this.emit(amount, phase, end, spacing, spacing > 0 ? this.carry / spacing : 0);
+      }
       const m = this.node.worldMatrix;
       const distance = Math.hypot(
         m[12]! - this.lastEmissionPosition[0]!,
@@ -1262,7 +1360,10 @@ export class Emitter {
       this.distanceCarry -= distanceAmount;
       this.distanceStarted = true;
       this.emit(distanceAmount, undefined, end);
-      this.time = end;
+      this.time =
+        this.lifetimeProgress && this.main.loop && end >= this.main.durationSeconds
+          ? Math.fround(end % this.main.durationSeconds)
+          : end;
     }
     this.lastEmissionPosition.set([
       this.node.worldMatrix[12]!,

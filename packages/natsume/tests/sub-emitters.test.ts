@@ -375,81 +375,8 @@ it.skipIf(!existsSync(nativePath))(
     );
   },
 );
-it.skipIf(!existsSync(nativePath))(
-  'warms descendants of expired parents and bounds known birth/death boundary differences',
-  () => {
-    const { lifecycle } = JSON.parse(readFileSync(nativePath, 'utf8')) as {
-      lifecycle: LifecycleCase[];
-    };
-    let countError = 0,
-      ageError = 0,
-      boundaryFrames = 0,
-      parentCountError = 0,
-      frames = 0;
-    for (const c of lifecycle.filter((c) => c.name === 'prewarm')) {
-      const { parent, child, graph } = fixture(0, c.inherit, 0, false, false, 1, 0, undefined, c);
-      graph.warm();
-      for (let frame = 0; frame <= 120; frame++) {
-        if (frame > 0) graph.step(1 / 60);
-        const sample = c.samples[frame]!;
-        frames++;
-        parentCountError = Math.max(
-          parentCountError,
-          Math.abs(parent.count - sample.parent.length),
-        );
-        expect(Math.abs(parent.count - sample.parent.length)).toBeLessThanOrEqual(1);
-        const difference = Math.abs(child.count - sample.child.length);
-        countError = Math.max(countError, difference);
-        if (difference) boundaryFrames++;
-        expect(
-          difference,
-          `life=${c.lifetime}, childLife=${c.childLifetime}, frame=${frame}`,
-        ).toBeLessThanOrEqual(frame === 0 ? 0 : 2);
-        const actual = Array.from(child.ages.subarray(0, child.count)).sort((a, b) => a - b);
-        const expected = sample.child.map((p) => p.lifetime - p.remaining).sort((a, b) => a - b);
-        // A count mismatch is permitted only at birth/death, never in an interior cohort.
-        let a = 0,
-          b = 0;
-        while (a < actual.length && b < expected.length) {
-          if (Math.abs(actual[a]! - expected[b]!) > 1 / 60 + 2e-5 && actual[a]! < 1 / 60 + 2e-5) {
-            a++;
-            continue;
-          }
-          if (Math.abs(actual[a]! - expected[b]!) > 1 / 60 + 2e-5 && expected[b]! < 1 / 60 + 2e-5) {
-            b++;
-            continue;
-          }
-          const error = Math.abs(actual[a++]! - expected[b++]!);
-          ageError = Math.max(ageError, error);
-          expect(error, `life=${c.lifetime}, frame=${frame}`).toBeLessThan(1 / 60 + 2e-5);
-        }
-        for (const age of [...actual.slice(a), ...expected.slice(b)])
-          expect(
-            Math.abs(age - c.childLifetime),
-            `life=${c.lifetime}, frame=${frame}`,
-          ).toBeLessThan(1 / 60 + 2e-5);
-      }
-    }
-    recordError(
-      'sub-emitter.prewarm.count',
-      countError,
-      'particles',
-      `${boundaryFrames}/${frames} frames differ; initial child counts exact`,
-    );
-    recordError(
-      'sub-emitter.prewarm.age',
-      ageError,
-      'seconds',
-      `12 cases, ${frames} frames; unmatched endpoint cohorts excluded`,
-    );
-    recordError(
-      'sub-emitter.prewarm.parent-count',
-      parentCountError,
-      'particles',
-      `${frames} frames`,
-    );
-  },
-);
+// Connected prewarm follows actual Play, which differs from Editor Play + manual Simulate.
+// The player-loop comparison is covered in sub-emitter-playback.test.ts.
 it.skipIf(!existsSync(nativePath))(
   'places distance births along the native parent path with partial-step age',
   () => {

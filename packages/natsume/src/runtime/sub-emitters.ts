@@ -10,7 +10,7 @@ import {
   type ParticleSnapshot,
 } from './particle-snapshot.js';
 import { random, scalar } from './parameters.js';
-import { graphPrewarmEstimate } from './prewarm.js';
+import { maximumLifetime, graphPrewarmEstimate } from './prewarm.js';
 
 interface BirthChannel {
   readonly source: Emitter;
@@ -38,6 +38,7 @@ interface PendingBirth {
   readonly remainder?: number;
   readonly initialAge?: number;
   readonly firstStep?: number | undefined;
+  readonly warmEvent?: Event;
 }
 
 /** Ordered DAG scheduling; channels share each target's original particle pool. */
@@ -50,17 +51,24 @@ export class SubEmitterGraph {
   private sequence = 0;
   private readonly indices = new Map<number, number>();
   private readonly warmRequests = new Set<Emitter>();
-  private readonly warmRemainders = new Map<Emitter, number>();
   private readonly descendants = new Map<number, ReadonlySet<number>>();
   private readonly queuedDistance = new Map<number, number>();
   private advancing: Emitter | undefined;
   private warmingStep = false;
   private clearing = false;
+  private readonly virtualWarm = new Map<Emitter, Map<number, Event>>();
+  private emittingWarmEvent = Event.Birth;
+  private warmDelta = 0;
+  private warmRemaining = 0;
+  private finishingWarm = false;
 
   constructor(private readonly emitters: ReadonlyMap<number, Emitter>) {
     const indegree = new Map<number, number>();
     for (const id of emitters.keys()) indegree.set(id, 0);
     for (const source of emitters.values()) {
+      source.onBirth = (index) => this.birth(source, index);
+      source.onDeath = (index) => this.death(source, index);
+      source.onClear = () => this.clearSource(source.id);
       const module = source.source.modules.find((m) => m.dataType === M.SubEmittersModule);
       if (!module) continue;
       const edges = (module.data as R<SubEmittersModuleT>).emitters;
@@ -79,9 +87,6 @@ export class SubEmitterGraph {
           emitters.get(edge.systemComponentId)!.enableSubClock();
           indegree.set(edge.systemComponentId, indegree.get(edge.systemComponentId)! + 1);
         }
-      source.onBirth = (index) => this.birth(source, index);
-      source.onDeath = (index) => this.death(source, index);
-      source.onClear = () => this.clearSource(source.id);
     }
     const queue = [...emitters.values()].filter((e) => indegree.get(e.id) === 0);
     for (let index = 0; index < queue.length; index++)
@@ -102,6 +107,8 @@ export class SubEmitterGraph {
             if (edge.systemComponentId) scope.add(edge.systemComponentId);
       this.descendants.set(root.id, scope);
       root.onPrewarm = () => this.warmRequests.add(root);
+      if (root.main.prewarm && root.main.loop)
+        for (const id of scope) emitters.get(id)!.enableLifetimeProgress();
     }
   }
 
@@ -139,16 +146,6 @@ export class SubEmitterGraph {
   step(delta: number): void {
     this.warm();
     this.stepScope(delta);
-    for (const [root, remainder] of this.warmRemainders) {
-      const localStep = delta * root.main.simulationSpeed;
-      if (localStep <= 0) continue;
-      let remaining = remainder;
-      while (remaining > 1e-6) {
-        this.stepScope(delta, this.descendants.get(root.id));
-        remaining -= localStep;
-      }
-      this.warmRemainders.delete(root);
-    }
   }
 
   /** Initializes connected histories after every system has synchronized its active state. */
@@ -169,11 +166,56 @@ export class SubEmitterGraph {
         root.id,
         new Map(this.order.filter((e) => scope.has(e.id)).map((e) => [e.id, e.source])),
       );
-      const remaining = root.prewarmGraph(
-        (seconds) => this.stepScope(seconds / root.main.simulationSpeed, scope, root, seconds),
-        history,
-      );
-      if (remaining > 0) this.warmRemainders.set(root, remaining);
+      const targets = this.order.filter((e) => e !== root && scope.has(e.id));
+      for (const target of targets) {
+        target.deferPrewarmParticles = true;
+        this.virtualWarm.set(
+          target,
+          new Map(Array.from(target.serials.subarray(0, target.count), (id) => [id, Event.Birth])),
+        );
+      }
+      try {
+        root.prewarmGraph((seconds, remaining) => {
+          this.warmRemaining = remaining;
+          this.warmDelta = seconds / root.main.simulationSpeed;
+          this.stepScope(this.warmDelta, scope, root, seconds);
+        }, history);
+        for (const target of targets) target.deferPrewarmParticles = false;
+        this.finishWarm(targets, Math.fround(history / Math.ceil(history / 0.03)));
+      } finally {
+        for (const target of targets) target.deferPrewarmParticles = false;
+        this.virtualWarm.clear();
+        this.warmDelta = 0;
+        this.warmRemaining = 0;
+        this.finishingWarm = false;
+      }
+    }
+  }
+
+  private finishWarm(targets: readonly Emitter[], step: number): void {
+    this.finishingWarm = true;
+    for (const source of targets) {
+      const origins = this.virtualWarm.get(source)!;
+      // New descendants emitted during this pass are already integrated to their remainder.
+      this.virtualWarm.delete(source);
+      let maximumAge = 0;
+      for (let i = 0; i < source.count; i++) {
+        const event = origins.get(source.serials[i]!);
+        if (event === undefined) continue;
+        let age = event === Event.Death ? 0 : Math.max(0, source.elapsedAge(i));
+        while (age >= step) age = Math.fround(age - step);
+        maximumAge = Math.max(maximumAge, age);
+        source.finishPrewarmParticle(i, age, () => {
+          this.advancing = event === Event.Death ? undefined : source;
+          this.warmingStep = event !== Event.Death;
+          this.birth(source, i);
+          this.advancing = undefined;
+          this.warmingStep = false;
+        });
+      }
+      source.finishPrewarmTrails(maximumAge);
+      this.advanceChannels(source, 0, origins);
+      for (const target of targets) this.flush(this.before, target.id);
     }
   }
 
@@ -206,7 +248,9 @@ export class SubEmitterGraph {
     this.after.clear();
     this.sequence = 0;
     this.warmRequests.clear();
-    this.warmRemainders.clear();
+    this.virtualWarm.clear();
+    this.warmDelta = 0;
+    this.finishingWarm = false;
     this.queuedDistance.clear();
   }
 
@@ -218,6 +262,11 @@ export class SubEmitterGraph {
     );
   }
   private birth(source: Emitter, index: number): void {
+    const virtual = this.virtualWarm.get(source);
+    if (virtual && !this.finishingWarm) {
+      virtual.set(source.serials[index]!, this.emittingWarmEvent);
+      return;
+    }
     for (const [slot, edge] of (this.slots.get(source.id) ?? []).entries()) {
       if (edge.event !== Event.Birth || !this.accept(source, index, edge, slot)) continue;
       this.channels.push({
@@ -237,6 +286,11 @@ export class SubEmitterGraph {
     }
   }
   private death(source: Emitter, index: number): void {
+    const virtual = this.virtualWarm.get(source);
+    if (virtual && !this.finishingWarm) {
+      virtual.delete(source.serials[index]!);
+      return;
+    }
     for (const [slot, edge] of (this.slots.get(source.id) ?? []).entries()) {
       if (edge.event !== Event.Death || !this.accept(source, index, edge, slot)) continue;
       this.enqueue(this.after, {
@@ -244,13 +298,14 @@ export class SubEmitterGraph {
         parentSystem: source.id,
         parent: particleSnapshot(source, index),
         properties: edge.inheritProperties,
+        warmEvent: Event.Death,
       });
     }
   }
   private clearSource(id: number): void {
     const emitter = this.emitters.get(id)!;
     this.warmRequests.delete(emitter);
-    this.warmRemainders.delete(emitter);
+    this.virtualWarm.delete(emitter);
     for (let i = this.channels.length - 1; i >= 0; i--)
       if (this.channels[i]!.source.id === id) this.channels.splice(i, 1);
     this.before.delete(id);
@@ -280,23 +335,41 @@ export class SubEmitterGraph {
   }
   private emit(birth: PendingBirth): void {
     if (!birth.target.enabled || !birth.target.node.activeInHierarchy) return;
+    if (
+      birth.target.deferPrewarmParticles &&
+      this.warmRemaining >= Math.fround(maximumLifetime(birth.target.main))
+    )
+      return;
     const first = birth.target.count;
-    if (birth.amount === undefined)
-      birth.target.emitTriggeredBurst(birth.parent, birth.properties, birth.parentSystem);
-    else
-      birth.target.emitSubParticles(
-        birth.amount,
-        birth.phase!,
-        birth.time!,
-        birth.parent,
-        birth.properties,
-        birth.spacing,
-        birth.remainder,
-        birth.parentSystem,
-        birth.initialAge,
-      );
-    if (birth.firstStep !== undefined && birth.target.main.simulationSpeed > 0)
-      birth.target.setBirthStep(first, birth.firstStep);
+    const previous = this.emittingWarmEvent;
+    this.emittingWarmEvent = birth.warmEvent ?? Event.Birth;
+    try {
+      if (birth.amount === undefined)
+        birth.target.emitTriggeredBurst(birth.parent, birth.properties, birth.parentSystem);
+      else
+        birth.target.emitSubParticles(
+          birth.amount,
+          birth.phase!,
+          birth.time!,
+          birth.parent,
+          birth.properties,
+          birth.spacing,
+          birth.remainder,
+          birth.parentSystem,
+          birth.initialAge,
+        );
+      if (birth.firstStep !== undefined && birth.target.main.simulationSpeed > 0)
+        birth.target.setBirthStep(first, birth.firstStep);
+      if (birth.target.deferPrewarmParticles)
+        birth.target.offsetPrewarmBirths(
+          first,
+          this.emittingWarmEvent === Event.Death
+            ? -Math.max(0, birth.parent.age - birth.parent.lifetime)
+            : this.warmDelta * birth.target.main.simulationSpeed,
+        );
+    } finally {
+      this.emittingWarmEvent = previous;
+    }
   }
   private flush(queue: Map<number, PendingBirth[]>, id: number): void {
     if (queue === this.after) this.queuedDistance.delete(id);
@@ -306,7 +379,11 @@ export class SubEmitterGraph {
     for (const birth of pending) this.emit(birth);
   }
 
-  private advanceChannels(source: Emitter, delta: number): void {
+  private advanceChannels(
+    source: Emitter,
+    delta: number,
+    warmOrigins?: ReadonlyMap<number, Event>,
+  ): void {
     if (!source.enabled || !source.node.activeInHierarchy) return;
     if (!this.channels.some((c) => c.source === source)) return;
     this.indices.clear();
@@ -321,7 +398,8 @@ export class SubEmitterGraph {
       }
       const parent = particleSnapshot(source, index);
       const target = channel.target;
-      const dt = delta * source.main.simulationSpeed;
+      if (warmOrigins?.get(channel.particle) === Event.Death) continue;
+      const dt = warmOrigins ? Math.max(parent.age, 1e-8) : delta * source.main.simulationSpeed;
       if (dt <= 0) continue;
       const from = channel.time,
         to = Math.fround(from + dt);
@@ -368,7 +446,11 @@ export class SubEmitterGraph {
               phase: local / duration,
               time: when,
               firstStep:
-                from === 0 && when === 0 && !channel.bornDuringWarm
+                from === 0 &&
+                when === 0 &&
+                !target.deferPrewarmParticles &&
+                !channel.bornDuringWarm &&
+                !this.finishingWarm
                   ? (source.elapsedAge(index) / source.main.simulationSpeed) *
                     target.main.simulationSpeed
                   : undefined,
