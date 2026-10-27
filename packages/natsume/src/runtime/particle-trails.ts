@@ -27,6 +27,7 @@ export class ParticleTrails {
   private readonly live = new Map<number, number>();
   private readonly vector = new Float64Array(3);
   private readonly colorScratch = new Float32Array(4);
+  private readonly deathSamples: { record: TrailRecord; anchor: number; factor: number }[] = [];
   private readonly ribbonAnchors = new Map<string, { point: number; count: number }>();
 
   constructor(
@@ -34,6 +35,7 @@ export class ParticleTrails {
     readonly definition: R<TrailsModuleT>,
     readonly pool: TrailPointPool,
   ) {
+    emitter.enableLifetimeProgress();
     const birth = emitter.onBirth,
       death = emitter.onDeath,
       clear = emitter.onClear,
@@ -60,6 +62,7 @@ export class ParticleTrails {
     for (const record of this.records.values()) this.release(record);
     this.records.clear();
     this.live.clear();
+    this.deathSamples.length = 0;
     this.time = 0;
   }
 
@@ -77,17 +80,45 @@ export class ParticleTrails {
       }
       records.sort((a, b) => b.particle.age - a.particle.age);
       const groups = new Map<string, TrailRecord[]>();
-      const ordinals = new Map<string, number>();
-      for (const record of records) {
-        const parent = this.definition.splitSubEmitterRibbons
-          ? record.ribbonGroup!.slice(0, record.ribbonGroup!.lastIndexOf('/') + 1)
-          : '';
-        const ordinal = ordinals.get(parent) ?? 0;
-        ordinals.set(parent, ordinal + 1);
-        const key = `${parent}${ordinal % this.definition.ribbonCount}`;
-        let group = groups.get(key);
-        if (!group) groups.set(key, (group = []));
-        group.push(record);
+      if (this.definition.splitSubEmitterRibbons) {
+        // Native traversal strides through the parent-sorted array across group boundaries.
+        records.sort((a, b) => {
+          const ap = a.ribbonGroup!.split('/'),
+            bp = b.ribbonGroup!.split('/');
+          return (
+            Number(bp[0]) - Number(ap[0]) ||
+            Number(bp[1]) - Number(ap[1]) ||
+            b.particle.age - a.particle.age
+          );
+        });
+        let lane = 0;
+        while (lane < this.definition.ribbonCount && lane < records.length) {
+          let cursor = lane,
+            lastStart = lane;
+          while (cursor < records.length) {
+            const group: TrailRecord[] = [];
+            const parent = records[cursor]!.ribbonGroup!.slice(
+              0,
+              records[cursor]!.ribbonGroup!.lastIndexOf('/') + 1,
+            );
+            lastStart = cursor;
+            while (cursor < records.length) {
+              const record = records[cursor]!;
+              if (group.length && !record.ribbonGroup!.startsWith(parent)) break;
+              group.push(record);
+              cursor += this.definition.ribbonCount;
+            }
+            groups.set(String(groups.size), group);
+          }
+          lane = lastStart + 1;
+        }
+      } else {
+        for (let ordinal = 0; ordinal < records.length; ordinal++) {
+          const key = String(ordinal % this.definition.ribbonCount);
+          let group = groups.get(key);
+          if (!group) groups.set(key, (group = []));
+          group.push(records[ordinal]!);
+        }
       }
       for (const group of groups.values()) {
         let last: TrailRecord | undefined;
@@ -157,8 +188,40 @@ export class ParticleTrails {
 
   private death(index: number): void {
     const id = this.emitter.serials[index]!;
+    let record = this.records.get(id);
+    if (!this.definition.dieWithParticles && this.definition.mode === TrailMode.PerParticle) {
+      const previous = record?.anchor;
+      const previousAge = record?.particle.age ?? 0;
+      const px = record ? this.pool.read(record.head, 0) : 0,
+        py = record ? this.pool.read(record.head, 1) : 0,
+        pz = record ? this.pool.read(record.head, 2) : 0;
+      this.sample(index, false);
+      record = this.records.get(id);
+      if (record) {
+        const factor = Math.max(
+          0,
+          Math.min(
+            1,
+            (record.particle.lifetime - previousAge) / (record.particle.age - previousAge || 1),
+          ),
+        );
+        if (factor < 1)
+          this.pool.write(
+            record.head,
+            px + (this.pool.read(record.head, 0) - px) * factor,
+            py + (this.pool.read(record.head, 1) - py) * factor,
+            pz + (this.pool.read(record.head, 2) - pz) * factor,
+            this.time,
+            record.distance,
+          );
+        this.deathSamples.push({
+          record,
+          anchor: record.anchor !== previous ? record.anchor : -1,
+          factor,
+        });
+      }
+    }
     this.live.delete(id);
-    const record = this.records.get(id);
     if (!record) return;
     record.alive = false;
     if (this.definition.dieWithParticles || this.definition.mode === TrailMode.Ribbon) {
@@ -169,6 +232,19 @@ export class ParticleTrails {
 
   private advance(seconds: number): void {
     this.time += seconds;
+    for (const { record, anchor, factor } of this.deathSamples) {
+      if (this.records.get(record.id) !== record) continue;
+      for (const point of anchor < 0 ? [record.head] : [record.head, anchor])
+        this.pool.write(
+          point,
+          this.pool.read(point, 0),
+          this.pool.read(point, 1),
+          this.pool.read(point, 2),
+          this.time - seconds * (1 - factor),
+          this.pool.read(point, 4),
+        );
+    }
+    this.deathSamples.length = 0;
     const e = this.emitter;
     const ribbon = this.definition.mode === TrailMode.Ribbon;
     // Release expired history before births/anchors consume the shared budget.
@@ -201,7 +277,7 @@ export class ParticleTrails {
     }
   }
 
-  private sample(index: number): void {
+  private sample(index: number, storeAnchor = true): void {
     const e = this.emitter,
       id = e.serials[index]!;
     const ribbon = this.definition.mode === TrailMode.Ribbon;
@@ -269,7 +345,11 @@ export class ParticleTrails {
             z - this.pool.read(record.anchor, 2),
           ),
         );
-        if (distance > Math.fround(this.definition.minVertexDistance)) {
+        if (
+          storeAnchor &&
+          particle.remainingLifetime > 0 &&
+          distance > Math.fround(this.definition.minVertexDistance)
+        ) {
           const anchor = this.pool.allocate(x, y, z, this.time, record.distance);
           this.pool.setNext(anchor, record.anchor);
           this.pool.setNext(record.head, anchor);

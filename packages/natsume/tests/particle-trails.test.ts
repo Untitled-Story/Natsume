@@ -18,6 +18,10 @@ import { ColorParameterT } from '../src/format/generated/noa/ir/color-parameter.
 import { ColorT } from '../src/format/generated/noa/ir/color.js';
 import { linear } from './particle-fixtures.js';
 import { recordError } from './measurement.js';
+import { GradientT } from '../src/format/generated/noa/ir/gradient.js';
+import { RgbKeyT } from '../src/format/generated/noa/ir/rgb-key.js';
+import { AlphaKeyT } from '../src/format/generated/noa/ir/alpha-key.js';
+import { particleSnapshot } from '../src/runtime/particle-snapshot.js';
 
 function fixture(
   mode = 0,
@@ -101,7 +105,10 @@ it('drops die-with-particle histories and atomically releases an incomplete firs
 
 it('recycles expired anchors before allocating and does not allocate zero-lifetime history', () => {
   const a = fixture(0, false, false, 5);
-  a.emitter.lifetimes[0] = 10;
+  a.source.main!.lifetime = constant(10);
+  a.emitter.reset();
+  a.emitter.sync();
+  a.emitter.velocities.set([1, 0, 0]);
   a.definition.lifetime = constant(0.02);
   for (let i = 0; i < 300; i++) a.emitter.step(0.025);
   expect(a.pool.count).toBeLessThanOrEqual(5);
@@ -115,10 +122,15 @@ it('recycles expired anchors before allocating and does not allocate zero-lifeti
 });
 
 it('redistributes Ribbon after compacting dead particle slots and releases history', () => {
-  const { emitter, trails, pool } = fixture(1);
+  const { emitter, trails, pool, source } = fixture(1);
   expect(centers(trails).map((s) => s.length)).toEqual([3, 2]);
   expect(pool.count).toBe(5);
-  emitter.lifetimes[1] = 1e-5;
+  const parent = particleSnapshot(emitter, 0);
+  emitter.clear();
+  for (let i = 0; i < 5; i++) {
+    source.main!.lifetime = constant(i === 1 ? 1e-5 : 0.5);
+    emitter.emitSubParticles(1, 0, 0, parent, 0);
+  }
   emitter.step(0.01);
   expect(centers(trails).map((s) => s.length)).toEqual([2, 2]);
   emitter.step(0.6);
@@ -596,47 +608,48 @@ it.skipIf(!existsSync(nativePath))(
         particles: Point[];
         vertices: Point[];
         indices: number[];
+        candidateVertices?: Point[];
+        candidateIndices?: number[];
+        candidateMismatches: number;
+        livePixels: number;
       }[];
     };
     expect(groups).toHaveLength(24);
     let compared = 0;
-    const links = (vertices: Point[], indices: ArrayLike<number>) => {
-      const edges: string[] = [];
-      const center = (index: number) => {
-        const a = vertices[index & ~1]!,
-          b = vertices[(index & ~1) + 1]!;
-        return [a.x + b.x, a.y + b.y, a.z + b.z]
-          .map((v) => (Math.abs(v) < 1e-5 ? 0 : v * 0.5).toFixed(4))
-          .join(',');
-      };
-      for (let i = 0; i < indices.length; i += 6) {
-        if (indices[i] === indices[i + 1]) continue;
-        edges.push([center(indices[i]!), center(indices[i + 1]!)].sort().join(' / '));
-      }
-      return edges.sort();
-    };
     for (const c of groups) {
-      // The native split/multiple-ribbon BakeTrailsMesh path emits corrupt index ranges.
-      if (c.split && c.ribbons > 1) continue;
-      const { emitter, trails, definition } = fixture(1, false, false, 65536, c.attach, c.split);
+      // Candidate geometry was rendered by Unity with the same camera and material.
+      if (!c.candidateVertices || !c.candidateIndices) continue;
+      expect(c.livePixels).toBeGreaterThan(0);
+      expect(c.candidateMismatches).toBe(0);
+      const { emitter, trails, definition, source } = fixture(
+        1,
+        false,
+        false,
+        65536,
+        c.attach,
+        c.split,
+      );
+      const parent = particleSnapshot(emitter, 0);
       emitter.clear();
       definition.ribbonCount = c.ribbons;
       definition.sizeAffectsWidth = false;
       definition.widthOverTrail = constant(0.25);
-      emitter.count = 6;
-      emitter.subParentSystems = new Uint32Array(emitter.lifetimes.length).fill(7);
-      emitter.subParentParticles = new Uint32Array(emitter.lifetimes.length);
       for (let i = 0; i < 6; i++) {
-        emitter.serials[i] = i;
-        emitter.lifetimes[i] = 2;
-        emitter.ages[i] = 0.01;
-        emitter.subParentParticles[i] = i < 3 ? 1 : 2;
+        source.main!.lifetime = constant(c.childDead && i === 1 ? 1e-5 : 2);
+        emitter.emitSubParticles(
+          1,
+          0,
+          0,
+          { ...parent, id: i < 3 ? 1 : 2, position: [0, 0, 0] },
+          0,
+          0,
+          0,
+          7,
+        );
         emitter.positions.set([i * 0.4, (i % 2) * 0.2, 0], i * 3);
         emitter.velocities.fill(0, i * 3, i * 3 + 3);
         emitter.startSizes.fill(1, i * 3, i * 3 + 3);
-        emitter.onBirth?.(i, 0);
       }
-      if (c.childDead) emitter.lifetimes[1] = 1e-5;
       emitter.step(c.parentDead ? 0.11 : 1e-6);
       const geometry = new TrailGeometry();
       geometry.update(trails);
@@ -647,32 +660,192 @@ it.skipIf(!existsSync(nativePath))(
           y: geometry.vertices[i * 10 + 1]!,
           z: geometry.vertices[i * 10 + 2]!,
         });
-      let expectedIndices = c.indices;
-      if (!c.split && c.ribbons === 2) {
-        expectedIndices = [];
-        let start = 0;
-        for (let lane = 0; lane < c.ribbons; lane++) {
-          const count = Math.ceil((c.particles.length - lane) / c.ribbons) + Number(c.attach);
-          for (let point = 1; point < count; point++) {
-            const b = (start + point) * 2;
-            expectedIndices.push(b - 2, b, b - 1, b - 1, b, b + 1);
-          }
-          start += count;
-        }
-      }
-      expect(
-        links(actual, geometry.indices.subarray(0, geometry.indexCount)),
-        JSON.stringify(c),
-      ).toEqual(links(c.vertices, expectedIndices));
+      expect(geometry.indexCount).toBe(c.candidateIndices.length);
+      expect(Array.from(geometry.indices.subarray(0, geometry.indexCount))).toEqual(
+        c.candidateIndices,
+      );
+      expect(actual.length).toBe(c.candidateVertices.length);
+      for (let i = 0; i < actual.length; i++)
+        for (const key of ['x', 'y', 'z'] as const)
+          expect(Math.abs(actual[i]![key] - c.candidateVertices[i]![key])).toBeLessThan(1e-6);
       emitter.clear();
       expect(trails.pool.count).toBe(0);
       compared++;
     }
     recordError(
-      'trail.ribbon.parent-links',
+      'trail.ribbon.parent-pixels',
       0,
-      'link mismatches',
+      'pixel mismatches',
       `${compared} parent / child death cases`,
     );
+  },
+);
+
+it.skipIf(!existsSync(nativePath))(
+  'measures perspective PerParticle turns and retained gradient endpoints',
+  () => {
+    type Point = { x: number; y: number; z: number };
+    const { motion } = JSON.parse(readFileSync(nativePath, 'utf8')) as {
+      motion: {
+        view: Point;
+        die: boolean;
+        width: number;
+        frame: number;
+        vertices: Point[];
+        uv: { x: number; y: number }[];
+        colors: { r: number; g: number; b: number; a: number }[];
+      }[];
+    };
+    expect(motion).toHaveLength(96);
+    let relative = 0,
+      absolute = 0,
+      uv = 0,
+      color = 0,
+      compared = 0;
+    const gradient = (a: number[], b: number[]) =>
+      new ColorParameterT(
+        1,
+        null,
+        null,
+        null,
+        new GradientT(
+          0,
+          [new RgbKeyT(0, a[0]!, a[1]!, a[2]!), new RgbKeyT(1, b[0]!, b[1]!, b[2]!)],
+          [new AlphaKeyT(0, a[3]!), new AlphaKeyT(1, b[3]!)],
+        ),
+      );
+    for (const c of motion) {
+      const { emitter, trails, definition, source } = fixture(0, false, c.die);
+      emitter.reset();
+      source.main!.size = vector(1, 1, 1);
+      emitter.sync();
+      emitter.enableLifetimeProgress();
+      definition.lifetime = constant(1);
+      definition.minVertexDistance = 0.01;
+      definition.sizeAffectsWidth = false;
+      definition.widthOverTrail = constant(c.width);
+      definition.colorOverLifetime = gradient([1, 0, 0, 1], [0, 0, 1, 1]);
+      definition.colorOverTrail = gradient([1, 1, 1, 1], [0.5, 1, 0.5, 0.5]);
+      for (let frame = 1; frame <= c.frame; frame++) {
+        emitter.velocities.set([1, 0.5, 0.75]);
+        emitter.step(0.05);
+      }
+      const forward = [-c.view.x, -c.view.y, -c.view.z];
+      const length = Math.hypot(...forward);
+      for (let axis = 0; axis < 3; axis++) forward[axis]! /= length;
+      const right = [forward[2]!, 0, -forward[0]!];
+      const horizontal = Math.hypot(...right);
+      for (let axis = 0; axis < 3; axis++) right[axis]! /= horizontal;
+      const up = [
+        forward[1]! * right[2]!,
+        forward[2]! * right[0]! - forward[0]! * right[2]!,
+        -forward[1]! * right[0]!,
+      ];
+      const geometry = new TrailGeometry();
+      geometry.update(
+        trails,
+        [c.view.x, c.view.y, c.view.z],
+        [
+          right[0]!,
+          up[0]!,
+          forward[0]!,
+          0,
+          right[1]!,
+          up[1]!,
+          forward[1]!,
+          0,
+          right[2]!,
+          up[2]!,
+          forward[2]!,
+          0,
+          0,
+          0,
+          0,
+          1,
+        ],
+      );
+      const unique = (count: number, point: (i: number) => Point) => {
+        const result: number[] = [];
+        for (let i = 0; i < count; i += 2) {
+          const a = point(i),
+            b = point(i + 1);
+          const center = [(a.x + b.x) * 0.5, (a.y + b.y) * 0.5, (a.z + b.z) * 0.5];
+          if (result.length) {
+            const j = result[result.length - 2]!,
+              p = point(j),
+              q = point(j + 1);
+            if (
+              Math.hypot(
+                center[0]! - (p.x + q.x) * 0.5,
+                center[1]! - (p.y + q.y) * 0.5,
+                center[2]! - (p.z + q.z) * 0.5,
+              ) < 1e-6
+            )
+              continue;
+          }
+          result.push(i, i + 1);
+        }
+        return result;
+      };
+      const actual = (i: number) => ({
+        x: geometry.vertices[i * 10]!,
+        y: geometry.vertices[i * 10 + 1]!,
+        z: geometry.vertices[i * 10 + 2]!,
+      });
+      const left = unique(geometry.vertexCount, actual),
+        rightIndices = unique(c.vertices.length, (i) => c.vertices[i]!);
+      expect(
+        Math.abs(geometry.vertexCount - c.vertices.length),
+        `frame=${c.frame} view=${JSON.stringify(c.view)} die=${c.die} native=${c.vertices.length} actual=${geometry.vertexCount}`,
+      ).toBeLessThanOrEqual(4);
+      expect(left.length, `frame=${c.frame}`).toBe(rightIndices.length);
+      for (let k = 0; k < left.length; k++) {
+        const i = left[k]!,
+          j = rightIndices[k]!,
+          p = c.vertices[j]!,
+          q = c.vertices[j ^ 1]!;
+        const distance = Math.hypot(
+          geometry.vertices[i * 10]! - p.x,
+          geometry.vertices[i * 10 + 1]! - p.y,
+          geometry.vertices[i * 10 + 2]! - p.z,
+        );
+        const width = Math.hypot(p.x - q.x, p.y - q.y, p.z - q.z);
+        absolute = Math.max(absolute, distance);
+        relative = Math.max(relative, distance / width);
+        expect(
+          distance / width,
+          `frame=${c.frame} view=${JSON.stringify(c.view)} width=${c.width} die=${c.die} vertex=${i}`,
+        ).toBeLessThan(0.1);
+        uv = Math.max(
+          uv,
+          Math.abs(geometry.vertices[i * 10 + 3]! - c.uv[j]!.x),
+          Math.abs(geometry.vertices[i * 10 + 4]! - c.uv[j]!.y),
+        );
+        for (let axis = 0; axis < 4; axis++) {
+          const key = (['r', 'g', 'b', 'a'] as const)[axis]!;
+          color = Math.max(
+            color,
+            Math.abs(geometry.vertices[i * 10 + 5 + axis]! * 255 - c.colors[j]![key]),
+          );
+        }
+        compared++;
+      }
+    }
+    expect(uv).toBeLessThan(1e-4);
+    expect(color).toBeLessThan(1.01);
+    recordError(
+      'trail.motion.position',
+      absolute,
+      'scene units',
+      `${motion.length} cases; ${compared} vertices`,
+    );
+    recordError(
+      'trail.motion.relative',
+      relative,
+      'full trail width',
+      `${motion.length} cases; ${compared} vertices`,
+    );
+    recordError('trail.motion.uv', uv, 'UV units', `${compared} vertices`);
+    recordError('trail.motion.color', color, '/255', `${compared} vertices`);
   },
 );
