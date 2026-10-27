@@ -54,7 +54,7 @@ function fixture(
     trails = new ParticleTrails(emitter, definition, pool);
   emitter.sync();
   for (let i = 0; i < emitter.count; i++) emitter.velocities.set([1, 0, 0], i * 3);
-  return { emitter, definition, pool, trails };
+  return { emitter, definition, pool, trails, source };
 }
 function centers(trails: ParticleTrails) {
   const strips: number[][][] = [];
@@ -114,13 +114,13 @@ it('recycles expired anchors before allocating and does not allocate zero-lifeti
   expect(b.pool.count).toBe(0);
 });
 
-it('groups Ribbon using stable particle IDs and removes dead records without retaining history', () => {
+it('redistributes Ribbon after compacting dead particle slots and releases history', () => {
   const { emitter, trails, pool } = fixture(1);
   expect(centers(trails).map((s) => s.length)).toEqual([3, 2]);
   expect(pool.count).toBe(5);
   emitter.lifetimes[1] = 1e-5;
   emitter.step(0.01);
-  expect(centers(trails).map((s) => s.length)).toEqual([3, 1]);
+  expect(centers(trails).map((s) => s.length)).toEqual([2, 2]);
   emitter.step(0.6);
   expect(pool.count).toBe(0);
 });
@@ -459,6 +459,220 @@ it.skipIf(!existsSync(nativePath))(
       foldRelativeError,
       'full trail width',
       `${foldVertices} fold vertices`,
+    );
+  },
+);
+
+it.skipIf(!existsSync(nativePath))(
+  'measures Ribbon geometry with independent perspective views and per-particle widths',
+  () => {
+    const { advanced } = JSON.parse(readFileSync(nativePath, 'utf8')) as {
+      advanced: {
+        view: { x: number; y: number; z: number };
+        layout: number;
+        sizes: number;
+        width: number;
+        centers: { x: number; y: number; z: number }[];
+        particleSizes: number[];
+        vertices: { x: number; y: number; z: number }[];
+        normals: { x: number; y: number; z: number }[];
+        tangents: { x: number; y: number; z: number; w: number }[];
+      }[];
+    };
+    expect(advanced).toHaveLength(54);
+    let maximum = 0,
+      relative = 0,
+      compared = 0,
+      lighting = 0;
+    for (const c of advanced) {
+      const { emitter, trails, definition, source } = fixture(1);
+      source.main!.size = vector(1, 1, 1);
+      definition.ribbonCount = 1;
+      definition.sizeAffectsWidth = true;
+      definition.widthOverTrail = constant(c.width);
+      emitter.reset();
+      emitter.sync();
+      emitter.velocities.fill(0);
+      for (let i = 0; i < emitter.count; i++) {
+        const p = c.centers[i]!;
+        emitter.positions.set([p.x, p.y, p.z], i * 3);
+        emitter.startSizes.fill(c.particleSizes[i]!, i * 3, i * 3 + 3);
+      }
+      emitter.step(1e-6);
+      const geometry = new TrailGeometry();
+      const forward = [-c.view.x, -c.view.y, -c.view.z];
+      const length = Math.hypot(...forward);
+      for (let axis = 0; axis < 3; axis++) forward[axis]! /= length;
+      const right = [forward[2]!, 0, -forward[0]!];
+      const horizontal = Math.hypot(...right);
+      for (let axis = 0; axis < 3; axis++) right[axis]! /= horizontal;
+      const up = [
+        forward[1]! * right[2]!,
+        forward[2]! * right[0]! - forward[0]! * right[2]!,
+        -forward[1]! * right[0]!,
+      ];
+      geometry.update(
+        trails,
+        [c.view.x, c.view.y, c.view.z],
+        [
+          right[0]!,
+          up[0]!,
+          forward[0]!,
+          0,
+          right[1]!,
+          up[1]!,
+          forward[1]!,
+          0,
+          right[2]!,
+          up[2]!,
+          forward[2]!,
+          0,
+          0,
+          0,
+          0,
+          1,
+        ],
+      );
+      expect(geometry.vertexCount).toBe(c.vertices.length);
+      for (let i = 0; i < geometry.vertexCount; i++) {
+        const p = c.vertices[i]!,
+          q = c.vertices[i ^ 1]!;
+        const distance = Math.hypot(
+          geometry.vertices[i * 10]! - p.x,
+          geometry.vertices[i * 10 + 1]! - p.y,
+          geometry.vertices[i * 10 + 2]! - p.z,
+        );
+        const width = Math.hypot(p.x - q.x, p.y - q.y, p.z - q.z);
+        maximum = Math.max(maximum, distance);
+        relative = Math.max(relative, distance / width);
+        expect(
+          distance / width,
+          `layout=${c.layout} sizes=${c.sizes} width=${c.width} view=${JSON.stringify(c.view)} vertex=${i}`,
+        ).toBeLessThan(0.1);
+        for (let axis = 0; axis < 3; axis++) {
+          const key = (['x', 'y', 'z'] as const)[axis]!;
+          lighting = Math.max(
+            lighting,
+            Math.abs(geometry.streams[i * 15 + axis]! - c.normals[i]![key]),
+            Math.abs(geometry.streams[i * 15 + 3 + axis]! - c.tangents[i]![key]),
+          );
+        }
+        expect(lighting).toBeLessThan(0.01);
+        compared++;
+      }
+    }
+    recordError(
+      'trail.view-width.lighting',
+      lighting,
+      'normal / tangent component',
+      `${compared} vertices`,
+    );
+    recordError(
+      'trail.view-width.position',
+      maximum,
+      'scene units',
+      `${advanced.length} cases, ${compared} vertices`,
+    );
+    recordError(
+      'trail.view-width.relative',
+      relative,
+      'full trail width',
+      `${advanced.length} cases, ${compared} vertices`,
+    );
+  },
+);
+
+it.skipIf(!existsSync(nativePath))(
+  'matches native Ribbon links across parent and child deaths',
+  () => {
+    type Point = { x: number; y: number; z: number };
+    const { groups } = JSON.parse(readFileSync(nativePath, 'utf8')) as {
+      groups: {
+        split: boolean;
+        attach: boolean;
+        ribbons: number;
+        parentDead: boolean;
+        childDead: boolean;
+        particles: Point[];
+        vertices: Point[];
+        indices: number[];
+      }[];
+    };
+    expect(groups).toHaveLength(24);
+    let compared = 0;
+    const links = (vertices: Point[], indices: ArrayLike<number>) => {
+      const edges: string[] = [];
+      const center = (index: number) => {
+        const a = vertices[index & ~1]!,
+          b = vertices[(index & ~1) + 1]!;
+        return [a.x + b.x, a.y + b.y, a.z + b.z]
+          .map((v) => (Math.abs(v) < 1e-5 ? 0 : v * 0.5).toFixed(4))
+          .join(',');
+      };
+      for (let i = 0; i < indices.length; i += 6) {
+        if (indices[i] === indices[i + 1]) continue;
+        edges.push([center(indices[i]!), center(indices[i + 1]!)].sort().join(' / '));
+      }
+      return edges.sort();
+    };
+    for (const c of groups) {
+      // The native split/multiple-ribbon BakeTrailsMesh path emits corrupt index ranges.
+      if (c.split && c.ribbons > 1) continue;
+      const { emitter, trails, definition } = fixture(1, false, false, 65536, c.attach, c.split);
+      emitter.clear();
+      definition.ribbonCount = c.ribbons;
+      definition.sizeAffectsWidth = false;
+      definition.widthOverTrail = constant(0.25);
+      emitter.count = 6;
+      emitter.subParentSystems = new Uint32Array(emitter.lifetimes.length).fill(7);
+      emitter.subParentParticles = new Uint32Array(emitter.lifetimes.length);
+      for (let i = 0; i < 6; i++) {
+        emitter.serials[i] = i;
+        emitter.lifetimes[i] = 2;
+        emitter.ages[i] = 0.01;
+        emitter.subParentParticles[i] = i < 3 ? 1 : 2;
+        emitter.positions.set([i * 0.4, (i % 2) * 0.2, 0], i * 3);
+        emitter.velocities.fill(0, i * 3, i * 3 + 3);
+        emitter.startSizes.fill(1, i * 3, i * 3 + 3);
+        emitter.onBirth?.(i, 0);
+      }
+      if (c.childDead) emitter.lifetimes[1] = 1e-5;
+      emitter.step(c.parentDead ? 0.11 : 1e-6);
+      const geometry = new TrailGeometry();
+      geometry.update(trails);
+      const actual: Point[] = [];
+      for (let i = 0; i < geometry.vertexCount; i++)
+        actual.push({
+          x: geometry.vertices[i * 10]!,
+          y: geometry.vertices[i * 10 + 1]!,
+          z: geometry.vertices[i * 10 + 2]!,
+        });
+      let expectedIndices = c.indices;
+      if (!c.split && c.ribbons === 2) {
+        expectedIndices = [];
+        let start = 0;
+        for (let lane = 0; lane < c.ribbons; lane++) {
+          const count = Math.ceil((c.particles.length - lane) / c.ribbons) + Number(c.attach);
+          for (let point = 1; point < count; point++) {
+            const b = (start + point) * 2;
+            expectedIndices.push(b - 2, b, b - 1, b - 1, b, b + 1);
+          }
+          start += count;
+        }
+      }
+      expect(
+        links(actual, geometry.indices.subarray(0, geometry.indexCount)),
+        JSON.stringify(c),
+      ).toEqual(links(c.vertices, expectedIndices));
+      emitter.clear();
+      expect(trails.pool.count).toBe(0);
+      compared++;
+    }
+    recordError(
+      'trail.ribbon.parent-links',
+      0,
+      'link mismatches',
+      `${compared} parent / child death cases`,
     );
   },
 );

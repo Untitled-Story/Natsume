@@ -69,16 +69,27 @@ export class ParticleTrails {
   ): void {
     const ribbon = this.definition.mode === TrailMode.Ribbon;
     if (ribbon) {
-      // Stable IDs, rather than compacted array slots, determine ribbon assignment.
-      const records = [...this.records.values()].filter((r) => r.alive).sort((a, b) => a.id - b.id);
+      // Unity sorts by absolute particle age; equal ages retain compacted particle slots.
+      const records: TrailRecord[] = [];
+      for (let i = 0; i < this.emitter.count; i++) {
+        const record = this.records.get(this.emitter.serials[i]!);
+        if (record?.alive) records.push(record);
+      }
+      records.sort((a, b) => b.particle.age - a.particle.age);
       const groups = new Map<string, TrailRecord[]>();
+      const ordinals = new Map<string, number>();
       for (const record of records) {
-        const key = record.ribbonGroup!;
+        const parent = this.definition.splitSubEmitterRibbons
+          ? record.ribbonGroup!.slice(0, record.ribbonGroup!.lastIndexOf('/') + 1)
+          : '';
+        const ordinal = ordinals.get(parent) ?? 0;
+        ordinals.set(parent, ordinal + 1);
+        const key = `${parent}${ordinal % this.definition.ribbonCount}`;
         let group = groups.get(key);
         if (!group) groups.set(key, (group = []));
         group.push(record);
       }
-      for (const [key, group] of groups) {
+      for (const group of groups.values()) {
         let last: TrailRecord | undefined;
         for (const record of group) {
           this.position(record.head);
@@ -86,10 +97,9 @@ export class ParticleTrails {
           last = record;
         }
         if (last) {
-          const anchor = this.ribbonAnchors.get(key);
-          if (anchor) {
+          if (this.definition.attachRibbonsToTransform) {
             const m = this.emitter.node.worldMatrix;
-            visitor(last, anchor.point, m[12]!, m[13]!, m[14]!);
+            visitor(last, last.head, m[12]!, m[13]!, m[14]!);
           }
           visitor(last, -1, 0, 0, 0);
         }

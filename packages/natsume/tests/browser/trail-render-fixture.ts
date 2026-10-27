@@ -63,9 +63,38 @@ export async function measureTrailRendering() {
   const display = mat4.fromScaling(mat4.create(), [48, 48, 1]);
   display[12] = 8;
   display[13] = 32;
+  const gl = renderer.gl;
+  const original = {
+    drawElements: gl.drawElements,
+    bufferData: gl.bufferData,
+    bufferSubData: gl.bufferSubData,
+  };
+  const frames: { draws: number; uploads: number; bytes: number }[] = [];
+  let stats = { draws: 0, uploads: 0, bytes: 0 };
+  Object.assign(gl, {
+    drawElements(...args: unknown[]) {
+      stats.draws++;
+      return Reflect.apply(original.drawElements, gl, args);
+    },
+    bufferData(...args: unknown[]) {
+      stats.uploads++;
+      const data = args[1];
+      stats.bytes +=
+        typeof data === 'number' ? data : ArrayBuffer.isView(data) ? data.byteLength : 0;
+      return Reflect.apply(original.bufferData, gl, args);
+    },
+    bufferSubData(...args: unknown[]) {
+      stats.uploads++;
+      const data = args[2];
+      if (ArrayBuffer.isView(data)) stats.bytes += data.byteLength;
+      return Reflect.apply(original.bufferSubData, gl, args);
+    },
+  });
   const draw = () => {
+    stats = { draws: 0, uploads: 0, bytes: 0 };
     mesh.sync(display, 'gamma');
     renderer.render({ container: root, target, clear: true });
+    frames.push({ ...stats });
     const pixels = renderer.extract.pixels({ target }).pixels;
     let green = 0;
     for (let i = 0; i < pixels.length; i += 4) if (pixels[i + 1]! > 200 && pixels[i]! < 10) green++;
@@ -76,6 +105,7 @@ export async function measureTrailRendering() {
   const empty = draw();
   for (let i = 0; i < 6; i++) emitter.step(0.05);
   const alive = draw(),
+    capacity = pool.capacity,
     buffer = mesh.trailGeometry.vertices;
   const repeat = draw(),
     reused = mesh.trailGeometry.vertices === buffer;
@@ -90,7 +120,10 @@ export async function measureTrailRendering() {
   const replay = draw();
   emitter.clear();
   const cleared = draw();
+  const capacityReused = pool.capacity === capacity;
+  const geometryReused = mesh.trailGeometry.vertices === buffer;
   const glError = renderer.gl.getError();
+  Object.assign(gl, original);
   mesh.destroy();
   root.destroy();
   target.destroy(true);
@@ -107,5 +140,9 @@ export async function measureTrailRendering() {
     cleared,
     points: pool.count,
     glError,
+    frames,
+    capacity,
+    capacityReused,
+    geometryReused,
   };
 }

@@ -13,6 +13,8 @@ import { VertexSemantic } from '../format/generated/noa/ir/vertex-semantic.js';
 /** Independent trail material pass; particle material slots are never used as a fallback. */
 export class TrailMesh extends SceneMesh {
   readonly trailGeometry = new TrailGeometry();
+  observationMatrix: ArrayLike<number> | undefined;
+  private readonly observation = new Float64Array(16);
   constructor(
     readonly trails: ParticleTrails,
     definition: R<ParticleRendererT>,
@@ -34,8 +36,17 @@ export class TrailMesh extends SceneMesh {
       ? 1
       : 0;
     this.label = `Natsume trails ${trails.emitter.id}`;
-    this.beforeSync = () => {
-      this.trailGeometry.update(trails, this.environment?.viewPosition);
+    this.beforeSync = (matrix) => {
+      let observation = matrix;
+      if (this.observationMatrix) {
+        this.observation.set(this.observationMatrix);
+        for (let c = 0; c < 4; c++) {
+          this.observation[1 + c * 4] = -this.observation[1 + c * 4]!;
+          this.observation[2 + c * 4] = -this.observation[2 + c * 4]!;
+        }
+        observation = this.observation;
+      }
+      this.trailGeometry.update(trails, this.environment?.viewPosition, observation);
       const data = this.trailGeometry;
       this.visible = data.indexCount > 0;
       if (this.visible)

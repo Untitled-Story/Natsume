@@ -15,12 +15,19 @@ export class TrailGeometry {
   indexCount = 0;
   private points = new Float64Array(0);
   private directions = new Float64Array(0);
+  private ribbonSides = new Float64Array(0);
+  private ribbonOffsets = new Float64Array(0);
+  private readonly ribbonNormal = new Float64Array(3);
   private readonly records: TrailRecord[] = [];
   private readonly strips: [number, number][] = [];
   private readonly tint = new Float32Array(4);
   private readonly scratch = new Float32Array(4);
 
-  update(trails: ParticleTrails, viewPosition?: readonly number[]): void {
+  update(
+    trails: ParticleTrails,
+    viewPosition?: readonly number[],
+    display?: ArrayLike<number>,
+  ): void {
     this.vertexCount = this.indexCount = 0;
     this.records.length = this.strips.length = 0;
     let count = 0,
@@ -56,7 +63,9 @@ export class TrailGeometry {
         this.points[o + 3] = length;
       }
       const base = this.vertexCount;
-      const baseWidth = this.smoothDirections(first, end, trails);
+      this.smoothDirections(first, end, trails);
+      if (definition.mode === TrailMode.Ribbon)
+        this.buildRibbonSides(first, end, trails, viewPosition, display);
       for (let i = first; i < end; i++) {
         const o = i * 4;
         let previous = Math.max(first, i - 1) * 4,
@@ -120,35 +129,16 @@ export class TrailGeometry {
           this.tint,
           this.scratch,
         );
-        // Bound miter growth by the incoming segment and the authored base width.
-        let miter = 1;
-        if (definition.mode === TrailMode.Ribbon && i > first && i + 1 < end && baseWidth > 0) {
-          const incoming = Math.hypot(
-            x - this.points[o - 4]!,
-            y - this.points[o - 3]!,
-            z - this.points[o - 2]!,
-          );
-          const dx = this.points[o + 4]! - x,
-            dy = this.points[o + 5]! - y,
-            dz = this.points[o + 6]! - z;
-          const cx = ry * dz - rz * dy,
-            cy = rz * dx - rx * dz,
-            cz = rx * dy - ry * dx;
-          const projected = Math.hypot(cx, cy, cz);
-          const dot = projected > 1e-10 ? Math.abs((sx * cx + sy * cy + sz * cz) / projected) : 1;
-          miter = Math.max(
-            1,
-            Math.min(
-              1 / Math.max(1e-10, dot),
-              Math.max(1, Math.min(3, (1.5 * incoming) / baseWidth)),
-            ),
-          );
+        if (definition.mode === TrailMode.Ribbon) {
+          sx = this.ribbonOffsets[d]!;
+          sy = this.ribbonOffsets[d + 1]!;
+          sz = this.ribbonOffsets[d + 2]!;
         }
         for (const side of [0, 1] as const) {
           const vertex = this.vertexCount++,
             v = vertex * 10,
             a = vertex * 15;
-          const half = width * miter * (side === 0 ? 0.5 : -0.5);
+          const half = width * (side === 0 ? 0.5 : -0.5);
           const uv = trailUV(
             definition,
             this.points[o + 3]!,
@@ -177,6 +167,12 @@ export class TrailGeometry {
           this.streams[a + 3] = px / pl;
           this.streams[a + 4] = py / pl;
           this.streams[a + 5] = pz / pl;
+          if (definition.mode === TrailMode.Ribbon) {
+            this.streams.set(this.ribbonNormal, a);
+            this.streams[a + 3] = tx;
+            this.streams[a + 4] = ty;
+            this.streams[a + 5] = tz;
+          }
           this.streams[a + 6] = 1;
           for (let axis = 0; axis < 3; axis++) {
             this.streams[a + 7 + axis] = this.points[previous + axis]!;
@@ -199,19 +195,23 @@ export class TrailGeometry {
     next.set(this.points);
     this.points = next;
     this.directions = new Float64Array((next.length / 4) * 3);
+    this.ribbonSides = new Float64Array(this.directions.length);
+    this.ribbonOffsets = new Float64Array(this.directions.length);
   }
 
-  /** Segment length relative to width controls how much adjacent tangents share a turn. */
-  private smoothDirections(first: number, end: number, trails: ParticleTrails): number {
-    const ribbon = trails.definition.mode === TrailMode.Ribbon;
+  private baseWidth(trails: ParticleTrails, record: TrailRecord): number {
     const width = trails.definition.widthOverTrail;
-    const record = this.records[first]!;
-    const baseWidth = Math.abs(
+    return Math.abs(
       (width?.mode === ScalarMode.Curve || width?.mode === ScalarMode.TwoCurves
         ? width.multiplier
         : scalar(width, 0, random(trails.emitter.seed, record.id, 193), 1)) *
         (trails.definition.sizeAffectsWidth ? Math.max(...record.particle.size) : 1),
     );
+  }
+
+  /** Segment length relative to width controls how much adjacent tangents share a turn. */
+  private smoothDirections(first: number, end: number, trails: ParticleTrails): void {
+    const ribbon = trails.definition.mode === TrailMode.Ribbon;
     let x = 1,
       y = 0,
       z = 0;
@@ -240,6 +240,7 @@ export class TrailGeometry {
       this.points[head + 2] === this.points[anchor + 2];
     let lookAhead = ribbon || duplicateHead ? 1 : 0;
     for (let i = first; i < end; i++) {
+      const baseWidth = this.baseWidth(trails, this.records[first]!);
       if (!ribbon && !lookAhead && i + 2 < end) {
         const p = (i + 1) * 4;
         const length = Math.hypot(
@@ -313,7 +314,145 @@ export class TrailGeometry {
       this.directions[i * 3 + 1] = outY;
       this.directions[i * 3 + 2] = outZ;
     }
-    return baseWidth;
+  }
+  /** Smooth normalized view-plane sides before intersecting the two offset edges. */
+  private buildRibbonSides(
+    first: number,
+    end: number,
+    trails: ParticleTrails,
+    view?: readonly number[],
+    display?: ArrayLike<number>,
+  ): void {
+    let ux = display?.[0] ?? 1,
+      uy = display?.[4] ?? 0,
+      uz = display?.[8] ?? 0;
+    const ul = Math.hypot(ux, uy, uz) || 1;
+    ux /= ul;
+    uy /= ul;
+    uz /= ul;
+    let nx = display?.[2] ?? 0,
+      ny = display?.[6] ?? 0,
+      nz = display?.[10] ?? 1;
+    const projection = ux * nx + uy * ny + uz * nz;
+    nx -= projection * ux;
+    ny -= projection * uy;
+    nz -= projection * uz;
+    const nl = Math.hypot(nx, ny, nz) || 1;
+    nx /= nl;
+    ny /= nl;
+    nz /= nl;
+    const vx = ny * uz - nz * uy,
+      vy = nz * ux - nx * uz,
+      vz = nx * uy - ny * ux;
+    // The smoothing radius is authored width; particle size only scales final vertices.
+    const width = trails.definition.widthOverTrail;
+    const authoredSize = trails.definition.sizeAffectsWidth
+      ? scalar(trails.emitter.main.size?.x, 0, 1, 1)
+      : 1;
+    const radius =
+      authoredSize *
+      Math.abs(
+        width?.mode === ScalarMode.Curve || width?.mode === ScalarMode.TwoCurves
+          ? width.multiplier
+          : scalar(width, 0, random(trails.emitter.seed, this.records[first]!.id, 193), 1),
+      );
+    for (let i = first; i < end; i++) {
+      const j = Math.max(first + 1, i),
+        a = (j - 1) * 4,
+        b = j * 4,
+        o = i * 4,
+        d = i * 3;
+      const dx = this.points[b]! - this.points[a]!,
+        dy = this.points[b + 1]! - this.points[a + 1]!,
+        dz = this.points[b + 2]! - this.points[a + 2]!;
+      const rx = view ? this.points[o]! - view[0]! : nx,
+        ry = view ? this.points[o + 1]! - view[1]! : ny,
+        rz = view ? this.points[o + 2]! - view[2]! : nz;
+      const cx = ry * dz - rz * dy,
+        cy = rz * dx - rx * dz,
+        cz = rx * dy - ry * dx;
+      let x = cx * ux + cy * uy + cz * uz,
+        y = cx * vx + cy * vy + cz * vz;
+      const length = Math.hypot(x, y) || 1;
+      x /= length;
+      y /= length;
+      this.ribbonSides[d] = x;
+      this.ribbonSides[d + 1] = y;
+      this.ribbonSides[d + 2] = Math.hypot(dx, dy, dz) / (2 * radius || 1);
+      if (i > first && this.ribbonSides[d + 2]! < 1) {
+        const p = d - 3,
+          px = this.ribbonSides[p]!,
+          py = this.ribbonSides[p + 1]!;
+        const mx = (x + px) * 0.5,
+          my = (y + py) * 0.5;
+        const weight = Math.max(0, this.ribbonSides[d + 2]! - 0.5) * 2;
+        const ax = mx + (px - mx) * weight,
+          ay = my + (py - my) * weight;
+        const bx = mx + (x - mx) * weight,
+          by = my + (y - my) * weight;
+        const al = Math.hypot(ax, ay),
+          bl = Math.hypot(bx, by);
+        if (al > 1e-10) {
+          this.ribbonSides[p] = ax / al;
+          this.ribbonSides[p + 1] = ay / al;
+        }
+        if (bl > 1e-10) {
+          this.ribbonSides[d] = bx / bl;
+          this.ribbonSides[d + 1] = by / bl;
+        }
+      }
+    }
+    // Reverse iteration preserves sides needed by the preceding intersection.
+    for (let i = end - 1; i >= first; i--) {
+      const d = i * 3,
+        j = Math.min(end - 1, i + 1) * 3;
+      let x = this.ribbonSides[j]!,
+        y = this.ribbonSides[j + 1]!;
+      if (i > first && i < end - 1) {
+        const ax = this.ribbonSides[d]!,
+          ay = this.ribbonSides[d + 1]!;
+        const sumX = ax + x,
+          sumY = ay + y;
+        const denom = 1 + ax * x + ay * y;
+        if (denom > 1e-10) {
+          x = sumX / denom;
+          y = sumY / denom;
+        } else {
+          x = ax;
+          y = ay;
+        }
+        const blend = Math.min(
+          1,
+          50 *
+            Math.min(
+              (ax - this.ribbonSides[j]!) ** 2 + (ay - this.ribbonSides[j + 1]!) ** 2,
+              (ax + this.ribbonSides[j]!) ** 2 + (ay + this.ribbonSides[j + 1]!) ** 2,
+            ),
+        );
+        x = ax + (x - ax) * blend;
+        y = ay + (y - ay) * blend;
+        const bound = Math.max(1, Math.min(3, this.ribbonSides[d - 1]! * 3));
+        const length = Math.hypot(x, y);
+        if (length > bound) {
+          x *= bound / length;
+          y *= bound / length;
+        }
+      }
+      // Keep unscaled segment sides for lighting tangents.
+      this.ribbonOffsets[d] = ux * x + vx * y;
+      this.ribbonOffsets[d + 1] = uy * x + vy * y;
+      this.ribbonOffsets[d + 2] = uz * x + vz * y;
+    }
+    this.ribbonNormal.set([-nx, -ny, -nz]);
+    for (let i = first; i < end; i++) {
+      const d = i * 3,
+        j = Math.min(end - 1, i + 1) * 3;
+      const x = this.ribbonSides[j]!,
+        y = this.ribbonSides[j + 1]!;
+      this.directions[d] = ux * y - vx * x;
+      this.directions[d + 1] = uy * y - vy * x;
+      this.directions[d + 2] = uz * y - vz * x;
+    }
   }
   private reserveVertices(count: number): void {
     if (this.vertices.length >= count * 10) return;

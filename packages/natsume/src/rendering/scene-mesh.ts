@@ -99,7 +99,7 @@ export class SceneMesh extends Mesh<Geometry, Shader> {
         | { matrix: ArrayLike<number>; rect: ArrayLike<number>; softness: ArrayLike<number> }
         | undefined)
     | undefined;
-  beforeSync: (() => void) | undefined;
+  beforeSync: ((matrix: ArrayLike<number>) => void) | undefined;
   uiContext: (() => { gamma: boolean; alphaClip: boolean }) | undefined;
   constructor(
     readonly node: SceneNode,
@@ -324,7 +324,7 @@ export class SceneMesh extends Mesh<Geometry, Shader> {
   sync(matrix: ArrayLike<number>, colorSpace: SourceColorSpace): void {
     this.visible = this.animationEnabled() && this.node.activeInHierarchy;
     if (!this.visible) return;
-    this.beforeSync?.();
+    this.beforeSync?.(matrix);
     if (!this.visible) return;
     const geometry = this.geometryProvider?.();
     if (geometry) this.updateGeometry(geometry);

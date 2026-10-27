@@ -572,7 +572,11 @@ export class EffectInstance {
       for (const mesh of pass === 0 ? this.auxiliaryMeshes : this.meshes) {
         const root = scene.rootCanvases.get(mesh.node.id);
         const layout = root === undefined ? undefined : scene.canvasLayouts.get(root);
-        if (mesh instanceof ParticleMesh && layout && scene.canvases.get(root!)?.mode === 1) {
+        if (
+          (mesh instanceof ParticleMesh || mesh instanceof TrailMesh) &&
+          layout &&
+          scene.canvases.get(root!)?.mode === 1
+        ) {
           mesh.observationMatrix = this.canvasEnvironment!.mainCamera!.viewMatrix;
         }
         mesh.canvasViewport = layout?.viewport;

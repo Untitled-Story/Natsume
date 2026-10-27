@@ -21,4 +21,10 @@ test('renders dynamic trail strips, retained tails and replay without stale GPU 
   expect(result.cleared).toBe(0);
   expect(result.points).toBe(0);
   expect(result.glError).toBe(0);
+  expect(result.capacity).toBe(256);
+  expect(result.capacityReused).toBe(true);
+  expect(result.geometryReused).toBe(true);
+  expect(result.frames.map((f: { draws: number }) => f.draws)).toEqual([0, 1, 1, 1, 0, 1, 0]);
+  expect(result.frames[2]!.uploads).toBe(2);
+  expect(result.frames[2]!.bytes).toBe(13_312);
 });
