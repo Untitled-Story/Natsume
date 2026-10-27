@@ -70,6 +70,7 @@ export class Emitter {
   readonly startColors: Float32Array;
   readonly ages: Float32Array;
   readonly lifetimes: Float32Array;
+  private birthStepSeconds: Float32Array | undefined;
   private lifetimeProgress: Float32Array | undefined;
   private inverseLifetimes: Float32Array | undefined;
   private subAges: Float64Array | undefined;
@@ -469,6 +470,17 @@ export class Emitter {
     return this.runPrewarm(advance, true, historyLifetime);
   }
 
+  /** @internal Integration time before remaining-lifetime getter rounding. */
+  elapsedAge(index: number): number {
+    return this.subAges?.[index] ?? this.ages[index]!;
+  }
+
+  /** @internal Birth channels integrate the source's partial first step. */
+  setBirthStep(first: number, seconds: number): void {
+    this.birthStepSeconds ??= new Float32Array(this.lifetimes.length).fill(NaN);
+    for (let i = first; i < this.count; i++) this.birthStepSeconds[i] = seconds;
+  }
+
   /** @internal Player-loop warm cohorts retain the native percentage-lifetime precision. */
   enableLifetimeProgress(): void {
     this.enableSubClock();
@@ -766,6 +778,7 @@ export class Emitter {
         this.inverseLifetimes![i] = reciprocalLifetime(this.lifetimes[i]!);
         this.lifetimes[i] = Math.fround(1 / this.inverseLifetimes![i]!);
       }
+      if (this.birthStepSeconds) this.birthStepSeconds[i] = NaN;
       this.updateCustom(i, 0);
       this.onBirth?.(i, phase);
       const age = (amount - n - 1 + remainder) * spacing;
@@ -894,9 +907,16 @@ export class Emitter {
     this.advanceEmission(dt);
     this.onAdvanced?.(dt);
   }
-  private advanceParticles(dt: number, first = 0): void {
-    const limitDecay = this.limit ? Math.pow(1 - this.limit.dampen, dt * 30) : 1;
+  private advanceParticles(seconds: number, first = 0): void {
+    const commonDecay = this.limit ? Math.pow(1 - this.limit.dampen, seconds * 30) : 1;
     for (let i = first; i < this.count; ) {
+      let dt = seconds;
+      if (this.birthStepSeconds && !Number.isNaN(this.birthStepSeconds[i]!)) {
+        dt = this.birthStepSeconds[i]!;
+        this.birthStepSeconds[i] = NaN;
+      }
+      const limitDecay =
+        dt === seconds || !this.limit ? commonDecay : Math.pow(1 - this.limit.dampen, dt * 30);
       const progress = this.lifetimeProgress
         ? advanceLifetimeProgress(this.lifetimeProgress[i]!, dt, this.inverseLifetimes![i]!)
         : undefined;
@@ -1255,6 +1275,7 @@ export class Emitter {
     if (i === last) return;
     for (const a of [this.ages, this.lifetimes, this.serials]) a[i] = a[last]!;
     if (this.subAges) this.subAges[i] = this.subAges[last]!;
+    if (this.birthStepSeconds) this.birthStepSeconds[i] = this.birthStepSeconds[last]!;
     if (this.lifetimeProgress) {
       this.lifetimeProgress[i] = this.lifetimeProgress[last]!;
       this.inverseLifetimes![i] = this.inverseLifetimes![last]!;

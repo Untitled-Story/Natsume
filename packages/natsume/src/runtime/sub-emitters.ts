@@ -37,6 +37,7 @@ interface PendingBirth {
   readonly spacing?: number;
   readonly remainder?: number;
   readonly initialAge?: number;
+  readonly firstStep?: number | undefined;
 }
 
 /** Ordered DAG scheduling; channels share each target's original particle pool. */
@@ -279,6 +280,7 @@ export class SubEmitterGraph {
   }
   private emit(birth: PendingBirth): void {
     if (!birth.target.enabled || !birth.target.node.activeInHierarchy) return;
+    const first = birth.target.count;
     if (birth.amount === undefined)
       birth.target.emitTriggeredBurst(birth.parent, birth.properties, birth.parentSystem);
     else
@@ -293,6 +295,8 @@ export class SubEmitterGraph {
         birth.parentSystem,
         birth.initialAge,
       );
+    if (birth.firstStep !== undefined && birth.target.main.simulationSpeed > 0)
+      birth.target.setBirthStep(first, birth.firstStep);
   }
   private flush(queue: Map<number, PendingBirth[]>, id: number): void {
     if (queue === this.after) this.queuedDistance.delete(id);
@@ -363,6 +367,11 @@ export class SubEmitterGraph {
               ),
               phase: local / duration,
               time: when,
+              firstStep:
+                from === 0 && when === 0 && !channel.bornDuringWarm
+                  ? (source.elapsedAge(index) / source.main.simulationSpeed) *
+                    target.main.simulationSpeed
+                  : undefined,
               initialAge: from === 0 && when === 0 && channel.bornDuringWarm ? parent.age : 0,
             });
           }
