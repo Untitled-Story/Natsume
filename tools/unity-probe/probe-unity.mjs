@@ -24,6 +24,17 @@ const version = '2022.3.21f1';
 const subEmitters = process.argv.includes('--sub-emitters');
 const sharedSubEmitters = process.argv.includes('--shared');
 const sharedSingle = process.argv.includes('--single');
+const caseArgument = process.argv.indexOf('--case');
+const sharedCase = caseArgument < 0 ? undefined : Number(process.argv[caseArgument + 1]);
+assert(
+  caseArgument < 0 ||
+    (sharedSubEmitters &&
+      !sharedSingle &&
+      Number.isInteger(sharedCase) &&
+      sharedCase >= 0 &&
+      sharedCase < 72),
+  '--case requires --shared and an integer from 0 to 71',
+);
 const workerArgument = process.argv.indexOf('--job-workers');
 const jobWorkers = workerArgument < 0 ? undefined : Number(process.argv[workerArgument + 1]);
 assert(
@@ -337,7 +348,12 @@ const child = spawn(
     env: {
       ...process.env,
       NATSUME_COMPAT_OUTPUT: baseline,
-      ...(sharedSubEmitters ? { NATSUME_SHARED_SINGLE: sharedSingle ? '1' : '0' } : {}),
+      ...(sharedSubEmitters
+        ? {
+            NATSUME_SHARED_SINGLE: sharedSingle ? '1' : '0',
+            NATSUME_SHARED_CASE: sharedCase === undefined ? '-1' : String(sharedCase),
+          }
+        : {}),
     },
   },
 );
@@ -367,11 +383,14 @@ if (subTransforms) {
 }
 if (sharedSubEmitters) {
   if (jobWorkers !== undefined) assert.equal(current.jobWorkers, jobWorkers);
-  assert.equal(current.cases.length, sharedSingle ? 1 : 72);
+  assert.equal(current.cases.length, sharedSingle || sharedCase !== undefined ? 1 : 72);
   for (const c of current.cases) assert.equal(c.samples.length, 121);
   if (process.argv.includes('--update-fixtures')) {
     await saveJson(
-      resolve(root, 'data/unity-baselines/fixtures/unity-sub-emitter-shared.json'),
+      resolve(
+        root,
+        `data/unity-baselines/fixtures/unity-sub-emitter-shared${sharedCase === undefined ? '' : `-case-${sharedCase}`}.json`,
+      ),
       JSON.stringify(current, null, 2) + '\n',
     );
   }

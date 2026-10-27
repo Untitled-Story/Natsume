@@ -39,6 +39,7 @@ export class ParticleTrails {
     const birth = emitter.onBirth,
       death = emitter.onDeath,
       clear = emitter.onClear,
+      disable = emitter.onDisable,
       advanced = emitter.onAdvanced;
     emitter.onBirth = (index, phase) => {
       birth?.(index, phase);
@@ -50,6 +51,10 @@ export class ParticleTrails {
     };
     emitter.onClear = () => {
       clear?.();
+      this.clear();
+    };
+    emitter.onDisable = () => {
+      disable?.();
       this.clear();
     };
     emitter.onAdvanced = (seconds) => {

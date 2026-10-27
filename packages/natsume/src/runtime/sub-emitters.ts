@@ -37,6 +37,7 @@ interface PendingBirth {
   readonly spacing?: number;
   readonly remainder?: number;
   readonly initialAge?: number;
+  readonly nativeDelta?: number;
   readonly firstStep?: number | undefined;
   readonly warmEvent?: Event;
 }
@@ -53,6 +54,10 @@ export class SubEmitterGraph {
   private readonly warmRequests = new Set<Emitter>();
   private readonly descendants = new Map<number, ReadonlySet<number>>();
   private readonly queuedDistance = new Map<number, number>();
+  private readonly roots: readonly Emitter[];
+  private readonly shared = new Set<number>();
+  private readonly visited = new Set<number>();
+  private readonly singletonScopes = new Map<number, ReadonlySet<number>>();
   private advancing: Emitter | undefined;
   private warmingStep = false;
   private clearing = false;
@@ -69,6 +74,7 @@ export class SubEmitterGraph {
       source.onBirth = (index) => this.birth(source, index);
       source.onDeath = (index) => this.death(source, index);
       source.onClear = () => this.clearSource(source.id);
+      source.onDisable = () => this.clearSource(source.id, false);
       const module = source.source.modules.find((m) => m.dataType === M.SubEmittersModule);
       if (!module) continue;
       const edges = (module.data as R<SubEmittersModuleT>).emitters;
@@ -89,6 +95,7 @@ export class SubEmitterGraph {
         }
     }
     const queue = [...emitters.values()].filter((e) => indegree.get(e.id) === 0);
+    this.roots = queue.slice();
     for (let index = 0; index < queue.length; index++)
       for (const edge of this.slots.get(queue[index]!.id) ?? [])
         if (edge.systemComponentId) {
@@ -99,16 +106,40 @@ export class SubEmitterGraph {
     check(queue.length === emitters.size, 'SEMANTIC', 'Sub-emitter graph contains a cycle');
     this.order = queue;
     for (const root of this.order) {
-      if (!this.slots.get(root.id)?.some((edge) => edge.systemComponentId)) continue;
+      this.singletonScopes.set(root.id, new Set([root.id]));
       const scope = new Set<number>([root.id]);
       for (const source of this.order)
         if (scope.has(source.id))
           for (const edge of this.slots.get(source.id) ?? [])
             if (edge.systemComponentId) scope.add(edge.systemComponentId);
       this.descendants.set(root.id, scope);
+      if (scope.size === 1) continue;
       root.onPrewarm = () => this.warmRequests.add(root);
       if (root.main.prewarm && root.main.loop)
         for (const id of scope) emitters.get(id)!.enableLifetimeProgress();
+    }
+    for (const target of this.order) {
+      const parents = this.order.filter((e) =>
+        (this.slots.get(e.id) ?? []).some((edge) => edge.systemComponentId === target.id),
+      );
+      if (
+        parents.length > 1 ||
+        parents.some(
+          (e) =>
+            (this.slots.get(e.id) ?? []).filter(
+              (edge) => edge.systemComponentId === target.id && edge.event === Event.Birth,
+            ).length > 1,
+        )
+      ) {
+        this.shared.add(target.id);
+        target.birthDriven = parents.some((parent) =>
+          this.slots
+            .get(parent.id)!
+            .some((edge) => edge.systemComponentId === target.id && edge.event === Event.Birth),
+        );
+        target.enableLifetimeProgress();
+        for (const parent of parents) parent.enableLifetimeProgress();
+      }
     }
   }
 
@@ -145,7 +176,21 @@ export class SubEmitterGraph {
 
   step(delta: number): void {
     this.warm();
-    this.stepScope(delta);
+    if (!this.shared.size) {
+      this.stepScope(delta);
+      return;
+    }
+    const visited = this.visited;
+    visited.clear();
+    for (const root of this.roots) {
+      if (!root.graphPlaying) continue;
+      const scope = this.descendants.get(root.id)!;
+      this.stepScope(delta, scope);
+      for (const id of scope) visited.add(id);
+    }
+    for (const emitter of this.order)
+      if (!visited.has(emitter.id)) this.stepScope(delta, this.singletonScopes.get(emitter.id)!);
+    for (const id of this.shared) this.flush(this.after, id);
   }
 
   /** Initializes connected histories after every system has synchronized its active state. */
@@ -238,7 +283,7 @@ export class SubEmitterGraph {
         this.warmingStep = false;
       }
       this.advanceChannels(emitter, delta);
-      this.flush(this.after, emitter.id);
+      if (warming || !this.shared.has(emitter.id)) this.flush(this.after, emitter.id);
     }
   }
 
@@ -269,6 +314,16 @@ export class SubEmitterGraph {
     }
     for (const [slot, edge] of (this.slots.get(source.id) ?? []).entries()) {
       if (edge.event !== Event.Birth || !this.accept(source, index, edge, slot)) continue;
+      if (
+        this.shared.has(edge.systemComponentId) &&
+        this.channels.some(
+          (c) =>
+            c.source === source &&
+            c.particle === source.serials[index] &&
+            c.target.id === edge.systemComponentId,
+        )
+      )
+        continue;
       this.channels.push({
         source,
         target: this.emitters.get(edge.systemComponentId)!,
@@ -302,7 +357,7 @@ export class SubEmitterGraph {
       });
     }
   }
-  private clearSource(id: number): void {
+  private clearSource(id: number, descendants = true): void {
     const emitter = this.emitters.get(id)!;
     this.warmRequests.delete(emitter);
     this.virtualWarm.delete(emitter);
@@ -317,7 +372,7 @@ export class SubEmitterGraph {
         if (remaining.length) queue.set(target, remaining);
         else queue.delete(target);
       }
-    if (!this.clearing) {
+    if (descendants && !this.clearing) {
       this.clearing = true;
       try {
         // Unity clears connected sub-emitter pools even when Clear(withChildren) is false.
@@ -357,6 +412,7 @@ export class SubEmitterGraph {
           birth.remainder,
           birth.parentSystem,
           birth.initialAge,
+          birth.nativeDelta,
         );
       if (birth.firstStep !== undefined && birth.target.main.simulationSpeed > 0)
         birth.target.setBirthStep(first, birth.firstStep);
@@ -401,8 +457,14 @@ export class SubEmitterGraph {
       if (warmOrigins?.get(channel.particle) === Event.Death) continue;
       const dt = warmOrigins ? Math.max(parent.age, 1e-8) : delta * source.main.simulationSpeed;
       if (dt <= 0) continue;
-      const from = channel.time,
-        to = Math.fround(from + dt);
+      const from =
+          this.shared.has(target.id) && !warmOrigins
+            ? Math.max(0, source.channelAge(index, dt))
+            : channel.time,
+        to =
+          this.shared.has(target.id) && !warmOrigins
+            ? source.channelAge(index)
+            : Math.fround(from + dt);
       channel.time = to;
       const delay = target.delaySeconds;
       const duration = Math.fround(target.main.durationSeconds);
@@ -461,22 +523,33 @@ export class SubEmitterGraph {
       }
       // One clock per parent; the target's authored automatic-emission flag is irrelevant here.
       const phase = (target.main.loop ? end % duration : Math.min(end, duration)) / duration;
-      const active = Math.max(
-        0,
-        (target.main.loop ? end : Math.min(end, duration)) -
-          (target.main.loop ? start : Math.min(start, duration)),
-      );
+      const active =
+        this.shared.has(target.id) && !target.main.loop && end >= duration
+          ? 0
+          : Math.max(
+              0,
+              (target.main.loop ? end : Math.min(end, duration)) -
+                (target.main.loop ? start : Math.min(start, duration)),
+            );
       const rate = Math.max(
         0,
         scalar(target.emission?.rateOverTime, phase, random(target.seed, channel.particle, 90)),
       );
+      const shared = this.shared.has(target.id) && !warmOrigins;
       const spacing = rate > 0 ? Math.fround(1 / rate) : 0;
       const rateTime = Math.fround(channel.rateTime + Math.fround(active));
-      channel.carry += rateTime - channel.rateTime;
+      channel.carry = shared
+        ? Math.fround(channel.carry + Math.fround(Math.fround(active) * Math.fround(rate)))
+        : channel.carry + rateTime - channel.rateTime;
       channel.rateTime =
         target.main.loop && rateTime >= duration ? Math.fround(rateTime % duration) : rateTime;
-      const amount = spacing > 0 ? Math.floor(channel.carry / spacing + 1e-6) : 0;
-      if (spacing > 0) channel.carry -= amount * spacing;
+      const amount = shared
+        ? Math.floor(channel.carry)
+        : spacing > 0
+          ? Math.floor(channel.carry / spacing + 1e-6)
+          : 0;
+      if (shared) channel.carry = Math.fround(channel.carry - amount);
+      else if (spacing > 0) channel.carry -= amount * spacing;
       else channel.carry = 0;
       if (amount > 0)
         this.enqueue(this.after, {
@@ -487,8 +560,13 @@ export class SubEmitterGraph {
           amount,
           phase,
           time: end,
-          spacing,
-          remainder: channel.carry / spacing,
+          spacing: shared
+            ? rate > 0
+              ? Math.fround(1 / Math.fround(Math.fround(active) * Math.fround(rate)))
+              : 0
+            : spacing,
+          remainder: shared ? channel.carry : channel.carry / spacing,
+          ...(shared ? { nativeDelta: Math.fround(delta * target.main.simulationSpeed) } : {}),
         });
       const previous = channel.previous;
       const distance = Math.hypot(

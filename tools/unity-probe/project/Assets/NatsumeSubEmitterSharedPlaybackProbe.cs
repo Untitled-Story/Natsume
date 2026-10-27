@@ -9,7 +9,7 @@ using UnityEngine;
 /** Measures two independently emitting parents that share one continuous child pool. */
 public sealed class NatsumeSubEmitterSharedPlaybackProbe : MonoBehaviour
 {
-    [Serializable] public class Sample { public int frame, a, b, child, invalidAgeCount; public float childTime; public float[] childAge,childX; public uint[] childSeed; public bool playingA,emittingA,playingB; public float timeA; }
+    [Serializable] public class Sample { public int frame, a, b, child, invalidAgeCount; public float childTime; public float[] childAge,childX,aAge,bAge; public uint[] childSeed; public bool playingA,emittingA,playingB; public float timeA; }
     [Serializable] public class Case
     {
         public float lifetimeA, lifetimeB, duration;
@@ -44,7 +44,7 @@ public sealed class NatsumeSubEmitterSharedPlaybackProbe : MonoBehaviour
         }
         invalid=count-ages.Count;return ages.ToArray();
     }
-    Output output = new Output(); int frame, startup; bool begun;
+    Output output = new Output(); int frame, startup,caseIndex; bool begun;
     public static void Run() {
         EditorSceneManager.NewScene(NewSceneSetup.EmptyScene,NewSceneMode.Single);
         EditorSettings.enterPlayModeOptionsEnabled=true;
@@ -54,6 +54,8 @@ public sealed class NatsumeSubEmitterSharedPlaybackProbe : MonoBehaviour
     }
     void Start() { Time.captureFramerate=60; output.unityVersion=Application.unityVersion; output.jobWorkers=Unity.Jobs.LowLevel.Unsafe.JobsUtility.JobWorkerCount; }
     void Configure(float life,float duration,int inherit,bool automatic,int clearFrame,int topology=0,int stopMode=0) {
+        int selected;
+        if(int.TryParse(Environment.GetEnvironmentVariable("NATSUME_SHARED_CASE"),out selected) && selected>=0 && caseIndex++!=selected)return;
         var holder=new GameObject("shared");holder.transform.SetParent(transform);
         var a=Make("a",holder.transform,life,false,2);
         var b=Make("b",holder.transform,life+.2f,false,2);
@@ -91,13 +93,13 @@ public sealed class NatsumeSubEmitterSharedPlaybackProbe : MonoBehaviour
     }
     void Record(Case c,int index) {
         int a,b,count,invalid,unused;
-        Read(c.a,out a,out unused);Read(c.b,out b,out unused);
+        var aa=Read(c.a,out a,out unused);var ba=Read(c.b,out b,out unused);
         var ages=Read(c.child,out count,out invalid);
         var particles=new ParticleSystem.Particle[c.child.main.maxParticles];
         int detailed=c.child.GetParticles(particles);
         var xs=new float[detailed];var seeds=new uint[detailed];
         for(int i=0;i<detailed;i++){xs[i]=particles[i].position.x;seeds[i]=particles[i].randomSeed;}
-        c.samples.Add(new Sample {frame=index,a=a,b=b,child=count,childTime=c.child.time,childAge=ages,childX=xs,childSeed=seeds,invalidAgeCount=invalid,playingA=c.a.isPlaying,emittingA=c.a.isEmitting,playingB=c.b.isPlaying,timeA=c.a.time});
+        c.samples.Add(new Sample {frame=index,a=a,b=b,aAge=aa,bAge=ba,child=count,childTime=c.child.time,childAge=ages,childX=xs,childSeed=seeds,invalidAgeCount=invalid,playingA=c.a.isPlaying,emittingA=c.a.isEmitting,playingB=c.b.isPlaying,timeA=c.a.time});
     }
     void Update() {
         if(!begun)return;

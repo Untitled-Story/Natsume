@@ -42,6 +42,7 @@ import { copyEnvironment } from '../rendering/particle-environment.js';
 import { rendererSupport, trailRendererSupport } from '../rendering/renderer-support.js';
 import { emitterSupport } from './emitter-support.js';
 import { instancePrewarmWork } from './prewarm.js';
+import { subEmitterSupport } from './sub-emitter-support.js';
 import { SupportChecks, type SupportIssue } from './support-checks.js';
 
 /** A blocking configuration or an explicit approximation for the selected entry. */
@@ -302,6 +303,7 @@ export function checkCompatibility(
   const components = pack.components.filter((c) => nodeIds.has(c.nodeId));
   const systems = components.filter((c) => c.dataType === C.ParticleSystem);
   const systemMap = new Map(systems.map((c) => [c.id, c.data as R<ParticleSystemT>]));
+  global.issues.push(...subEmitterSupport(systemMap));
   const capacity = systems.reduce(
     (sum, c) => sum + (c.data as R<ParticleSystemT>).main!.maxParticles,
     0,

@@ -168,18 +168,18 @@ it('preserves empty and duplicate slots, event probability, and resets stale Bir
   ]);
   graph.trigger(3, 0);
   graph.step(1 / 60);
-  expect(child.count).toBe(4);
+  expect(child.count).toBe(2);
   parent.reset();
   child.reset();
   graph.clear();
   parent.sync();
   child.sync();
   graph.step(1 / 60);
-  expect(child.count).toBe(4);
+  expect(child.count).toBe(2);
   graph.trigger(3, 3);
-  expect(child.count).toBe(4);
+  expect(child.count).toBe(2);
   graph.trigger(3, 1);
-  expect(child.count).toBe(6);
+  expect(child.count).toBe(4);
 });
 
 it('supports a shared target without cloning storage or overwriting its authored configuration', () => {

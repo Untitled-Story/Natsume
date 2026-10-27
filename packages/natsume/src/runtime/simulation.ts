@@ -24,6 +24,7 @@ import { CameraPolicy } from '../format/generated/noa/ir/camera-policy.js';
 import { Scene, type LayoutSize } from './scene.js';
 import { Emitter, type Diagnostic } from './emitter.js';
 import { instancePrewarmWork } from './prewarm.js';
+import { subEmitterSupport } from './sub-emitter-support.js';
 
 export interface SimulationOptions {
   /** Maximum retained trail points per instance. Defaults to 65,536; overflow throws. */
@@ -164,6 +165,11 @@ export class Simulation {
         ),
       );
     this.subEmitters = new SubEmitterGraph(this.emitters);
+    this.diagnostics.push(
+      ...subEmitterSupport(new Map(systems.map((c) => [c.id, c.data as R<ParticleSystemT>]))).map(
+        ({ code, message }) => ({ code, message }),
+      ),
+    );
     for (const emitter of this.emitters.values()) {
       const module = emitter.source.modules.find(
         (m) => m.dataType === ParticleModuleData.TrailsModule,

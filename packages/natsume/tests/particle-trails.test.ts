@@ -103,6 +103,22 @@ it('drops die-with-particle histories and atomically releases an incomplete firs
   expect(b.trails.records.size).toBe(0);
 });
 
+it('releases disabled-system history and reuses its pool on enable', () => {
+  const { emitter, trails, pool } = fixture();
+  emitter.step(0.1);
+  expect(pool.count).toBeGreaterThan(0);
+  const capacity = pool.capacity;
+  emitter.node.activeInHierarchy = false;
+  emitter.sync();
+  expect(pool.count).toBe(0);
+  expect(trails.records.size).toBe(0);
+  emitter.node.activeInHierarchy = true;
+  emitter.sync();
+  emitter.step(0.1);
+  expect(pool.count).toBeGreaterThan(0);
+  expect(pool.capacity).toBe(capacity);
+});
+
 it('recycles expired anchors before allocating and does not allocate zero-lifetime history', () => {
   const a = fixture(0, false, false, 5);
   a.source.main!.lifetime = constant(10);

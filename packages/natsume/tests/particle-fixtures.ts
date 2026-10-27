@@ -97,6 +97,8 @@ export function manualParticle(emitter: Emitter) {
   emitter.count = 1;
   emitter.positions.set([1, 0.5, 0.2]);
   emitter.velocities.set([2, 0, 0]);
+  // Like Unity SetParticles, the initial render velocity precedes module integration.
+  emitter.renderVelocities?.set([2, 0, 0]);
   emitter.lifetimes[0] = 1;
   emitter.ages[0] = 0;
   emitter.startSizes.set([2, 3, 4]);

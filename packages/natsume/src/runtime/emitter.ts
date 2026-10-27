@@ -111,6 +111,9 @@ export class Emitter {
   onBirth: ((index: number, phase: number) => void) | undefined;
   onDeath: ((index: number) => void) | undefined;
   onClear: (() => void) | undefined;
+  onDisable: (() => void) | undefined;
+  /** @internal Birth-driven systems emit through parent channels, even after Play(). */
+  birthDriven = false;
   onAdvanced: ((seconds: number) => void) | undefined;
   /** @internal A graph defers warming until all participating systems are initialized. */
   onPrewarm: (() => void) | undefined;
@@ -425,13 +428,24 @@ export class Emitter {
     this.onClear?.();
     this.count = 0;
   }
+  /** @internal A stopped root drains its particles before releasing its graph update. */
+  get graphPlaying(): boolean {
+    return (
+      this.enabledLast &&
+      (this.count > 0 ||
+        (this.started &&
+          this.emitting &&
+          (this.main.loop || this.time < this.main.durationSeconds)))
+    );
+  }
   sync(): void {
     this.updateSpace();
     const active = this.enabled && this.node.activeInHierarchy;
     if (active === this.enabledLast) return;
     this.enabledLast = active;
     if (!active) {
-      this.clear();
+      this.onDisable?.();
+      this.count = 0;
       this.noiseEvaluator?.reset();
       this.started = false;
       this.delayRemaining = this.delaySeconds;
@@ -458,7 +472,7 @@ export class Emitter {
     if (this.started) return;
     this.started = true;
     if (this.delayRemaining > 0) return;
-    this.bursts(-Number.EPSILON, 0);
+    if (!this.birthDriven) this.bursts(-Number.EPSILON, 0);
     this.prewarm();
   }
   private prewarm(): void {
@@ -501,6 +515,21 @@ export class Emitter {
   /** @internal Integration time before remaining-lifetime getter rounding. */
   elapsedAge(index: number): number {
     return this.subAges?.[index] ?? this.ages[index]!;
+  }
+  /** @internal Emission uses percentage age before remaining-lifetime getter rounding. */
+  channelAge(index: number, previousSeconds = 0): number {
+    return this.lifetimeProgress
+      ? Math.fround(
+          Math.fround(
+            Math.fround(
+              this.lifetimeProgress[index]! -
+                Math.fround(
+                  Math.fround(Math.fround(previousSeconds) * 100) * this.inverseLifetimes![index]!,
+                ),
+            ) * Math.fround(0.01),
+          ) / this.inverseLifetimes![index]!,
+        )
+      : this.elapsedAge(index);
   }
 
   /** @internal Birth channels integrate the source's partial first step. */
@@ -881,12 +910,13 @@ export class Emitter {
     remainder = 0,
     parentSystem = 0,
     initialAge = 0,
+    nativeDelta?: number,
   ): void {
     this.enableSubClock();
     this.subBirth = { parent, properties, parentSystem };
     try {
       const first = this.count;
-      this.emit(amount, phase, seconds, spacing, remainder);
+      this.emit(amount, phase, seconds, spacing, remainder, nativeDelta);
       if (initialAge > 0) this.advanceParticles(initialAge, first);
     } finally {
       this.subBirth = undefined;
@@ -948,7 +978,7 @@ export class Emitter {
       }
       dt = -this.delayRemaining;
       this.delayRemaining = 0;
-      this.bursts(-Number.EPSILON, 0);
+      if (!this.birthDriven) this.bursts(-Number.EPSILON, 0);
       this.prewarm();
       if (dt <= 0) return;
     }
@@ -1286,7 +1316,7 @@ export class Emitter {
       // enough to move boundary births to another step and change their initial values.
       if (this.main.loop && this.rateTime >= this.main.durationSeconds)
         this.rateTime = Math.fround(this.rateTime % this.main.durationSeconds);
-      this.bursts(this.time, end);
+      if (!this.birthDriven) this.bursts(this.time, end);
       const activeDt = this.main.loop
         ? dt
         : Math.max(
@@ -1300,7 +1330,7 @@ export class Emitter {
           : Math.min(this.rateTime, this.main.durationSeconds)) / this.main.durationSeconds;
       const rate = Math.max(
         0,
-        this.emission?.enabled === false
+        this.birthDriven || this.emission?.enabled === false
           ? 0
           : scalar(this.emission?.rateOverTime, phase, random(this.seed, 0, 90)),
       );
@@ -1348,7 +1378,7 @@ export class Emitter {
         (activeDt / dt) *
         Math.max(
           0,
-          this.emission?.enabled === false
+          this.birthDriven || this.emission?.enabled === false
             ? 0
             : scalar(
                 this.emission?.rateOverDistance,
