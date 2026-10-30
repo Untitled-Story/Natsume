@@ -140,7 +140,7 @@ it('separates one-shot ApplyClip from continuing PlayClip', async () => {
     expect(active(s)).toBe(kind === ActionKind.ApplyClip);
   }
 });
-it('applies zero-duration initialization once without a repeating player', async () => {
+it('continues writing zero-duration Animator motions until restart', async () => {
   const d = document();
   d.animations[0]!.durationSeconds = 0;
   d.animations[0]!.loop = true;
@@ -148,7 +148,7 @@ it('applies zero-duration initialization once without a repeating player', async
   s.play();
   s.setNodeActive(3, false);
   step(s, 8);
-  expect(active(s)).toBe(false);
+  expect(active(s)).toBe(true);
   s.restart();
   expect(active(s)).toBe(true);
 });

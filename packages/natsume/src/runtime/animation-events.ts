@@ -28,7 +28,19 @@ export function visitAnimationEvents(
   to: number,
   visit: (event: R<AnimationEventT>) => boolean,
 ): void {
-  if (to < from || events.length === 0) return;
+  if (events.length === 0) return;
+  if (to < from) {
+    if (duration === 0) return;
+    const first = loop ? Math.ceil(from) : 0;
+    const last = loop ? Math.floor(to) : 0;
+    for (let cycle = first; cycle >= last; cycle--)
+      for (let i = events.length - 1; i >= 0; i--) {
+        const event = events[i]!;
+        const at = Math.fround(cycle + Math.fround(event.timeSeconds / duration));
+        if (at < from && at >= to && !visit(event)) return;
+      }
+    return;
+  }
   if (duration === 0) {
     if (from < 0 && to >= 0) for (const event of events) if (!visit(event)) return;
     return;

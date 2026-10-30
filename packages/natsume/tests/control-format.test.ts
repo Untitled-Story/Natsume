@@ -35,10 +35,10 @@ it('keeps state identifiers local to a layer, including IDs used by document ent
   a.layers[1]!.states.push(new AnimatorStateT(1, 'duplicate'));
   expect(() => validateDocument(d)).toThrow(/state IDs/);
 });
-it('preserves controller absence and empty layers; preflight blocks unimplemented motion branches', () => {
+it('preserves executable controller absence, empty layers and empty motions', () => {
   const { d, a } = controller();
   expect(() => validateDocument(d)).not.toThrow();
-  expect(animatorSupport(a, 3).some((i) => i.field.endsWith('animationId'))).toBe(true);
+  expect(animatorSupport(a, 3)).toEqual([]);
   a.layers[0]!.defaultStateId = 0;
   a.layers[0]!.states = [];
   expect(() => validateDocument(d)).not.toThrow();

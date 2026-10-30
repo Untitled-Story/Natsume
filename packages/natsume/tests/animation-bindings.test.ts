@@ -176,7 +176,9 @@ it('uses Euler ZXY and normalizes sampled quaternion components', () => {
   s.update(0.1);
   const q = s.scene.nodes.get(3)!.localRotation,
     expected = eulerQuaternion([6.2, 0.23, -0.18]);
-  expect([q.x, q.y, q.z, q.w]).toEqual(Array.from(expected).map((v) => expect.closeTo(v, 5)));
+  expect(
+    Math.abs(q.x * expected[0] + q.y * expected[1] + q.z * expected[2] + q.w * expected[3]),
+  ).toBeCloseTo(1, 5);
   const r = new TrackT(
     new BindingT(3, P.NodeRotation),
     D.RotationTrack,

@@ -82,11 +82,33 @@ app.destroy();
 
 ## 动画
 
-支持单层、无过渡 Animator 的节点启用、位置 / 缩放 / 旋转、Rect 布局、组件启用、粒子参数 / 颜色和 Renderer 材质轨道，包括零时长初始化、循环、末帧停留、非负状态速度和 `[0,1]` 内的 cycle offset。偏移只作用于循环片段；`effect.playAnimatorState(animatorId, stateIdOrName)` 从起点重新播放状态。
+支持平面 Animator Controller：Float / Int / Bool / Trigger、条件与过渡、中断、Entry / AnyState / Exit、多层 Override / Additive、层权重、状态速度 / 相位 / 时间参数、tag 和 Write Defaults。保留无 Controller、空层及空 Motion。绑定覆盖节点启用、TRS、Rect、组件启用、粒子参数 / 颜色、材质和 Sprite 颜色。
 
-动画按 1/60 s 固定步先采样，再推进粒子；暂停、停止排空和过载丢弃的时间不推进动画。`setNodeActive` 立即生效，下一个固定步可被动画覆盖。入口 ApplyClip 只应用起点，PlayClip 持续播放。
+```ts
+const animator = effect.getAnimator(animatorId);
+animator.setFloat('speed', 1.2);
+animator.setTrigger('play');
+animator.setLayerWeight(1, 0.5);
+const state = animator.getCurrentState(); // 空层为 undefined
+const transition = animator.getTransition();
+effect.playAnimatorState(animatorId, 'Idle', 0); // 层序号默认 0
+```
 
-旋转支持归一化四元数分量与 Euler ZXY。缺失通道保留动作入口值；Write Defaults 恢复 Animator 启动时的属性值；重播恢复包初值。粒子参数只影响对应源分支，不改变参数模式；材质覆盖按 Renderer 和实例隔离。关闭 Animator 组件暂停并保留状态；节点失活时按 keep-state / write-defaults 设置处理。
+参数名称与类型不匹配会报错。句柄按实例隔离，restart 后仍有效；销毁后不可使用。Base Layer 的有效权重始终为 1。状态查询保留已完成的循环数；空 Motion 不创建替代片段。
+
+Normal 动画按 1/60 s 固定步先采样，再推进粒子。UnscaledTime 使用宿主提供的未缩放秒数；AnimatePhysics 按宿主提供的物理步逐次推进。仅实际使用相应模式的活动 Animator 要求额外时钟：
+
+```ts
+effect.update(deltaSeconds, {
+  unscaledDeltaSeconds,
+  physicsSteps: [0.02], // 本帧的物理步；没有物理步时传 []
+});
+animator.setVisible(visible); // 默认 true，控制源 culling mode
+```
+
+Cull Update Transforms 在不可见时继续推进状态和事件、停止属性写回；Cull Completely 冻结状态。暂停及停止排空冻结全部动画。`setNodeActive` 立即生效，下一次动画求值可覆盖。入口 ApplyClip 只应用起点，PlayClip 持续播放。
+
+旋转支持归一化四元数与 Unity ZXY。缺失通道保留动作入口值；Write Defaults 恢复 Animator 启动时的属性值。关闭组件保留状态；节点失活按源 keep-state / write-defaults 设置处理。restart 恢复包初值、参数默认值及源层权重。粒子参数保持源模式，材质覆盖按 Renderer 和实例隔离。
 
 多个 Animator 或入口 PlayClip 重叠写入时默认按注册顺序执行，PlayClip 在 Animator 之后；同优先级重叠会给出 `NATSUME_ANIMATION_ORDER` 警告。宿主可以指定覆盖顺序：
 
@@ -96,7 +118,7 @@ effect.setAnimationPriority({ animatorId: 12 }, 10);
 effect.setAnimationPriority({ clipId: 56 }, 20);
 ```
 
-重新启用的 Animator 重新注册；切状态保持原顺序。设置不同优先级后，该对写入者不再产生顺序警告。零时长片段仍只初始化，不会因优先级修改而重复执行。
+重新启用的 Animator 重新注册；切状态保持原顺序。设置不同优先级后，该对写入者不再产生顺序警告。零时长 Animator Motion 继续写回固定姿态；ApplyClip 保持一次性采样。
 
 宿主可以订阅类型化动画事件：
 
@@ -108,9 +130,9 @@ const unsubscribe = effect.onAnimationEvent((event) => {
 unsubscribe();
 ```
 
-Bridge 行为可实现 `onAnimationEvent(event)`，接收同节点 Animator 的事件。事件保留源字符串、数字和对象引用（包括 bigint fileID），不按名称自动调用方法。订阅者先于 Bridge，事件先于该固定步的轨道采样和粒子推进；初始化、循环末端与同时间戳按源顺序派发。ApplyClip 只采样起点，不派发持续播放事件。
+Bridge 行为可实现 `onAnimationEvent(event)`，接收同节点 Animator 的事件。事件保留源字符串、数字和对象引用（包括 bigint fileID），不按名称自动调用方法。订阅者先于 Bridge，事件先于该固定步的轨道采样和粒子推进；正向初始化、循环末端与同时间戳按源顺序派发，倒放按反向顺序派发。ApplyClip 只采样起点，不派发持续播放事件。
 
-回调异常记录诊断，RequireReceiver 无人确认时给出警告；停止、暂停、重播、切状态或销毁取消当前失效批次。回调中启动的新状态，其起始事件延至下一固定步；递归 update 会报错。倒放、多层混合和状态过渡尚未实现；未支持的必需能力明确拒绝加载。
+回调异常记录诊断，RequireReceiver 无人确认时给出警告；停止、暂停、重播、切状态或销毁取消当前失效批次。回调中启动的新状态，其起始事件延至下一固定步；递归 update 会报错。Avatar / Root Motion、IK / Mirror、AvatarMask、同步层、BlendTree、OverrideController、嵌套状态机和 StateMachineBehaviour 不在当前平面控制器范围。
 
 ## 场景绘制
 
@@ -277,7 +299,7 @@ runtime.registerScript(
 | Size over Lifetime  | 生命周期尺寸；统一或分轴缩放，三轴共用随机插值因子                                                                        |
 | Size by Speed       | 速度区间、统一 / 分轴尺寸乘数及四种参数模式                                                                               |
 | Rotation by Speed   | 速度区间、Z / 分轴角速度积分及四种参数模式                                                                                |
-| Animation           | 单层无过渡状态、已支持绑定轨道、类型化事件与 Bridge                                                                       |
+| Animation           | 平面参数化状态机、过渡 / 中断、多层混合、三种时钟 / 裁剪、已支持绑定、类型化事件与 Bridge                                 |
 | Trails              | PerParticle / Ribbon、五种纹理模式、颜色 / 宽度 / 寿命、World Space、死亡残留、多 Ribbon 与子发射器分组、独立材质与顶点流 |
 
 速度取样包含重力、Velocity 和 Limit，不包含 Speed Multiplier 与 Noise 位移。零宽区间按 Unity 的端点规则处理。
@@ -295,7 +317,6 @@ runtime.registerScript(
 | Limit Velocity over Lifetime | Local / World 标量与分轴限速、Dampen、Drag，含尺寸 / 速度乘算                                                                                                                                                                                                                                                                                                                                                                                                                                     | 任意剪切与非均匀缩放组合尚未验收                                                                          |
 | Noise                        | 三档实测 Perlin Curl 场与种子偏移；多 octave、Scroll、Remap、位置 / 旋转 / 尺寸影响                                                                                                                                                                                                                                                                                                                                                                                                               | 尺寸及未穷举的参数组合；误差见测量文档                                                                    |
 | Texture Sheet Animation      | Grid / 有序 Sprite 帧（可跨纹理）；Lifetime / Speed / FPS；Whole Sheet / Single Row；Fixed / Random 行；MeshIndex 行；UV mask                                                                                                                                                                                                                                                                                                                                                                     |                                                                                                           |
-| Animation                    | 单层状态、已支持的曲线与绑定；事件按帧派发，携带原始 payload，支持宿主订阅与同节点 Bridge 接收                                                                                                                                                                                                                                                                                                                                                                                                    | 多层混合、状态过渡、倒放；任意 C# 方法执行                                                                |
 | Custom Data                  | Custom1 / Custom2 Vector（1–4 维）与 Color                                                                                                                                                                                                                                                                                                                                                                                                                                                        | 已知材质只消费 Custom1.x，其余分量保留为求值数据                                                          |
 | Renderer                     | Billboard、Horizontal / Vertical Billboard、普通 / Freeform Stretch；View / World / Local / Facing / Velocity 对齐；多 Mesh、均匀 / 加权选择；多材质叠加、实例内 Render Queue 交错与系统深度排序（第二槽保留给 Trails）；每个 Mesh 使用单 submesh；None / Distance / Oldest / Youngest / Depth 排序；Pivot、Flip、尺寸限制、allowRoll；ParticleAddAlpha、ParticleUnlit、Legacy Additive / Alpha Blended、雾效与软粒子；None、空材质、顶点色 / 多 UV、共享 Pass 状态、Sprite Mask Inside / Outside | 其他材质模型；已知无光照材质不消费 normalDirection                                                        |
 
@@ -317,16 +338,18 @@ Unity 临时材质对象 ID 不在 NOAP 中；同队列不透明材质分组使�
 
 ### Unsupported
 
-| 模块                      | 未实现行为             |
-| ------------------------- | ---------------------- |
-| Inherit Velocity          | 继承发射器速度         |
-| Lifetime by Emitter Speed | 根据发射器速度设置寿命 |
-| Force over Lifetime       | 生命周期内施加力       |
-| Color by Speed            | 根据速度改变颜色       |
-| External Forces           | 外部力场               |
-| Collision                 | 平面及场景碰撞         |
-| Triggers                  | 碰撞区域检测与事件     |
-| Lights                    | 粒子灯光               |
+| 模块                      | 未实现行为                                                                                                              |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| Inherit Velocity          | 继承发射器速度                                                                                                          |
+| Lifetime by Emitter Speed | 根据发射器速度设置寿命                                                                                                  |
+| Force over Lifetime       | 生命周期内施加力                                                                                                        |
+| Color by Speed            | 根据速度改变颜色                                                                                                        |
+| External Forces           | 外部力场                                                                                                                |
+| Collision                 | 平面及场景碰撞                                                                                                          |
+| Triggers                  | 碰撞区域检测与事件                                                                                                      |
+| Lights                    | 粒子灯光                                                                                                                |
+| Timeline                  | PlayableDirector 与 Timeline 执行                                                                                       |
+| Animator 扩展             | Avatar / Root Motion、IK / Mirror、AvatarMask、同步层、BlendTree、OverrideController、嵌套状态机、StateMachineBehaviour |
 
 ## 开发与预览
 

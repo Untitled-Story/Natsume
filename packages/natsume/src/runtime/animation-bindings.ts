@@ -24,6 +24,10 @@ export interface CompiledBinding {
   readonly key: string;
   readonly writes: readonly string[];
   readonly baseline: readonly number[];
+  readonly mask: readonly boolean[];
+  readonly discrete: boolean;
+  readonly rotation: 'euler' | 'quaternion' | undefined;
+  evaluate(seconds: number): readonly number[];
   read(): number[];
   write(value: readonly number[]): void;
   sample(seconds: number): void;
@@ -322,21 +326,33 @@ export class AnimationBindings {
           : ['x', 'y', 'z', 'w'].slice(0, baseline.length);
     const samplers = names.map((k) => channels[k]);
     const values = [...baseline];
+    const evaluate = (seconds: number): readonly number[] => {
+      if (track.dataType === TrackData.BoolTrack)
+        values[0] = Number(
+          sampleBool((track.data as R<BoolTrackT>).keys, seconds) ?? !!baseline[0],
+        );
+      else
+        for (let i = 0; i < baseline.length; i++)
+          values[i] = samplers[i] ? curve(samplers[i], seconds) : baseline[i]!;
+      return values;
+    };
     return {
       key: `${b.targetId}:${b.property}:${b.parameter}:${b.propertyName}:${b.slotIndex}`,
       writes: bindingWrites(this.pack, track),
       baseline,
+      mask: track.dataType === TrackData.BoolTrack ? [true] : samplers.map((s) => !!s),
+      discrete: track.dataType === TrackData.BoolTrack,
+      rotation:
+        b.property === P.NodeRotation
+          ? (track.data as R<RotationTrackT>).encoding === RotationEncoding.EulerZXY
+            ? 'euler'
+            : 'quaternion'
+          : undefined,
       read: read!,
       write: write!,
+      evaluate,
       sample: (seconds) => {
-        if (track.dataType === TrackData.BoolTrack)
-          values[0] = Number(
-            sampleBool((track.data as R<BoolTrackT>).keys, seconds) ?? !!baseline[0],
-          );
-        else
-          for (let i = 0; i < baseline.length; i++)
-            values[i] = samplers[i] ? curve(samplers[i], seconds) : baseline[i]!;
-        write!(values);
+        write!(evaluate(seconds));
       },
     };
   }
@@ -366,7 +382,7 @@ export function eulerQuaternion(v: readonly number[]): quat {
     cy * cx * cz + sy * sx * sz,
   );
 }
-function quaternionEuler(q: { x: number; y: number; z: number; w: number }): number[] {
+export function quaternionEuler(q: { x: number; y: number; z: number; w: number }): number[] {
   const m = mat3.fromQuat(mat3.create(), [q.x, q.y, q.z, q.w]);
   const x = Math.asin(Math.max(-1, Math.min(1, -m[7]!)));
   return Math.abs(Math.cos(x)) > 1e-6

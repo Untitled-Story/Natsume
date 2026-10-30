@@ -1,3 +1,5 @@
+import { NatsumeAnimator } from './animator-handle.js';
+import type { AnimationUpdateOptions } from './simulation.js';
 import type { ParticleSnapshot } from './particle-snapshot.js';
 import { canvasSortingRank } from '../rendering/canvas-sorting.js';
 import { createSpriteMasks } from './sprite-masks.js';
@@ -129,6 +131,7 @@ export class NatsumeNode {
 }
 
 export class EffectInstance {
+  private readonly animatorHandles = new Map<number, NatsumeAnimator>();
   readonly container = new Container({ label: 'Natsume effect' });
   private readonly canvasPassOrder = new Map<number, number>();
   private readonly auxiliaryMeshes: SceneMesh[] = [];
@@ -367,13 +370,25 @@ export class EffectInstance {
     this.render();
   }
   /** Restarts a state by ID or name, applying its initial sample and source speed / cycle offset. */
-  playAnimatorState(animatorId: number, state: string | number): void {
+  playAnimatorState(animatorId: number, state: string | number, layer = 0): void {
     this.eventRevision++;
     this.assertAlive();
-    this.simulation.applyAnimatorState(animatorId, state);
+    this.simulation.applyAnimatorState(animatorId, state, true, layer);
     if (this.disposed) return;
     this.syncBehaviors();
     this.render();
+  }
+  /** Returns a typed controller handle for an Animator component ID. */
+  getAnimator(animatorId: number): NatsumeAnimator {
+    this.assertAlive();
+    let handle = this.animatorHandles.get(animatorId);
+    if (!handle) {
+      handle = new NatsumeAnimator(this.simulation.getAnimator(animatorId), () =>
+        this.assertAlive(),
+      );
+      this.animatorHandles.set(animatorId, handle);
+    }
+    return handle;
   }
   /** Higher priorities write later. Applies next fixed step; retained across state changes and restart. */
   setAnimationPriority(target: AnimationTarget, priority: number): void {
@@ -434,7 +449,7 @@ export class EffectInstance {
       this.dispatchingEvent = false;
     }
   }
-  update(seconds: number): void {
+  update(seconds: number, clocks?: AnimationUpdateOptions): void {
     this.assertAlive();
     check(
       !this.updating && !this.dispatchingEvent,
@@ -444,7 +459,7 @@ export class EffectInstance {
     this.updating = true;
     try {
       const before = this.simulation.time;
-      this.simulation.update(seconds);
+      this.simulation.update(seconds, clocks);
       if (this.disposed) return;
       const advanced = this.simulation.time - before;
       if (advanced > 0)

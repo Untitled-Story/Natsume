@@ -83,57 +83,23 @@ export function animationSupport(animation: R<AnimationT>): readonly SupportIssu
   return rules.issues;
 }
 
+/** The validated flat controller contract is executable, including empty controllers and motions. */
 export function animatorSupport(animator: R<AnimatorT>, id: number): readonly SupportIssue[] {
   const rules = new SupportChecks();
   rules.require(
-    animator.layers.length <= 1,
+    [0, 1, 2].includes(animator.updateMode),
     'CAPABILITY',
-    'layers',
-    animator.layers.length,
-    'Only single-layer Animator is supported',
+    `animators.${id}.updateMode`,
+    animator.updateMode,
+    'Unknown Animator clock',
   );
-  const require = (supported: boolean, field: string, value: unknown) =>
-    rules.require(
-      supported,
-      'CAPABILITY',
-      `animators.${id}.${field}`,
-      value,
-      'Animator controller branch is not implemented',
-    );
-  require(animator.parameters.length === 0, 'parameters', animator.parameters.length);
-  require(animator.updateMode === 0, 'updateMode', animator.updateMode);
-  require(animator.cullingMode === 0, 'cullingMode', animator.cullingMode);
-  for (const [index, layer] of animator.layers.entries()) {
-    require(layer.blend === 0, `layers.${index}.blend`, layer.blend);
-    require(layer.anyStateTransitions.length === 0, `layers.${index}.anyStateTransitions`, layer
-      .anyStateTransitions.length);
-    require(layer.entryTransitions.length === 0, `layers.${index}.entryTransitions`, layer
-      .entryTransitions.length);
-    for (const state of layer.states) {
-      require(state.animationId !== 0, `states.${state.id}.animationId`, state.animationId);
-      require(state.transitions.length === 0, `states.${state.id}.transitions`, state.transitions
-        .length);
-      for (const field of ['speedParameter', 'cycleOffsetParameter', 'timeParameter'] as const)
-        require(state[field] === null, `states.${state.id}.${field}`, state[field]);
-    }
-  }
-  for (const layer of animator.layers)
-    for (const state of layer.states) {
-      rules.require(
-        state.speed >= 0,
-        'CAPABILITY',
-        `animators.${id}.states.${state.id}.speed`,
-        state.speed,
-        'Reverse Animator playback is unsupported',
-      );
-      rules.require(
-        state.cycleOffset >= 0 && state.cycleOffset <= 1,
-        'CAPABILITY',
-        `animators.${id}.states.${state.id}.cycleOffset`,
-        state.cycleOffset,
-        'Animator cycle offset must be in [0, 1]',
-      );
-    }
+  rules.require(
+    [0, 1, 2].includes(animator.cullingMode),
+    'CAPABILITY',
+    `animators.${id}.cullingMode`,
+    animator.cullingMode,
+    'Unknown Animator culling mode',
+  );
   return rules.issues;
 }
 
