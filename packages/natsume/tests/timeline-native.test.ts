@@ -8,6 +8,7 @@ import { Simulation } from '../src/runtime/simulation.js';
 const directory = resolve(import.meta.dirname, '../../../data/unity-baselines/timeline');
 interface Sample {
   time: number;
+  systems?: { name: string; count: number; time: number; seed: number }[];
   active: boolean;
   position: { x: number; y: number; z: number };
   starts: number;
@@ -64,6 +65,10 @@ it.skipIf(!existsSync(directory + '/packages/case23.noap'))(
         controlDifferences = 0,
         countDifferences = 0,
         maxClock = 0;
+      const clockError = (actual: number, expected: number, duration: number, loop: boolean) => {
+        const error = Math.abs(actual - expected);
+        return loop ? Math.min(error, Math.abs(error - duration)) : error;
+      };
       const differences: unknown[] = [];
       for (const sample of row.samples) {
         director.setTime(sample.time);
@@ -89,10 +94,49 @@ it.skipIf(!existsSync(directory + '/packages/case23.noap'))(
         maxClock = Math.max(
           maxClock,
           Math.abs(controlTime - sample.controlTime),
-          Math.abs((particle?.elapsedSeconds ?? 0) - sample.particleTime),
+          clockError(
+            particle?.elapsedSeconds ?? 0,
+            sample.particleTime,
+            particle?.main.durationSeconds ?? 1,
+            particle?.main.loop ?? false,
+          ),
           Math.abs((nested?.time ?? 0) - sample.nestedTime),
         );
         countDifferences += Number((particle?.count ?? 0) !== sample.particles);
+        for (const system of sample.systems ?? []) {
+          const emitter = [...simulation.emitters.values()].find(
+            (e) => e.node.name === system.name,
+          )!;
+          if (
+            (emitter.count !== system.count ||
+              clockError(
+                emitter.elapsedSeconds,
+                system.time,
+                emitter.main.durationSeconds,
+                emitter.main.loop,
+              ) > 1e-5) &&
+            differences.length < 4
+          )
+            differences.push({
+              at: sample.time,
+              name: system.name,
+              count: emitter.count,
+              expectedCount: system.count,
+              time: emitter.elapsedSeconds,
+              expectedTime: system.time,
+            });
+          countDifferences += Number(emitter.count !== system.count);
+          maxClock = Math.max(
+            maxClock,
+            clockError(
+              emitter.elapsedSeconds,
+              system.time,
+              emitter.main.durationSeconds,
+              emitter.main.loop,
+            ),
+          );
+          expect(emitter.seed, `${row.label}:${system.name} seed`).toBe(system.seed);
+        }
       }
       director.stop();
       const immediateStopDifference = Number(node.active !== row.stoppedActive);
@@ -120,5 +164,35 @@ it.skipIf(!existsSync(directory + '/packages/case23.noap'))(
     expect(
       results.filter((r) => r.controlDifferences || r.countDifferences || r.maxClock > 1e-5),
     ).toEqual([]);
+  },
+);
+
+it.skipIf(!existsSync(directory + '/packages/case54.noap'))(
+  'resynchronizes an independently reactivated child particle clock',
+  async () => {
+    const pack = await loadPack(new Uint8Array(readFileSync(directory + '/packages/case54.noap')));
+    const simulation = new Simulation(pack, { seed: 42 });
+    try {
+      const director = [...simulation.directors.values()][0]!;
+      const systems = [...simulation.emitters.values()];
+      const child = systems.find((e) => e.node.name === 'child-particles')!;
+      const root = systems.find((e) => e.node.name === 'target')!;
+      director.setTime(0.5);
+      director.evaluate();
+      simulation.setNodeActive(child.node.id, false);
+      director.setTime(0.6);
+      director.evaluate();
+      expect(child.elapsedSeconds).toBeCloseTo(0.25, 6);
+      expect(root.elapsedSeconds).toBeCloseTo(0.35, 6);
+      simulation.setNodeActive(child.node.id, true);
+      director.setTime(0.7);
+      director.evaluate();
+      expect(child.elapsedSeconds).toBeCloseTo(0.45, 6);
+      expect(root.elapsedSeconds).toBeCloseTo(0.45, 6);
+      expect(child.count).toBe(root.count);
+    } finally {
+      simulation.disposeDirectors();
+      pack.dispose();
+    }
   },
 );

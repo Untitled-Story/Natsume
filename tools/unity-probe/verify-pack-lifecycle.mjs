@@ -9,6 +9,9 @@ import { createHash } from 'node:crypto';
 const root = fileURLToPath(new URL('../../', import.meta.url));
 assert(process.argv[2], 'Provide a directory of local .noap files');
 const directory = resolve(process.argv[2]);
+const sortingLayers = process.argv[3]
+  ? JSON.parse(await readFile(resolve(process.argv[3]), 'utf8'))
+  : undefined;
 const files = (await readdir(directory, { recursive: true }))
   .filter((file) => file.endsWith('.noap'))
   .sort();
@@ -38,7 +41,7 @@ try {
     const bytes = await readFile(resolve(directory, file));
     const result = await page
       .evaluate(
-        async ({ bytes, source }) => {
+        async ({ bytes, source, sortingLayers }) => {
           const { loadPack } = await import('/@fs' + source + '/packages/natsume/src/index.ts');
           const { prewarmDuration } = await import(
             '/@fs' + source + '/packages/natsume/src/runtime/prewarm.ts'
@@ -66,7 +69,7 @@ try {
                 const options = {
                   entryId: entry.id,
                   seed: 12345,
-                  renderEnvironment: { globalMipBias: 0 },
+                  renderEnvironment: { globalMipBias: 0, sortingLayers },
                   canvasEnvironment: {
                     displays: { 0: { width: 640, height: 360 } },
                     mainCamera: {
@@ -218,7 +221,7 @@ try {
             device: app.renderer.gl.getParameter(app.renderer.gl.RENDERER),
           };
         },
-        { bytes: [...bytes], source: root.replace(/\/$/, '') },
+        { bytes: [...bytes], source: root.replace(/\/$/, ''), sortingLayers },
       )
       .then(
         (value) => ({
