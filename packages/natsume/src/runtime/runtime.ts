@@ -151,6 +151,8 @@ export class EffectInstance {
     behavior: ScriptBehavior;
     active: boolean;
     failed: boolean;
+    controlDepth?: number;
+    componentId?: number;
   }[] = [];
   private readonly eventHandlers = new Set<AnimationEventHandler>();
   private readonly missingReceivers = new Set<string>();
@@ -170,10 +172,14 @@ export class EffectInstance {
     options: InstanceOptions,
   ) {
     simulation.onAnimationEvent = (event) => this.dispatchAnimationEvent(event);
-    simulation.onControlTime = (nodeId, phase, seconds) => {
+    simulation.onControlTime = (nodeId, phase, seconds, isCurrent) => {
       for (const b of this.behaviors) {
+        if (phase !== 'stop' && !isCurrent()) return;
         if (this.disposed && !(this.destroying && phase === 'stop')) return;
         if (b.failed || b.node.id !== nodeId) continue;
+        if (phase === 'start') b.controlDepth = (b.controlDepth ?? 0) + 1;
+        else if (!b.controlDepth) continue;
+        else if (phase === 'stop') b.controlDepth--;
         b.failed = !this.invoke(() => {
           if (phase === 'start') b.behavior.onControlTimeStart?.();
           else if (phase === 'stop') b.behavior.onControlTimeStop?.();
@@ -526,7 +532,10 @@ export class EffectInstance {
   private syncBehaviors(): void {
     for (const b of this.behaviors) {
       if (b.failed) continue;
-      const active = b.node.activeInHierarchy;
+      const active =
+        b.node.activeInHierarchy &&
+        (b.componentId === undefined ||
+          this.simulation.bindings.enabled.get(b.componentId) === true);
       if (active !== b.active) {
         b.active = active;
         b.failed = !this.invoke(() =>
@@ -538,11 +547,12 @@ export class EffectInstance {
   /** @internal */ initializeScripts(): void {
     for (const c of this.simulation.pack.customComponents) {
       const node = this.simulation.scene.nodes.get(c.nodeId);
-      if (!node || !c.enabled) continue;
+      if (!node) continue;
       const component = c.data as R<CustomComponentT>,
         identity = component.script;
       const factory = identity ? this.runtime.getScriptFactory(identity) : undefined;
       if (!factory) {
+        if (!c.enabled) continue;
         this.simulation.diagnostics.push({
           code: 'UNKNOWN_SCRIPT',
           componentId: c.id,
@@ -557,7 +567,7 @@ export class EffectInstance {
           'HOST',
           'Script factory must return a behavior object',
         );
-        this.behaviors.push({ node, behavior, active: false, failed: false });
+        this.behaviors.push({ node, behavior, componentId: c.id, active: false, failed: false });
       });
     }
   }
@@ -685,8 +695,12 @@ export class EffectInstance {
     if (this.disposed) return;
     this.disposed = true;
     this.destroying = true;
-    this.simulation.disposeDirectors();
     let failure: unknown;
+    try {
+      this.simulation.disposeDirectors();
+    } catch (error) {
+      failure = error;
+    }
     for (const b of this.behaviors) {
       try {
         if (b.active && !b.failed) this.invoke(() => b.behavior.onDisable?.());

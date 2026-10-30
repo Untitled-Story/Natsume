@@ -26,7 +26,7 @@ import { timelineClipTime, timelineClipWeight, timelineTrackClips } from './time
 import { visitAnimationEvents } from './animation-events.js';
 import { AnimationProperty as P } from '../format/generated/noa/ir/animation-property.js';
 import { ComponentData as C } from '../format/generated/noa/ir/component-data.js';
-import type { TrackT } from '../format/generated/noa/ir/track.js';
+import { retargetTimelineBinding } from './timeline-bindings.js';
 
 export interface TimelineControl {
   sample(seconds: number, playing: boolean): void;
@@ -68,17 +68,18 @@ interface Track {
 export class TimelineGraph implements DirectorGraph {
   private readonly tracks: Track[] = [];
   private destroyed = false;
+  private previousTime: number | undefined;
   constructor(
     private readonly director: TimelineDirector,
     private readonly host: TimelineHost,
   ) {
     const timeline = director.source.timeline!;
-    const muted = (index: number): boolean => {
-      const track = timeline.tracks[index]!;
-      return track.muted || (track.parentIndex >= 0 && muted(track.parentIndex));
-    };
-    for (const [index, source] of timeline.tracks.entries()) {
-      if (muted(index) || source.kind === 0) continue;
+    const pending = [...timeline.roots].reverse();
+    while (pending.length) {
+      const source = timeline.tracks[pending.pop()!]!;
+      if (source.muted) continue;
+      pending.push(...[...source.children].reverse());
+      if (source.kind === 0) continue;
       const target = director.resolve(source.source!, source.target);
       const component = target?.kind === 2 ? host.pack.getComponent(target.id) : undefined;
       const node = host.scene.nodes.get(component?.nodeId ?? target?.id ?? 0);
@@ -102,7 +103,7 @@ export class TimelineGraph implements DirectorGraph {
           const data = clip.data as R<TimelineAnimationT>;
           animation = host.pack.document.animations.find((a) => a.id === data.animationId)!;
           bindings = animation.tracks.flatMap((track) => {
-            const mapped = this.retarget(track, source, target);
+            const mapped = retargetTimelineBinding(host.pack, host.scene, track, source, target);
             let binding = host.bindings.compile(mapped);
             if (!binding) return [];
             const property = track.binding!.property;
@@ -146,44 +147,6 @@ export class TimelineGraph implements DirectorGraph {
       this.tracks.push({ source, target, node, clips, baseline: node?.active ?? false, defaults });
     }
   }
-  private retarget(
-    track: R<TrackT>,
-    source: R<TimelineTrackT>,
-    target: R<TypedReferenceT>,
-  ): R<TrackT> {
-    if (source.target?.id === target.id) return track;
-    const pack = this.host.pack;
-    const from = pack.getComponent(source.target!.id)!.nodeId;
-    const to = pack.getComponent(target.id)!.nodeId;
-    const original = pack.getComponent(track.binding!.targetId);
-    let node = pack.getNode(original?.nodeId ?? track.binding!.targetId);
-    const path: string[] = [];
-    while (node && node.id !== from) {
-      path.unshift(String(node.name));
-      node = pack.getNode(node.parentId);
-    }
-    check(node, 'HOST', 'Animation binding is outside its original Animator');
-    let destination = this.host.scene.nodes.get(to)!;
-    for (const name of path) {
-      const child = this.host.scene.ordered.find(
-        (n) => n.parent === destination && n.name === name,
-      );
-      check(child, 'HOST', 'Rebound Animator is missing animated node: ' + path.join('/'));
-      destination = child;
-    }
-    let id = destination.id;
-    if (original) {
-      const index = pack.components
-        .filter((c) => c.nodeId === original.nodeId && c.dataType === original.dataType)
-        .findIndex((c) => c.id === original.id);
-      const component = pack.components.filter(
-        (c) => c.nodeId === destination.id && c.dataType === original.dataType,
-      )[index];
-      check(component, 'HOST', 'Rebound Animator is missing an animated component');
-      id = component.id;
-    }
-    return { ...track, binding: { ...track.binding!, targetId: id } };
-  }
   evaluate(seconds: number, playback: boolean): void {
     if (this.destroyed) return;
     const revision = this.director.version;
@@ -193,6 +156,8 @@ export class TimelineGraph implements DirectorGraph {
       this.director.isCurrent(revision) &&
       this.host.revision?.() === hostRevision;
     const events: { animatorId: number; clip: R<AnimationT>; event: R<AnimationEventT> }[] = [];
+    const output: AnimationPose[] = [];
+    const looped = playback && this.previousTime !== undefined && seconds < this.previousTime;
     for (const track of this.tracks) {
       if (!current()) return;
       if (track.source.kind === 1) {
@@ -219,7 +184,7 @@ export class TimelineGraph implements DirectorGraph {
         const data = clip.source.data as R<TimelineAnimationT>;
         const duration = clip.animation.durationSeconds;
         const loop = data.loop === 1 || (data.loop === 0 && clip.animation.loop);
-        let time = duration > 0 && loop ? local % duration : Math.min(local, duration);
+        let time = duration > 0 && loop ? local % duration : Math.max(0, Math.min(local, duration));
         if (time < 0) time += duration;
         const weight = timelineClipWeight(clip.source, seconds);
         for (const binding of clip.bindings) {
@@ -241,7 +206,9 @@ export class TimelineGraph implements DirectorGraph {
             clip.animation.events,
             duration,
             loop,
-            wasActive && clip.previous !== undefined ? clip.previous / duration : -Number.EPSILON,
+            !looped && wasActive && clip.previous !== undefined
+              ? clip.previous / duration
+              : -Number.EPSILON,
             local / duration,
             (event) => {
               events.push({ animatorId: track.target!.id, clip: clip.animation!, event });
@@ -276,13 +243,16 @@ export class TimelineGraph implements DirectorGraph {
               : base,
           );
         }
-        writePose(pose);
+        output.push(pose);
       }
     }
     this.host.scene.update();
     for (const { animatorId, clip, event } of events) {
       if (!current() || !this.host.event(animatorId, clip, event)) return;
     }
+    for (const pose of output) writePose(pose);
+    this.previousTime = seconds;
+    this.host.scene.update();
   }
   private offsetRoot(
     track: Track,

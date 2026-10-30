@@ -22,6 +22,8 @@ import type { MeshRendererT } from '../format/generated/noa/ir/mesh-renderer.js'
 import type { MeshFilterT } from '../format/generated/noa/ir/mesh-filter.js';
 import { bindingWrites } from './animation-bindings.js';
 import { SUPPORTED_FEATURES } from '../format/semantics.js';
+import { directorSupport } from './timeline-support.js';
+import type { PlayableDirectorT } from '../format/generated/noa/ir/playable-director.js';
 import { ActionKind } from '../format/generated/noa/ir/action-kind.js';
 import { AnimationProperty } from '../format/generated/noa/ir/animation-property.js';
 import { ParticleParameter } from '../format/generated/noa/ir/particle-parameter.js';
@@ -524,6 +526,8 @@ export function checkCompatibility(
         }
       }
     }
+    if (c.dataType === C.PlayableDirector)
+      rules.issues.push(...directorSupport(pack, c.data as R<PlayableDirectorT>, nodeIds));
     if (c.dataType === C.Animator)
       rules.issues.push(...animatorSupport(c.data as R<AnimatorT>, c.id));
     if (c.enabled && c.dataType === C.CustomComponent) {

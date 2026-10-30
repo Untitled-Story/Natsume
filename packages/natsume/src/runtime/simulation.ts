@@ -1,8 +1,10 @@
 import { AnimatorController } from './animator-controller.js';
 import { TimelineDirector } from './timeline-director.js';
 import { TimelineGraph } from './timeline-graph.js';
+import { validateTimelineBinding } from './timeline-bindings.js';
 import { TimelineControlPlayer } from './timeline-control.js';
 import { TimelineParticles } from './timeline-particles.js';
+import { directorSupport } from './timeline-support.js';
 import type { PlayableDirectorT } from '../format/generated/noa/ir/playable-director.js';
 import type { AnimationEventT } from '../format/generated/noa/ir/animation-event.js';
 import { particleSnapshot, type ParticleSnapshot } from './particle-snapshot.js';
@@ -76,8 +78,6 @@ type AnimationPlayer = ClipPlayer | ControllerPlayer;
 
 /** Extra clocks are required only by active controllers using those update modes. */
 export interface AnimationUpdateOptions {
-  /** Absolute monotonic audio-clock seconds, required by playing DSP Directors. */
-  readonly dspTimeSeconds?: number;
   readonly unscaledDeltaSeconds?: number;
   readonly physicsSteps?: readonly number[];
 }
@@ -89,7 +89,12 @@ export class Simulation {
   private deferredDirectorDisposals: (() => void)[] = [];
   private flushingDirectors = false;
   onControlTime:
-    | ((nodeId: number, phase: 'start' | 'sample' | 'stop', seconds: number) => void)
+    | ((
+        nodeId: number,
+        phase: 'start' | 'sample' | 'stop',
+        seconds: number,
+        isCurrent: () => boolean,
+      ) => void)
     | undefined;
   readonly trailPoints: TrailPointPool;
   readonly subEmitters: SubEmitterGraph;
@@ -256,6 +261,9 @@ export class Simulation {
       );
     for (const c of pack.components)
       if (c.dataType === ComponentData.PlayableDirector && this.scene.nodes.has(c.nodeId)) {
+        assertSupport(
+          directorSupport(pack, c.data as R<PlayableDirectorT>, new Set(this.scene.nodes.keys())),
+        );
         this.directors.set(
           c.id,
           new TimelineDirector(
@@ -286,23 +294,25 @@ export class Simulation {
                       ),
                     controlTime: (nodeId, phase, seconds) => {
                       const revision = this.revision;
-                      this.onControlTime?.(nodeId, phase, seconds);
+                      const version = director.version;
+                      this.onControlTime?.(
+                        nodeId,
+                        phase,
+                        seconds,
+                        () => this.revision === revision && director.isCurrent(version),
+                      );
                       return this.revision === revision;
                     },
                   }),
               }),
-            (target) => {
-              if (target === null) return;
-              const component =
-                target.componentId !== undefined
-                  ? pack.getComponent(target.componentId)
-                  : undefined;
-              check(
-                !!this.scene.nodes.get(component?.nodeId ?? target.nodeId ?? 0),
-                'HOST',
-                'Director binding target is outside this instance',
-              );
-            },
+            (target, key) =>
+              validateTimelineBinding(
+                pack,
+                this.scene,
+                c.data as R<PlayableDirectorT>,
+                key,
+                target,
+              ),
           ),
         );
       }
@@ -511,6 +521,7 @@ export class Simulation {
     this.scene.reset();
     for (const e of this.emitters.values()) {
       e.timelineControlled = false;
+      e.restorePlaybackSeed();
       e.reset();
     }
     this.trailPoints.clear();
@@ -825,17 +836,9 @@ export class Simulation {
       for (const [id, director] of this.directors) {
         if (director.state !== 'playing' || this.directorClaims.has(id)) continue;
         check(
-          director.source.clock !== 2 || clocks.unscaledDeltaSeconds !== undefined,
+          ![0, 2].includes(director.source.clock) || clocks.unscaledDeltaSeconds !== undefined,
           'HOST',
-          'UnscaledGameTime Director requires unscaledDeltaSeconds',
-        );
-        check(
-          director.source.clock !== 0 ||
-            (clocks.dspTimeSeconds !== undefined &&
-              Number.isFinite(clocks.dspTimeSeconds) &&
-              clocks.dspTimeSeconds >= 0),
-          'HOST',
-          'DSP Director requires dspTimeSeconds',
+          'DSP and UnscaledGameTime Directors require unscaledDeltaSeconds',
         );
       }
       check(
@@ -922,7 +925,7 @@ export class Simulation {
         !this.scene.nodes.get(component.nodeId)!.activeInHierarchy
       )
         continue;
-      director.advance(seconds, clocks.unscaledDeltaSeconds, clocks.dspTimeSeconds);
+      director.advance(seconds, clocks.unscaledDeltaSeconds);
       if (this.revision !== revision) return false;
     }
     this.sync();

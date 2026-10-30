@@ -14,3 +14,23 @@ test('isolates Director graphs and retains guarded handles across restart', asyn
     disposed: true,
   });
 });
+
+test('pairs Bridge control callbacks when the first receiver stops playback', async ({ page }) => {
+  await page.goto('/');
+  const calls = await page.evaluate(
+    async (path) => (await import('/@fs' + path)).verifyControlCancellation(),
+    new URL('./timeline-fixture.ts', import.meta.url).pathname,
+  );
+  expect(calls).toEqual(['first:start', 'first:stop']);
+});
+
+test('drives disabled ITimeControl receivers without ordinary lifecycle updates', async ({
+  page,
+}) => {
+  await page.goto('/');
+  const calls = await page.evaluate(
+    async (path) => (await import('/@fs' + path)).verifyDisabledControlReceiver(),
+    new URL('./timeline-fixture.ts', import.meta.url).pathname,
+  );
+  expect(calls).toEqual(['start', 'sample', 'stop']);
+});

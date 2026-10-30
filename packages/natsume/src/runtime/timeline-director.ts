@@ -21,8 +21,6 @@ export class TimelineDirector {
   time = 0;
   readonly duration: number;
   private graph: DirectorGraph | undefined;
-  private dspAnchor: number | undefined;
-  private dspTime = 0;
   private evaluating = false;
   private revision = 0;
   private readonly overrides = new Map<string, R<TypedReferenceT> | null>();
@@ -31,7 +29,10 @@ export class TimelineDirector {
     readonly id: number,
     readonly source: R<PlayableDirectorT>,
     private readonly createGraph: (director: TimelineDirector) => DirectorGraph,
-    private readonly validateTarget: (target: DirectorBindingTarget) => void,
+    private readonly validateTarget: (
+      target: DirectorBindingTarget,
+      key: DirectorBindingKey,
+    ) => void,
   ) {
     this.duration = source.timeline ? timelineDuration(source.timeline) : 0;
     this.time = source.initialTime;
@@ -53,7 +54,7 @@ export class TimelineDirector {
       'HOST',
       'Director binding key requires guid/bigint fileId or a nonempty exposedName',
     );
-    this.validateTarget(target);
+    this.validateTarget(target, key);
     const map = key.exposedName !== undefined ? this.exposed : this.overrides;
     map.set(
       key.exposedName !== undefined ? key.exposedName : bindingKey(key),
@@ -75,20 +76,17 @@ export class TimelineDirector {
     this.revision++;
     if (!this.source.timeline) return;
     this.state = 'playing';
-    this.dspAnchor = undefined;
     this.graph ??= this.createGraph(this);
   }
   pause(): void {
     this.revision++;
     if (this.state === 'playing') this.state = 'paused';
-    this.dspAnchor = undefined;
     this.graph?.pause();
   }
   stop(): void {
     this.revision++;
     this.state = 'stopped';
-    this.time = 0;
-    this.dspAnchor = undefined;
+    this.time = this.source.initialTime;
     this.releaseGraph(true);
   }
   reset(): void {
@@ -103,15 +101,14 @@ export class TimelineDirector {
     );
     this.revision++;
     this.time = seconds;
-    this.dspAnchor = undefined;
   }
-  evaluate(): void {
+  evaluate(playback = false): void {
     if (!this.source.timeline) return;
     check(!this.evaluating, 'HOST', 'Recursive Director evaluation or control cycle');
     this.evaluating = true;
     try {
       this.graph ??= this.createGraph(this);
-      this.graph.evaluate(this.time, false);
+      this.graph.evaluate(this.time, playback);
     } finally {
       this.evaluating = false;
     }
@@ -123,34 +120,32 @@ export class TimelineDirector {
   get version(): number {
     return this.revision;
   }
-  advance(seconds: number, unscaled?: number, dsp?: number): void {
+  advance(seconds: number, unscaled?: number): void {
     if (this.state !== 'playing' || this.source.clock === 3) return;
     let delta = seconds;
-    if (this.source.clock === 2) {
+    if (this.source.clock === 0 || this.source.clock === 2) {
       check(
         unscaled !== undefined,
         'HOST',
-        'UnscaledGameTime Director requires unscaledDeltaSeconds',
+        'DSP and UnscaledGameTime Directors require unscaledDeltaSeconds',
       );
       delta = unscaled;
     }
-    if (this.source.clock === 0) {
-      check(
-        dsp !== undefined && Number.isFinite(dsp) && dsp >= 0,
-        'HOST',
-        'DSP Director requires dspTimeSeconds',
-      );
-      if (this.dspAnchor === undefined) {
-        this.dspAnchor = dsp;
-        this.dspTime = this.time;
-      }
-      check(dsp >= this.dspAnchor, 'HOST', 'DSP clock must not move backwards during playback');
-      this.time = this.dspTime + dsp - this.dspAnchor;
-    } else this.time += delta;
+    this.time += delta;
     if (this.duration > 0 && this.time >= this.duration) {
       if (this.source.wrap === 1) this.time %= this.duration;
       else if (this.source.wrap === 2) {
-        this.stop();
+        const revision = this.revision;
+        this.time = this.duration;
+        check(!this.evaluating, 'HOST', 'Recursive Director evaluation or control cycle');
+        this.evaluating = true;
+        try {
+          this.graph ??= this.createGraph(this);
+          this.graph.evaluate(this.time, true);
+        } finally {
+          this.evaluating = false;
+        }
+        if (this.revision === revision) this.stop();
         return;
       } else this.time = this.duration;
     }

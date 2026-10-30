@@ -80,6 +80,8 @@ export class Emitter {
   subParentSystems: Uint32Array | undefined;
   subParentParticles: Uint32Array | undefined;
   seed: number;
+  private readonly initialSeed: number;
+  private playbackSeedAssigned = false;
   field: ParticleNoise['field'] | undefined;
   readonly noiseSizes: Float32Array | undefined;
   private noiseEvaluator: ParticleNoise | undefined;
@@ -125,7 +127,7 @@ export class Emitter {
   private time = 0;
   /** @internal Source simulation time, excluding wall-clock pause. */
   get elapsedSeconds(): number {
-    return this.time;
+    return this.main.loop ? this.time % this.main.durationSeconds : this.time;
   }
   private burstTime = 0;
   private burstCycle = 0;
@@ -240,6 +242,7 @@ export class Emitter {
       main.seedMode === SeedMode.Fixed
         ? main.seed
         : Math.floor(random(instanceSeed, id, 0) * 4294967296);
+    this.initialSeed = this.seed;
     if (this.noise) {
       const n = this.noise;
       this.noiseEvaluator = new ParticleNoise(n, this.seed);
@@ -476,8 +479,18 @@ export class Emitter {
   }
   /** @internal Timeline owns simulation and supplies an automatic seed explicitly. */
   setPlaybackSeed(seed: number): void {
-    if (this.main.seedMode === SeedMode.Fixed) return;
-    this.seed = Math.max(1, seed >>> 0);
+    if (this.main.seedMode === SeedMode.Fixed || this.playbackSeedAssigned) return;
+    this.playbackSeedAssigned = true;
+    this.reseed(Math.max(1, seed >>> 0));
+  }
+  /** @internal Restores per-instance randomness when restarting outside a controlled graph. */
+  restorePlaybackSeed(): void {
+    this.playbackSeedAssigned = false;
+    this.reseed(this.initialSeed);
+  }
+  private reseed(seed: number): void {
+    if (this.seed === seed) return;
+    this.seed = seed;
     if (this.noise) {
       this.noiseEvaluator = new ParticleNoise(this.noise, this.seed);
       this.field = this.noiseEvaluator.field;
@@ -994,7 +1007,7 @@ export class Emitter {
       dt = -this.delayRemaining;
       this.delayRemaining = 0;
       if (!this.birthDriven) this.bursts(-Number.EPSILON, 0);
-      this.prewarm();
+      if (!this.timelineControlled) this.prewarm();
       if (dt <= 0) return;
     }
     const steps = Math.ceil(dt / Math.fround(0.03));

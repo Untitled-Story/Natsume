@@ -49,7 +49,9 @@ export class TimelineControlPlayer implements TimelineControl {
             : component.nodeId === node.id;
         })
       : [];
-    this.scripts = source.updateTimeControl ? host.scene.ordered.filter(descendant) : [];
+    this.scripts = source.updateTimeControl
+      ? host.scene.ordered.filter((n) => descendant(n) && (n === node || n.activeInHierarchy))
+      : [];
     for (const director of this.directors)
       host.directorClaims.set(director.id, (host.directorClaims.get(director.id) ?? 0) + 1);
     this.particles = source.updateParticles
@@ -75,8 +77,10 @@ export class TimelineControlPlayer implements TimelineControl {
         continue;
       const duration = Math.max(0.1, director.duration);
       const time = director.source.wrap === 1 ? seconds % duration : Math.min(seconds, duration);
+      if (playback && director.state !== 'playing') director.play();
       director.setTime(Math.max(0, time));
-      director.evaluate();
+      director.evaluate(playback);
+      if (playback && director.source.wrap === 2 && seconds > duration) director.pause();
       if (!this.owner.isCurrent(revision) || this.destroyed) return;
     }
     for (const node of this.scripts) {
@@ -90,7 +94,6 @@ export class TimelineControlPlayer implements TimelineControl {
     if (!this.started) return;
     this.started = false;
     this.particles?.pause();
-    if (this.activation) this.node.active = false;
     for (const director of this.directors) {
       if (outside) director.stop();
       else director.pause();

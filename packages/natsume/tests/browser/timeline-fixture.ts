@@ -1,3 +1,9 @@
+import { ComponentT } from '../../src/format/generated/noa/ir/component.js';
+import { ComponentData as C } from '../../src/format/generated/noa/ir/component-data.js';
+import { CustomComponentT } from '../../src/format/generated/noa/ir/custom-component.js';
+import { ScriptIdentityT } from '../../src/format/generated/noa/ir/script-identity.js';
+import { TimelineControlT } from '../../src/format/generated/noa/ir/timeline-control.js';
+import { TypedReferenceT } from '../../src/format/generated/noa/ir/typed-reference.js';
 import { timelinePack } from '../timeline-pack.js';
 import { createPlaybackHarness } from './playback-harness.js';
 
@@ -32,6 +38,122 @@ export async function verifyDirectors() {
     }
     b.destroy();
     return { live, isolated, rebound, retained, disposed };
+  } finally {
+    runtime.destroy();
+    app.destroy(true);
+    pack.dispose();
+  }
+}
+
+export async function verifyControlCancellation() {
+  const { app, runtime } = await createPlaybackHarness();
+  const pack = timelinePack((source) => {
+    const track = source.timeline!.tracks[0]!;
+    track.kind = 3;
+    track.target = null;
+    track.clips[0]!.dataType = 2;
+    track.clips[0]!.data = new TimelineControlT(
+      'subject',
+      new TypedReferenceT(1, 4),
+      false,
+      42,
+      false,
+      true,
+      true,
+      true,
+      2,
+    );
+  });
+  try {
+    const effect = await runtime.instantiate(pack);
+    const director = effect.getDirector(3);
+    const calls: string[] = [];
+    const internal = effect as unknown as {
+      behaviors: { node: unknown; behavior: unknown; active: boolean; failed: boolean }[];
+    };
+    const sim = (effect as unknown as { simulation: { scene: { nodes: Map<number, unknown> } } })
+      .simulation;
+    for (const name of ['first', 'second'])
+      internal.behaviors.push({
+        node: sim.scene.nodes.get(4),
+        behavior: {
+          onControlTimeStart() {
+            calls.push(name + ':start');
+            if (name === 'first') director.stop();
+          },
+          onControlTime() {
+            calls.push(name + ':sample');
+          },
+          onControlTimeStop() {
+            calls.push(name + ':stop');
+          },
+        },
+        active: true,
+        failed: false,
+      });
+    director.setTime(0.5);
+    director.evaluate();
+    effect.update(0);
+    effect.destroy();
+    return calls;
+  } finally {
+    runtime.destroy();
+    app.destroy(true);
+    pack.dispose();
+  }
+}
+
+export async function verifyDisabledControlReceiver() {
+  const { app, runtime } = await createPlaybackHarness();
+  const identity = new ScriptIdentityT('Assembly-CSharp', 'Probe', 'DisabledControl');
+  const calls: string[] = [];
+  runtime.registerScript(identity, () => ({
+    onEnable() {
+      calls.push('enable');
+    },
+    update() {
+      calls.push('update');
+    },
+    onControlTimeStart() {
+      calls.push('start');
+    },
+    onControlTime() {
+      calls.push('sample');
+    },
+    onControlTimeStop() {
+      calls.push('stop');
+    },
+  }));
+  const pack = timelinePack((source, document) => {
+    const track = source.timeline!.tracks[0]!;
+    track.kind = 3;
+    track.target = null;
+    track.clips[0]!.dataType = 2;
+    track.clips[0]!.data = new TimelineControlT(
+      'subject',
+      new TypedReferenceT(1, 4),
+      false,
+      42,
+      false,
+      true,
+      true,
+      true,
+      2,
+    );
+    document.components.push(
+      new ComponentT(7, 4, false, C.CustomComponent, new CustomComponentT(identity)),
+    );
+  });
+  try {
+    const effect = await runtime.instantiate(pack);
+    effect.play();
+    const director = effect.getDirector(3);
+    director.setTime(0.5);
+    director.evaluate();
+    director.stop();
+    effect.update(1 / 60);
+    effect.destroy();
+    return calls;
   } finally {
     runtime.destroy();
     app.destroy(true);

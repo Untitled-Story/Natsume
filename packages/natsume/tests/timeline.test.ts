@@ -68,20 +68,18 @@ describe('Director clocks and lifecycle', () => {
     director.advance(0.2, 0.5);
     expect(director.time).toBe(0.5);
   });
-  it('anchors DSP to host audio time and reanchors after pause or seek', () => {
+  it('uses explicit unscaled time for DSP graphs without audio outputs', () => {
     const { director } = fixture(0);
     director.play();
-    expect(() => director.advance(0.2)).toThrow('dspTimeSeconds');
-    director.advance(0, undefined, 100);
-    director.advance(0, undefined, 100.25);
+    expect(() => director.advance(0.2)).toThrow('unscaledDeltaSeconds');
+    director.advance(0, 0.25);
     expect(director.time).toBe(0.25);
     director.pause();
-    director.play();
-    director.advance(0, undefined, 200);
+    director.advance(0, 0.2);
     expect(director.time).toBe(0.25);
-    director.setTime(0.5);
-    director.advance(0, undefined, 201);
-    expect(director.time).toBe(0.5);
+    director.play();
+    director.advance(0, 0.2);
+    expect(director.time).toBe(0.45);
   });
   it('rejects recursive evaluation and restores the guard after an exception', () => {
     const { director, graph } = fixture();

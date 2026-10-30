@@ -11,7 +11,8 @@ const repeat = (v: number, duration: number) => ((v % duration) + duration) % du
 export function timelineTrackClips(
   clips: readonly R<TimelineClipT>[],
 ): readonly R<TimelineClipT>[] {
-  const sorted = clips.map((c) => ({ ...c })).sort((a, b) => a.start - b.start);
+  const result = clips.map((c) => ({ ...c }));
+  const sorted = [...result].sort((a, b) => a.start - b.start);
   for (const c of sorted) {
     let post = Infinity;
     const end = c.start + c.duration;
@@ -40,9 +41,7 @@ export function timelineTrackClips(
     }
     c.preExtrapolationTime = pre <= 1e-5 ? 0 : pre;
   }
-  return clips.map(
-    (c) => sorted.find((s) => s.start === c.start && s.data === c.data && s.name === c.name)!,
-  );
+  return result;
 }
 
 /** Timeline's discrete time uses one-picosecond ticks; Fixed retains the recorded value. */
@@ -59,13 +58,21 @@ export function timelineClipTime(clip: R<TimelineClipT>, time: number): number |
   const offset = time - clip.start;
   if (time < 0) return undefined;
   let local = offset;
-  const mode = offset < 0 ? clip.preExtrapolation : clip.postExtrapolation;
-  if (offset < 0 || offset >= clip.duration) {
-    const extent = offset < 0 ? clip.preExtrapolationTime : clip.postExtrapolationTime;
-    if (!mode || (offset < 0 ? -offset > extent : offset >= clip.duration + extent))
-      return undefined;
+  const snapped = Math.floor(time / tick + 0.5),
+    start = Math.floor(clip.start / tick + 0.5),
+    end = Math.floor((clip.start + clip.duration) / tick + 0.5);
+  const before = snapped < start,
+    after = snapped >= end;
+  const mode = before ? clip.preExtrapolation : clip.postExtrapolation;
+  if (before || after) {
+    const extent = before ? clip.preExtrapolationTime : clip.postExtrapolationTime;
+    if (!mode || (before ? -offset > extent : offset >= clip.duration + extent)) return undefined;
     if (mode === 1) local = Math.max(0, Math.min(clip.duration, offset));
-    if (mode === 2) local = repeat(offset, clip.duration);
+    if (mode === 2) {
+      // Unity keeps the first end point, and maps negative whole cycles to the end.
+      if (offset < 0) local = clip.duration - (-offset % clip.duration);
+      else if (offset > clip.duration) local = offset % clip.duration;
+    }
     if (mode === 3)
       local = clip.duration - Math.abs(repeat(offset, 2 * clip.duration) - clip.duration);
   }

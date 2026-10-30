@@ -35,7 +35,7 @@ export class NatsumeDirector {
     this.director.pause();
     this.refresh();
   }
-  /** Stops playback and resets time; post-playback restoration runs at the next update boundary. */
+  /** Stops at the source initial time; post-playback restoration runs at the next update boundary. */
   stop(): void {
     this.assertAlive();
     this.director.stop();
