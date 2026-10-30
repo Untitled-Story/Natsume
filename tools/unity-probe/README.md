@@ -25,6 +25,8 @@ pnpm probe:unity --sub-emitters --shared --single # 独立进程重复检查同�
 pnpm probe:unity --sub-emitters --shared --job-workers 0 --update-fixtures # 串行共享目标对照
 pnpm probe:unity --sub-emitters --shared --job-workers 0 --trace-order --update-fixtures # 同时记录原生执行顺序
 pnpm probe:unity --trails       # 拖尾几何、纹理模式、宽度颜色与死亡边界
+pnpm probe:unity --animator-controller # 参数、状态选路、过渡 / 中断与多层混合
+pnpm probe:unity --animator-playback # 实际 Play 时钟、可见性、裁剪与事件
 pnpm probe:unity --animation    # 动画时钟、循环与多关键帧曲线
 pnpm probe:unity --events       # 类型化事件、循环端点与启停顺序
 pnpm probe:unity --boundaries   # 发射、运动、外观与 BakeMesh 边界
@@ -70,6 +72,15 @@ pnpm probe:unity --prefab-layout # 原始 prefab 布局
 ../Noa/target/debug/noa compile data/unity-probe/Assets/SceneMaterialProbe/scene.prefab --output data/scene-mesh.noap --json
 pnpm exec playwright test scene-materials.spec.ts
 ```
+
+控制器探针保存受控 Prefab 与原生逐帧数据。用本地 Noa 生成对照包后运行回归：
+
+```sh
+node tools/unity-probe/compile-controller-packages.mjs
+pnpm --filter natsume exec vitest run tests/animator-controller-native.test.ts tests/animator-controller.test.ts
+```
+
+编译器默认取相邻 Noa 的 `target/debug/noa`，可用 `NOA_BIN` 指定。原生数据、独立编译源与 `.noap` 输出均留在忽略目录；缺少原生数据时仅跳过原生回放，普通控制器测试仍执行。
 
 ## 扩展 Noise 采样
 
