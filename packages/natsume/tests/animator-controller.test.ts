@@ -562,3 +562,25 @@ it('orders Normal and UnscaledTime event batches by Animator registration within
   s.update(1 / 60, { unscaledDeltaSeconds: 0.1 });
   expect(ids).toEqual([3, 4]);
 });
+
+it.each([false, true].flatMap((parameter) => [false, true].map((loop) => ({ parameter, loop }))))(
+  'distinguishes reverse state speed from reverse parameter clocks, parameter=$parameter loop=$loop',
+  ({ parameter, loop }) => {
+    const { controller: c } = fixture((a, clips) => {
+      clips[0]!.loop = loop;
+      const state = a.layers[0]!.states[0]!;
+      if (parameter) {
+        state.speedParameter = 'f';
+        a.parameters.find((p) => p.name === 'f')!.defaultFloat = -1;
+      } else state.speed = -1;
+      const transition = edge(2, []);
+      transition.hasExitTime = true;
+      transition.exitTime = 0.25;
+      state.transitions = [transition];
+    });
+    c.start();
+    tick(c, 96);
+    expect(c.getCurrentState()!.name).toBe(parameter ? 'A' : 'B');
+    expect(c.getCurrentState()!.normalizedTime).toBeCloseTo(parameter ? -1.6 : 1.35, 5);
+  },
+);

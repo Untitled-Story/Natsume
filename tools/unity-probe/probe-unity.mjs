@@ -419,7 +419,7 @@ await new Promise((accept, reject) => {
 const current = JSON.parse(await readFile(baseline, 'utf8'));
 assert.equal(current.unityVersion, version);
 if (controller || controllerPlayback) {
-  assert.equal(current.cases.length, controller ? 146 : 20);
+  assert.equal(current.cases.length, controller ? 150 : 20);
   console.log(`Animator observations: ${current.cases.length}, ${baseline}`);
   process.exit(0);
 }

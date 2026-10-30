@@ -1,6 +1,6 @@
 # Unity 行为对照
 
-复测：**2026-10-30 10:45 UTC**。Unity **2022.3.21f1 / Apple M5**；Chromium / WebGL2。
+复测：**2026-10-30 11:04 UTC**。Unity **2022.3.21f1 / Apple M5**；Chromium / WebGL2。
 
 历史曲线 / 粒子基线：**520,217** 个标量比较、**404** 项指标。
 
@@ -41,7 +41,7 @@
 
 ## Animator Controller
 
-146 组、14,162 帧、19,885 个层状态记录；包括六种条件、Trigger、Entry / AnyState / Exit、循环边界、偏移、固定 / 归一化时长、五种中断来源、ordered interruption、Override / Additive、Write Defaults、空层 / 空 Motion、三维旋转、颜色、粒子参数及倒放事件。
+150 组、14,550 帧、20,273 个层状态记录；包括六种条件、Trigger、Entry / AnyState / Exit、循环边界、偏移、固定 / 归一化时长、五种中断来源、ordered interruption、Override / Additive、Write Defaults、空层 / 空 Motion、三维旋转、颜色、粒子参数及倒放事件。
 
 | 项目                      |         最大差 |
 | ------------------------- | -------------: |
@@ -50,11 +50,13 @@
 | Sprite 颜色分量           | **4.831×10⁻⁸** |
 | 粒子速度参数              | **5.365×10⁻⁷** |
 | 状态 / 过渡归一化时间     | **5.961×10⁻⁸** |
-| 当前 / 下一状态及过渡选择 | **0 / 19,885** |
-| Active                    | **0 / 14,162** |
+| 当前 / 下一状态及过渡选择 | **0 / 20,273** |
+| Active                    | **0 / 14,550** |
 | 事件帧与顺序              |     **0 / 61** |
 
 实际 Play 另测 18 组时钟 / 裁剪组合，每组 71 帧。对齐原生首帧状态后，回放 1,260 个后续帧：时钟、位置和累计事件数最大差均为 **0**；另测两组初始 Entry，均从默认状态启动。Normal 的公开调度保持 60 Hz 固定步；本项回放使用原生记录的 scaled / unscaled / physics 时间输入。
+
+负状态速度按正向归一化时钟处理 Exit Time；负速度参数令状态时间倒退，已测正向 Exit Time 不触发，4 组差 **0**。
 
 不可见时，Cull Update Transforms 保留时钟和事件、停止属性写回；Cull Completely 冻结。AnimatePhysics 恢复可见而本帧无物理步时，原生会派发保留的上一物理步事件批次，回放差 **0**。
 
