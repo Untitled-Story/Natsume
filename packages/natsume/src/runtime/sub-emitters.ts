@@ -45,6 +45,8 @@ interface PendingBirth {
 
 /** Ordered DAG scheduling; channels share each target's original particle pool. */
 export class SubEmitterGraph {
+  /** @internal Pools driven by a Timeline graph do not also run in the ordinary fixed step. */
+  readonly externallyControlled = new Set<number>();
   readonly order: readonly Emitter[];
   private readonly slots = new Map<number, readonly R<SubEmitterT>[]>();
   private readonly channels: BirthChannel[] = [];
@@ -226,6 +228,7 @@ export class SubEmitterGraph {
     this.orderedDelta = delta;
     try {
       for (const id of order) {
+        if (this.externallyControlled.has(id)) continue;
         const remaining = this.visits.get(id)!;
         if (!remaining) continue;
         this.visits.set(id, remaining - 1);
@@ -325,9 +328,11 @@ export class SubEmitterGraph {
     scope?: ReadonlySet<number>,
     warming?: Emitter,
     localSeconds = 0,
+    controlled = false,
   ): void {
     for (const emitter of this.order) {
       if (scope && !scope.has(emitter.id)) continue;
+      if (!controlled && this.externallyControlled.has(emitter.id)) continue;
       this.flush(this.before, emitter.id);
       this.advancing = emitter;
       this.warmingStep = warming !== undefined;
@@ -341,6 +346,12 @@ export class SubEmitterGraph {
       this.advanceChannels(emitter, delta);
       if (warming || !this.shared.has(emitter.id)) this.flush(this.after, emitter.id);
     }
+  }
+
+  /** @internal Runs an explicit Timeline-owned pool scope, including descendant births. */
+  stepControlled(delta: number, scope: ReadonlySet<number>): void {
+    this.stepScope(delta, scope, undefined, 0, true);
+    for (const id of scope) this.flush(this.after, id);
   }
 
   clear(): void {

@@ -72,6 +72,8 @@ export const SUPPORTED_FEATURES: Readonly<Record<string, number>> = Object.freez
       'camera.host',
       'script.bridge',
       'animator.controller',
+      'timeline.director',
+      'timeline.graph',
       'animation.node-active',
       'animation.transform',
       'animation.layout',

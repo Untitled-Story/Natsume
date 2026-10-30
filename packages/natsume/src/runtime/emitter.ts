@@ -79,10 +79,10 @@ export class Emitter {
   readonly serials: Uint32Array;
   subParentSystems: Uint32Array | undefined;
   subParentParticles: Uint32Array | undefined;
-  readonly seed: number;
-  readonly field: ParticleNoise['field'] | undefined;
+  seed: number;
+  field: ParticleNoise['field'] | undefined;
   readonly noiseSizes: Float32Array | undefined;
-  private readonly noiseEvaluator: ParticleNoise | undefined;
+  private noiseEvaluator: ParticleNoise | undefined;
   prewarmSeconds: number;
   private maximumBirthLifetime: number;
   requiresAnimatedGravity = false;
@@ -114,6 +114,8 @@ export class Emitter {
   onDisable: (() => void) | undefined;
   /** @internal Birth-driven systems emit through parent channels, even after Play(). */
   birthDriven = false;
+  /** @internal Timeline owns the clock, and Simulate does not use Play's prewarm. */
+  timelineControlled = false;
   onAdvanced: ((seconds: number) => void) | undefined;
   /** @internal A graph defers warming until all participating systems are initialized. */
   onPrewarm: (() => void) | undefined;
@@ -121,6 +123,10 @@ export class Emitter {
     | { parent: ParticleSnapshot; properties: number; parentSystem: number }
     | undefined;
   private time = 0;
+  /** @internal Source simulation time, excluding wall-clock pause. */
+  get elapsedSeconds(): number {
+    return this.time;
+  }
   private burstTime = 0;
   private burstCycle = 0;
   private readonly burstRepeats = new Map<number, number>();
@@ -466,14 +472,23 @@ export class Emitter {
         this.node.worldMatrix[13]!,
         this.node.worldMatrix[14]!,
       ]);
-    } else if (this.main.playOnEnable && this.emitting) this.start();
+    } else if (this.main.playOnEnable && this.emitting) this.start(!this.timelineControlled);
   }
-  start(): void {
+  /** @internal Timeline owns simulation and supplies an automatic seed explicitly. */
+  setPlaybackSeed(seed: number): void {
+    if (this.main.seedMode === SeedMode.Fixed) return;
+    this.seed = Math.max(1, seed >>> 0);
+    if (this.noise) {
+      this.noiseEvaluator = new ParticleNoise(this.noise, this.seed);
+      this.field = this.noiseEvaluator.field;
+    }
+  }
+  start(warm = true): void {
     if (this.started) return;
     this.started = true;
     if (this.delayRemaining > 0) return;
     if (!this.birthDriven) this.bursts(-Number.EPSILON, 0);
-    this.prewarm();
+    if (warm) this.prewarm();
   }
   private prewarm(): void {
     if (!this.main.simulationSpeed || !this.prewarmSeconds) return;

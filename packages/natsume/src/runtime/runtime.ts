@@ -1,4 +1,5 @@
 import { NatsumeAnimator } from './animator-handle.js';
+import { NatsumeDirector } from './director-handle.js';
 import type { AnimationUpdateOptions } from './simulation.js';
 import type { ParticleSnapshot } from './particle-snapshot.js';
 import { canvasSortingRank } from '../rendering/canvas-sorting.js';
@@ -57,6 +58,10 @@ export interface InstanceOptions extends SimulationOptions {
   readonly displayMatrix?: ArrayLike<number>;
 }
 export interface ScriptBehavior {
+  /** Timeline ITimeControl lifecycle; callbacks receive clip-local seconds. */
+  onControlTimeStart?(): void;
+  onControlTime?(seconds: number): void;
+  onControlTimeStop?(): void;
   /** Receives source messages from the Animator on this node; return true when handled. */
   onAnimationEvent?: AnimationEventHandler;
   onEnable?(): void;
@@ -131,6 +136,7 @@ export class NatsumeNode {
 }
 
 export class EffectInstance {
+  private readonly directorHandles = new Map<number, NatsumeDirector>();
   private readonly animatorHandles = new Map<number, NatsumeAnimator>();
   readonly container = new Container({ label: 'Natsume effect' });
   private readonly canvasPassOrder = new Map<number, number>();
@@ -164,6 +170,17 @@ export class EffectInstance {
     options: InstanceOptions,
   ) {
     simulation.onAnimationEvent = (event) => this.dispatchAnimationEvent(event);
+    simulation.onControlTime = (nodeId, phase, seconds) => {
+      for (const b of this.behaviors) {
+        if (this.disposed && !(this.destroying && phase === 'stop')) return;
+        if (b.failed || b.node.id !== nodeId) continue;
+        b.failed = !this.invoke(() => {
+          if (phase === 'start') b.behavior.onControlTimeStart?.();
+          else if (phase === 'stop') b.behavior.onControlTimeStop?.();
+          else b.behavior.onControlTime?.(seconds);
+        });
+      }
+    };
     this.materialOrder = new Map(simulation.pack.document.materials.map((m, i) => [m.id, i]));
     this.environment = copyEnvironment(options.particleEnvironment);
     this.renderEnvironment = copyRenderEnvironment(options.renderEnvironment);
@@ -387,6 +404,25 @@ export class EffectInstance {
         this.assertAlive(),
       );
       this.animatorHandles.set(animatorId, handle);
+    }
+    return handle;
+  }
+  /** Returns an instance-owned PlayableDirector handle by component ID. */
+  getDirector(directorId: number): NatsumeDirector {
+    this.assertAlive();
+    let handle = this.directorHandles.get(directorId);
+    if (!handle) {
+      handle = new NatsumeDirector(
+        this.simulation.getDirector(directorId),
+        () => this.assertAlive(),
+        () => {
+          if (this.disposed) return;
+          this.simulation.scene.update();
+          this.syncBehaviors();
+          this.render();
+        },
+      );
+      this.directorHandles.set(directorId, handle);
     }
     return handle;
   }
@@ -649,6 +685,7 @@ export class EffectInstance {
     if (this.disposed) return;
     this.disposed = true;
     this.destroying = true;
+    this.simulation.disposeDirectors();
     let failure: unknown;
     for (const b of this.behaviors) {
       try {

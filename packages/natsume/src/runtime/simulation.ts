@@ -1,4 +1,9 @@
 import { AnimatorController } from './animator-controller.js';
+import { TimelineDirector } from './timeline-director.js';
+import { TimelineGraph } from './timeline-graph.js';
+import { TimelineControlPlayer } from './timeline-control.js';
+import { TimelineParticles } from './timeline-particles.js';
+import type { PlayableDirectorT } from '../format/generated/noa/ir/playable-director.js';
 import type { AnimationEventT } from '../format/generated/noa/ir/animation-event.js';
 import { particleSnapshot, type ParticleSnapshot } from './particle-snapshot.js';
 import { TrailPointPool } from './trail-point-pool.js';
@@ -71,11 +76,21 @@ type AnimationPlayer = ClipPlayer | ControllerPlayer;
 
 /** Extra clocks are required only by active controllers using those update modes. */
 export interface AnimationUpdateOptions {
+  /** Absolute monotonic audio-clock seconds, required by playing DSP Directors. */
+  readonly dspTimeSeconds?: number;
   readonly unscaledDeltaSeconds?: number;
   readonly physicsSteps?: readonly number[];
 }
 
 export class Simulation {
+  readonly directors = new Map<number, TimelineDirector>();
+  private readonly directorClaims = new Map<number, number>();
+  private readonly enabledDirectors = new Set<number>();
+  private deferredDirectorDisposals: (() => void)[] = [];
+  private flushingDirectors = false;
+  onControlTime:
+    | ((nodeId: number, phase: 'start' | 'sample' | 'stop', seconds: number) => void)
+    | undefined;
   readonly trailPoints: TrailPointPool;
   readonly subEmitters: SubEmitterGraph;
   readonly trails = new Map<number, ParticleTrails>();
@@ -239,6 +254,82 @@ export class Simulation {
         'CAPABILITY',
         'Unsupported entry action',
       );
+    for (const c of pack.components)
+      if (c.dataType === ComponentData.PlayableDirector && this.scene.nodes.has(c.nodeId)) {
+        this.directors.set(
+          c.id,
+          new TimelineDirector(
+            c.id,
+            c.data as R<PlayableDirectorT>,
+            (director) =>
+              new TimelineGraph(director, {
+                pack,
+                scene: this.scene,
+                bindings: this.bindings,
+                animatorPose: (id) => this.controllers.get(id)?.getPose(),
+                defer: (action) => this.deferredDirectorDisposals.push(action),
+                revision: () => this.revision,
+                event: (id, clip, event) => this.emitAnimationEvent(id, clip, event),
+                control: (director, data, target) =>
+                  new TimelineControlPlayer(director, data, target, {
+                    pack,
+                    scene: this.scene,
+                    directors: this.directors,
+                    directorClaims: this.directorClaims,
+                    acquireParticles: (node, search, randomSeed) =>
+                      new TimelineParticles(
+                        node,
+                        search,
+                        randomSeed,
+                        this.emitters,
+                        this.subEmitters,
+                      ),
+                    controlTime: (nodeId, phase, seconds) => {
+                      const revision = this.revision;
+                      this.onControlTime?.(nodeId, phase, seconds);
+                      return this.revision === revision;
+                    },
+                  }),
+              }),
+            (target) => {
+              if (target === null) return;
+              const component =
+                target.componentId !== undefined
+                  ? pack.getComponent(target.componentId)
+                  : undefined;
+              check(
+                !!this.scene.nodes.get(component?.nodeId ?? target.nodeId ?? 0),
+                'HOST',
+                'Director binding target is outside this instance',
+              );
+            },
+          ),
+        );
+      }
+  }
+  getDirector(id: number): TimelineDirector {
+    const director = this.directors.get(id);
+    check(director, 'HOST', 'Unknown PlayableDirector');
+    return director;
+  }
+  /** @internal Unity releases stopped playable graphs at the next graph-update boundary. */
+  flushDirectors(): void {
+    if (this.flushingDirectors) return;
+    this.flushingDirectors = true;
+    try {
+      while (this.deferredDirectorDisposals.length) {
+        const pending = this.deferredDirectorDisposals;
+        this.deferredDirectorDisposals = [];
+        for (const action of pending) action();
+      }
+    } finally {
+      this.flushingDirectors = false;
+    }
+  }
+  /** @internal Release all owned graphs before destroying scene and script state. */
+  disposeDirectors(): void {
+    for (const director of this.directors.values()) director.stop();
+    this.flushDirectors();
   }
   getParticles(systemId: number): readonly ParticleSnapshot[] {
     const emitter = this.emitters.get(systemId);
@@ -320,6 +411,17 @@ export class Simulation {
         e.sync();
       }
     if (this.initialized) this.subEmitters.warm();
+    if (this.initialized)
+      for (const [id, director] of this.directors) {
+        const component = this.pack.getComponent(id)!;
+        const active =
+          this.bindings.enabled.get(id) &&
+          this.scene.nodes.get(component.nodeId)!.activeInHierarchy;
+        if (active && !this.enabledDirectors.has(id)) {
+          this.enabledDirectors.add(id);
+          if (director.source.playOnAwake) director.play();
+        } else if (!active && this.enabledDirectors.delete(id)) director.stop();
+      }
   }
   play(): void {
     if (this.state === 'playing') return;
@@ -374,6 +476,7 @@ export class Simulation {
   }
   stop(mode: 'drain' | 'clear' = 'drain'): void {
     this.revision++;
+    if (mode === 'clear') for (const director of this.directors.values()) director.stop();
     for (const e of this.emitters.values()) {
       e.emitting = false;
       if (mode === 'clear') e.clear();
@@ -387,7 +490,11 @@ export class Simulation {
   }
   restart(): void {
     this.revision++;
+    for (const director of this.directors.values()) director.reset();
+    this.flushDirectors();
+    this.enabledDirectors.clear();
     this.subEmitters.clear();
+    this.subEmitters.externallyControlled.clear();
     this.time = 0;
     this.accumulator = 0;
     this.droppedSeconds = 0;
@@ -402,7 +509,10 @@ export class Simulation {
     this.bindings.reset();
     this.state = 'idle';
     this.scene.reset();
-    for (const e of this.emitters.values()) e.reset();
+    for (const e of this.emitters.values()) {
+      e.timelineControlled = false;
+      e.reset();
+    }
     this.trailPoints.clear();
     this.scene.update();
     this.play();
@@ -678,6 +788,8 @@ export class Simulation {
       'Delta time must be finite nonnegative seconds',
     );
     check(!this.updating, 'HOST', 'Recursive animation update is unsupported');
+    check(!this.flushingDirectors, 'HOST', 'Recursive animation update is unsupported');
+    this.flushDirectors();
     if (this.state !== 'playing' && this.state !== 'draining') return;
     check(
       clocks !== null && typeof clocks === 'object',
@@ -710,6 +822,22 @@ export class Simulation {
       ),
     );
     if (this.state === 'playing') {
+      for (const [id, director] of this.directors) {
+        if (director.state !== 'playing' || this.directorClaims.has(id)) continue;
+        check(
+          director.source.clock !== 2 || clocks.unscaledDeltaSeconds !== undefined,
+          'HOST',
+          'UnscaledGameTime Director requires unscaledDeltaSeconds',
+        );
+        check(
+          director.source.clock !== 0 ||
+            (clocks.dspTimeSeconds !== undefined &&
+              Number.isFinite(clocks.dspTimeSeconds) &&
+              clocks.dspTimeSeconds >= 0),
+          'HOST',
+          'DSP Director requires dspTimeSeconds',
+        );
+      }
       check(
         !modes.has(1) || clocks.physicsSteps !== undefined,
         'HOST',
@@ -742,6 +870,7 @@ export class Simulation {
       }
       // At most eight fixed steps. Preserve the fractional remainder, discard overload.
       let steps = 0;
+      let directorsAdvanced = false;
       let unscaledDelta = clocks.unscaledDeltaSeconds;
       while (this.accumulator + 1e-10 >= this.fixedDelta && steps < 8) {
         const revision = this.revision;
@@ -755,6 +884,10 @@ export class Simulation {
           this.sync();
         }
         if (this.state !== 'playing' && this.state !== 'draining') break;
+        if (this.state === 'playing' && !directorsAdvanced) {
+          directorsAdvanced = true;
+          if (!this.advanceDirectors(seconds, clocks)) return;
+        }
         this.subEmitters.step(this.fixedDelta);
         this.time += this.fixedDelta;
         this.accumulator -= this.fixedDelta;
@@ -766,6 +899,8 @@ export class Simulation {
         if (this.revision !== revision) return;
         this.sync();
       }
+      if (this.state === 'playing' && !directorsAdvanced && !this.advanceDirectors(seconds, clocks))
+        return;
       if (this.accumulator >= this.fixedDelta) {
         const excess = Math.floor((this.accumulator + 1e-10) / this.fixedDelta) * this.fixedDelta;
         this.droppedSeconds += excess;
@@ -776,5 +911,21 @@ export class Simulation {
     } finally {
       this.updating = false;
     }
+  }
+  private advanceDirectors(seconds: number, clocks: AnimationUpdateOptions): boolean {
+    const revision = this.revision;
+    for (const [id, director] of this.directors) {
+      if (this.directorClaims.has(id)) continue;
+      const component = this.pack.getComponent(id)!;
+      if (
+        !this.bindings.enabled.get(id) ||
+        !this.scene.nodes.get(component.nodeId)!.activeInHierarchy
+      )
+        continue;
+      director.advance(seconds, clocks.unscaledDeltaSeconds, clocks.dspTimeSeconds);
+      if (this.revision !== revision) return false;
+    }
+    this.sync();
+    return true;
   }
 }

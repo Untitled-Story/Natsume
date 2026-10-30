@@ -43,3 +43,5 @@ export { type ParticleSnapshot } from './runtime/particle-snapshot.js';
 export { NatsumeAnimator } from './runtime/animator-handle.js';
 export type { AnimatorStateInfo, AnimatorTransitionInfo } from './runtime/animator-controller.js';
 export type { AnimationUpdateOptions } from './runtime/simulation.js';
+export { NatsumeDirector } from './runtime/director-handle.js';
+export type { DirectorBindingKey, DirectorBindingTarget } from './runtime/director-handle.js';

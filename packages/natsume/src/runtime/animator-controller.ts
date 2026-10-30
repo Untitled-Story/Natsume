@@ -527,4 +527,8 @@ export class AnimatorController {
     if (!this.visible && this.source.cullingMode !== 0) return;
     writePose(this.pose);
   }
+  /** @internal Current controller output before a Timeline mixes over it. */
+  getPose(): ReadonlyMap<string, import('./animation-pose.js').PoseValue> {
+    return this.pose;
+  }
 }
