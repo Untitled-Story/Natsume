@@ -184,6 +184,18 @@ effect.emitSubEmitter(systemId, slot); // 对所有存活粒子触发
 
 `systemId` 为源 ParticleSystem 组件 ID，`slot` 为源包中的零起始槽序号，空槽不发射。Birth / Death 由运行时自动触发；Collision / Trigger / Manual 由宿主通知，Natsume 不执行碰撞检测。失效粒子 ID 或不存在的系统 / 槽会报错。
 
+多个独立根共享子系统时，默认使用稳定调度。Unity 的任务交错可能改变出生年龄及寿命边界的数量，运行时保留 `SHARED_SUB_EMITTER_ORDER` 诊断。宿主可显式指定每个固定步的执行顺序；例如仅含 A、B 和共享子系统的实例：
+
+```ts
+const effect = await runtime.instantiate(pack, {
+  subEmitterUpdateOrder: [childId, parentAId, childId, parentBId],
+});
+effect.setSubEmitterUpdateOrder([childId, childId, parentAId, parentBId]);
+effect.setSubEmitterUpdateOrder(undefined); // 恢复默认调度
+```
+
+数组使用 ParticleSystem 组件 ID，必须包含实例内全部系统；每个系统按可达的独立根数出现，同根重复槽和菱形路径只算一次。停止后多余的共享池更新自动跳过，排空阶段保留一次更新。配置复制后从下一固定步生效，重播保留；不改变预热历史。未知、遗漏或过量 ID 会报错，失败更新保留原配置。NOAP 不包含 Unity 全局任务队列，指定顺序不保证复现其他场景的任务交错。
+
 拖尾历史使用实例共享、可复用的点池：
 
 ```ts

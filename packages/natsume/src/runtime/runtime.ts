@@ -317,6 +317,11 @@ export class EffectInstance {
     this.simulation.emitSubEmitter(systemId, slot, particleId);
     this.render();
   }
+  /** Copies the system job order for the next fixed step. Undefined restores stable scheduling; restart retains it. */
+  setSubEmitterUpdateOrder(order: readonly number[] | undefined): void {
+    this.assertAlive();
+    this.simulation.setSubEmitterUpdateOrder(order);
+  }
   getNode(id: number): NatsumeNode | undefined {
     this.assertAlive();
     const node = this.simulation.scene.nodes.get(id);

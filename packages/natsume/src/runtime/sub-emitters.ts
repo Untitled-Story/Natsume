@@ -11,6 +11,7 @@ import {
 } from './particle-snapshot.js';
 import { random, scalar } from './parameters.js';
 import { maximumLifetime, graphPrewarmEstimate } from './prewarm.js';
+import { copySubEmitterUpdateOrder } from './sub-emitter-order.js';
 
 interface BirthChannel {
   readonly source: Emitter;
@@ -66,6 +67,9 @@ export class SubEmitterGraph {
   private warmDelta = 0;
   private warmRemaining = 0;
   private finishingWarm = false;
+  private updateOrder: readonly number[] | undefined;
+  private readonly visits = new Map<number, number>();
+  private orderedDelta = 0;
 
   constructor(private readonly emitters: ReadonlyMap<number, Emitter>) {
     const indegree = new Map<number, number>();
@@ -143,6 +147,19 @@ export class SubEmitterGraph {
     }
   }
 
+  /** Copies a complete job order. Undefined restores the deterministic default. */
+  setUpdateOrder(order: readonly number[] | undefined): void {
+    if (order === undefined) {
+      this.updateOrder = undefined;
+      return;
+    }
+    const copied = copySubEmitterUpdateOrder(
+      new Map([...this.emitters].map(([id, emitter]) => [id, emitter.source])),
+      order,
+    );
+    this.updateOrder = copied;
+  }
+
   trigger(systemId: number, slot: number, particleId?: number): void {
     const source = this.emitters.get(systemId);
     check(source, 'HOST', 'Unknown particle system');
@@ -176,6 +193,10 @@ export class SubEmitterGraph {
 
   step(delta: number): void {
     this.warm();
+    if (this.updateOrder) {
+      this.stepOrdered(delta, this.updateOrder);
+      return;
+    }
     if (!this.shared.size) {
       this.stepScope(delta);
       return;
@@ -191,6 +212,41 @@ export class SubEmitterGraph {
     for (const emitter of this.order)
       if (!visited.has(emitter.id)) this.stepScope(delta, this.singletonScopes.get(emitter.id)!);
     for (const id of this.shared) this.flush(this.after, id);
+  }
+
+  private stepOrdered(delta: number, order: readonly number[]): void {
+    this.visits.clear();
+    for (const root of this.roots)
+      if (root.graphPlaying)
+        for (const id of this.descendants.get(root.id)!)
+          this.visits.set(id, (this.visits.get(id) ?? 0) + 1);
+    // Draining pools still receive one update after their last root has stopped.
+    for (const id of this.emitters.keys())
+      this.visits.set(id, Math.max(1, this.visits.get(id) ?? 0));
+    this.orderedDelta = delta;
+    try {
+      for (const id of order) {
+        const remaining = this.visits.get(id)!;
+        if (!remaining) continue;
+        this.visits.set(id, remaining - 1);
+        const emitter = this.emitters.get(id)!;
+        this.advancing = emitter;
+        try {
+          emitter.step(delta);
+        } finally {
+          this.advancing = undefined;
+        }
+        this.advanceChannels(emitter, delta);
+        // A completed parent job publishes births before the next pool integration.
+        while (this.before.size || this.after.size) {
+          const target = (this.before.keys().next().value ?? this.after.keys().next().value)!;
+          this.flush(this.before, target);
+          this.flush(this.after, target);
+        }
+      }
+    } finally {
+      this.orderedDelta = 0;
+    }
   }
 
   /** Initializes connected histories after every system has synchronized its active state. */
@@ -396,6 +452,7 @@ export class SubEmitterGraph {
     )
       return;
     const first = birth.target.count;
+    const firstChannel = this.channels.length;
     const previous = this.emittingWarmEvent;
     this.emittingWarmEvent = birth.warmEvent ?? Event.Birth;
     try {
@@ -426,6 +483,15 @@ export class SubEmitterGraph {
     } finally {
       this.emittingWarmEvent = previous;
     }
+    if (this.orderedDelta && this.channels.length > firstChannel) {
+      // Birth integration can create another generation after its pool job has run.
+      this.advanceChannels(
+        birth.target,
+        this.orderedDelta,
+        undefined,
+        new Set(this.channels.slice(firstChannel)),
+      );
+    }
   }
   private flush(queue: Map<number, PendingBirth[]>, id: number): void {
     if (queue === this.after) this.queuedDistance.delete(id);
@@ -439,6 +505,7 @@ export class SubEmitterGraph {
     source: Emitter,
     delta: number,
     warmOrigins?: ReadonlyMap<number, Event>,
+    newborn?: ReadonlySet<BirthChannel>,
   ): void {
     if (!source.enabled || !source.node.activeInHierarchy) return;
     if (!this.channels.some((c) => c.source === source)) return;
@@ -447,6 +514,7 @@ export class SubEmitterGraph {
     for (let i = 0; i < this.channels.length; i++) {
       const channel = this.channels[i]!;
       if (channel.source !== source) continue;
+      if (newborn && !newborn.has(channel)) continue;
       const index = this.indices.get(channel.particle);
       if (index === undefined) {
         this.channels.splice(i--, 1);
@@ -455,7 +523,11 @@ export class SubEmitterGraph {
       const parent = particleSnapshot(source, index);
       const target = channel.target;
       if (warmOrigins?.get(channel.particle) === Event.Death) continue;
-      const dt = warmOrigins ? Math.max(parent.age, 1e-8) : delta * source.main.simulationSpeed;
+      const dt = warmOrigins
+        ? Math.max(parent.age, 1e-8)
+        : newborn
+          ? Math.min(Math.max(0, source.elapsedAge(index)), delta * source.main.simulationSpeed)
+          : delta * source.main.simulationSpeed;
       if (dt <= 0) continue;
       const from =
           this.shared.has(target.id) && !warmOrigins
@@ -508,6 +580,7 @@ export class SubEmitterGraph {
               phase: local / duration,
               time: when,
               firstStep:
+                !this.orderedDelta &&
                 from === 0 &&
                 when === 0 &&
                 !target.deferPrewarmParticles &&
@@ -516,7 +589,12 @@ export class SubEmitterGraph {
                   ? (source.elapsedAge(index) / source.main.simulationSpeed) *
                     target.main.simulationSpeed
                   : undefined,
-              initialAge: from === 0 && when === 0 && channel.bornDuringWarm ? parent.age : 0,
+              initialAge: this.orderedDelta
+                ? (Math.max(0, to - delay - when) / source.main.simulationSpeed) *
+                  target.main.simulationSpeed
+                : from === 0 && when === 0 && channel.bornDuringWarm
+                  ? parent.age
+                  : 0,
             });
           }
         }

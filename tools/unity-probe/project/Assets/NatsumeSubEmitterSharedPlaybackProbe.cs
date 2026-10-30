@@ -17,6 +17,7 @@ public sealed class NatsumeSubEmitterSharedPlaybackProbe : MonoBehaviour
         public bool automatic;
         public List<Sample> samples = new List<Sample>();
         [NonSerialized] public ParticleSystem a,b,child,root;
+        [NonSerialized] public int index;
     }
     [Serializable] public class Output { public string unityVersion; public int jobWorkers; public List<Case> cases = new List<Case>(); }
     ParticleSystem Make(string name, Transform root, float life, bool automatic, float duration)
@@ -54,8 +55,8 @@ public sealed class NatsumeSubEmitterSharedPlaybackProbe : MonoBehaviour
     }
     void Start() { Time.captureFramerate=60; output.unityVersion=Application.unityVersion; output.jobWorkers=Unity.Jobs.LowLevel.Unsafe.JobsUtility.JobWorkerCount; }
     void Configure(float life,float duration,int inherit,bool automatic,int clearFrame,int topology=0,int stopMode=0) {
-        int selected;
-        if(int.TryParse(Environment.GetEnvironmentVariable("NATSUME_SHARED_CASE"),out selected) && selected>=0 && caseIndex++!=selected)return;
+        int selected, current=caseIndex++;
+        if(int.TryParse(Environment.GetEnvironmentVariable("NATSUME_SHARED_CASE"),out selected) && selected>=0 && current!=selected)return;
         var holder=new GameObject("shared");holder.transform.SetParent(transform);
         var a=Make("a",holder.transform,life,false,2);
         var b=Make("b",holder.transform,life+.2f,false,2);
@@ -67,7 +68,7 @@ public sealed class NatsumeSubEmitterSharedPlaybackProbe : MonoBehaviour
         var e=child.emission;e.rateOverTime=30;
         Add(a,child,inherit);
         if(topology==1)Add(a,child,inherit);else Add(b,child,inherit);
-        var row=new Case {lifetimeA=life,lifetimeB=life+.2f,duration=duration,inherit=inherit,automatic=automatic,clearFrame=clearFrame,a=a,b=b,child=child,topology=topology,stopMode=stopMode,slotsA=a.subEmitters.subEmittersCount};
+        var row=new Case {index=current,lifetimeA=life,lifetimeB=life+.2f,duration=duration,inherit=inherit,automatic=automatic,clearFrame=clearFrame,a=a,b=b,child=child,topology=topology,stopMode=stopMode,slotsA=a.subEmitters.subEmittersCount};
         if(topology==2) {
             row.root=Make("root",holder.transform,1,false,2);
             Add(row.root,a,0);Add(row.root,b,0);
@@ -90,6 +91,20 @@ public sealed class NatsumeSubEmitterSharedPlaybackProbe : MonoBehaviour
             Configure(life,duration,inherit,automatic,clearFrame);
         foreach(int topology in new[]{0,1,2}) foreach(bool automatic in new[]{false,true}) foreach(int stopMode in new[]{1,2,3,4})
             Configure(.55f,2f,0,automatic,0,topology,stopMode);
+    }
+    [Serializable] class NativeRow { public int key; public long ptr; }
+    [Serializable] class NativeMap { public List<NativeRow> rows=new List<NativeRow>(); }
+    void SaveNativeMap() {
+        var path=Environment.GetEnvironmentVariable("NATSUME_NATIVE_MAP");
+        if(string.IsNullOrEmpty(path))return;
+        var field=typeof(UnityEngine.Object).GetField("m_CachedPtr",System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic);
+        var map=new NativeMap();
+        foreach(var c in output.cases) {
+            var systems=new[]{c.a,c.b,c.child,c.root};
+            for(int i=0;i<systems.Length;i++)if(systems[i]!=null)
+                map.rows.Add(new NativeRow {key=c.index*10+i+1,ptr=((IntPtr)field.GetValue(systems[i])).ToInt64()});
+        }
+        File.WriteAllText(path,JsonUtility.ToJson(map));
     }
     void Record(Case c,int index) {
         int a,b,count,invalid,unused;
@@ -117,7 +132,7 @@ public sealed class NatsumeSubEmitterSharedPlaybackProbe : MonoBehaviour
     }
     void LateUpdate() {
         try {
-            if(!begun) {if(++startup<3)return;Begin();begun=true;return;}
+            if(!begun) {if(++startup<3)return;Begin();SaveNativeMap();begun=true;return;}
             foreach(var c in output.cases)Record(c,frame);
             if(frame<120)return;
             var path=Environment.GetEnvironmentVariable("NATSUME_COMPAT_OUTPUT");

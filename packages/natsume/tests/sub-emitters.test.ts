@@ -416,9 +416,9 @@ it.skipIf(!existsSync(nativePath))(
     recordError('sub-emitter.distance.lifetime', lifetimeError, 'seconds', '2 cases, 120 frames');
   },
 );
-it.skipIf(!existsSync(nativePath))(
-  'matches native bursts and inheritance, while bounding measured continuous-rate frame differences',
-  () => {
+it.skipIf(!existsSync(nativePath)).each([{ order: undefined }, { order: [4, 3] }])(
+  'matches native bursts and inheritance with job order $order, bounding continuous-rate frame differences',
+  ({ order }) => {
     const cases = (JSON.parse(readFileSync(nativePath, 'utf8')) as { cases: NativeCase[] }).cases;
     let countError = 0,
       positionError = 0,
@@ -437,6 +437,7 @@ it.skipIf(!existsSync(nativePath))(
         c.probability,
         c.kind,
       );
+      graph.setUpdateOrder(order);
       if (c.eventType === 4) graph.trigger(3, 0);
       for (let frame = 1; frame <= 60; frame++) {
         graph.step(1 / 60);

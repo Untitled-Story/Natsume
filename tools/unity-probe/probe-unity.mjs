@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
-import { cp, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { cp, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { verifyUnityBaseline } from './verify-unity-baseline.mjs';
+import { sharedOrderFixture } from './shared-order-fixture.mjs';
 
 // Preserve existing fixture bytes when a fresh native run is numerically identical.
 async function saveJson(path, contents) {
@@ -49,6 +50,17 @@ assert(
 assert(
   !sharedSubEmitters || !process.argv.includes('--update-fixtures') || jobWorkers === 0,
   'Shared golden data requires --job-workers 0',
+);
+const traceOrder = process.argv.includes('--trace-order');
+assert(
+  !traceOrder ||
+    (sharedSubEmitters &&
+      jobWorkers === 0 &&
+      !sharedSingle &&
+      sharedCase === undefined &&
+      process.platform === 'darwin' &&
+      process.arch === 'arm64'),
+  '--trace-order requires macOS arm64, --shared --job-workers 0, and all cases',
 );
 const playback = process.argv.includes('--playback') || sharedSubEmitters;
 const subTransforms = process.argv.includes('--transforms');
@@ -241,7 +253,32 @@ if (stretch) {
 }
 const log = resolve(output, 'editor.log');
 console.log(`Running Unity ${version}; editor log: ${log}`);
-const child = spawn(
+const nativeMap = resolve(output, 'native-map.json');
+const nativeTrace = resolve(output, 'native-order.jsonl');
+if (traceOrder) {
+  await rm(nativeMap, { force: true });
+  await rm(nativeTrace, { force: true });
+}
+function runEditor(command, args, options) {
+  if (!traceOrder) return spawn(command, args, options);
+  return spawn(
+    'xcrun',
+    [
+      'lldb',
+      '-b',
+      '-o',
+      `target create ${JSON.stringify(command)}`,
+      '-o',
+      'settings set target.disable-aslr false',
+      '-o',
+      `command script import ${JSON.stringify(resolve(tool, 'trace_shared_order.py'))}`,
+      '-o',
+      `run ${args.map((arg) => JSON.stringify(arg)).join(' ')}`,
+    ],
+    options,
+  );
+}
+const child = runEditor(
   editor,
   [
     '-batchmode',
@@ -348,6 +385,7 @@ const child = spawn(
     env: {
       ...process.env,
       NATSUME_COMPAT_OUTPUT: baseline,
+      ...(traceOrder ? { NATSUME_NATIVE_MAP: nativeMap, NATSUME_NATIVE_TRACE: nativeTrace } : {}),
       ...(sharedSubEmitters
         ? {
             NATSUME_SHARED_SINGLE: sharedSingle ? '1' : '0',
@@ -393,6 +431,20 @@ if (sharedSubEmitters) {
       ),
       JSON.stringify(current, null, 2) + '\n',
     );
+  }
+  if (traceOrder) {
+    const trace = (await readFile(nativeTrace, 'utf8'))
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line));
+    const fixture = sharedOrderFixture(current, trace);
+    await saveJson(resolve(output, 'shared-order.json'), JSON.stringify(fixture, null, 2) + '\n');
+    if (process.argv.includes('--update-fixtures'))
+      await saveJson(
+        resolve(root, 'data/unity-baselines/fixtures/unity-sub-emitter-shared-scheduled.json'),
+        JSON.stringify(fixture, null, 2) + '\n',
+      );
+    console.log('Shared execution trace: 120 frames');
   }
   console.log(`Shared child observations: ${current.cases.length}`);
   process.exit(0);

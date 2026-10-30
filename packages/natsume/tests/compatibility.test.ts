@@ -380,3 +380,21 @@ it('budgets shared trail points across duplicate renderer passes and includes th
     true,
   );
 });
+
+it('preflights complete particle job orders without retaining or accepting invalid IDs', () => {
+  const f = fixture(),
+    pack = f.pack();
+  expect(
+    checkCompatibility(pack, { subEmitterUpdateOrder: [3] }, context).issues.filter(
+      (i) => i.field === 'subEmitterUpdateOrder',
+    ),
+  ).toEqual([]);
+  for (const order of [[], [99], [3, 3], [3.5]]) {
+    const report = checkCompatibility(pack, { subEmitterUpdateOrder: order }, context);
+    expect(report.compatible).toBe(false);
+    expect(report.issues).toContainEqual(
+      expect.objectContaining({ field: 'subEmitterUpdateOrder', severity: 'error', code: 'HOST' }),
+    );
+  }
+  pack.dispose();
+});

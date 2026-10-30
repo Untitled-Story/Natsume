@@ -27,6 +27,8 @@ import { instancePrewarmWork } from './prewarm.js';
 import { subEmitterSupport } from './sub-emitter-support.js';
 
 export interface SimulationOptions {
+  /** Complete fixed-step system order; repeat shared pools once per independent root. Defaults to stable scheduling. */
+  readonly subEmitterUpdateOrder?: readonly number[];
   /** Maximum retained trail points per instance. Defaults to 65,536; overflow throws. */
   readonly maxTrailPoints?: number;
   /** Host display and projection inputs for source Canvas components. */
@@ -165,6 +167,7 @@ export class Simulation {
         ),
       );
     this.subEmitters = new SubEmitterGraph(this.emitters);
+    this.subEmitters.setUpdateOrder(options.subEmitterUpdateOrder);
     this.diagnostics.push(
       ...subEmitterSupport(new Map(systems.map((c) => [c.id, c.data as R<ParticleSystemT>]))).map(
         ({ code, message }) => ({ code, message }),
@@ -222,6 +225,10 @@ export class Simulation {
   }
   emitSubEmitter(systemId: number, slot: number, particleId?: number): void {
     this.subEmitters.trigger(systemId, slot, particleId);
+  }
+  /** Copies the job order for the next fixed step. Undefined restores stable scheduling; restart retains it. */
+  setSubEmitterUpdateOrder(order: readonly number[] | undefined): void {
+    this.subEmitters.setUpdateOrder(order);
   }
   get particleCount(): number {
     let n = 0;

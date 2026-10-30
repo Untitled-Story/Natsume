@@ -43,6 +43,7 @@ import { rendererSupport, trailRendererSupport } from '../rendering/renderer-sup
 import { emitterSupport } from './emitter-support.js';
 import { instancePrewarmWork } from './prewarm.js';
 import { subEmitterSupport } from './sub-emitter-support.js';
+import { copySubEmitterUpdateOrder } from './sub-emitter-order.js';
 import { SupportChecks, type SupportIssue } from './support-checks.js';
 
 /** A blocking configuration or an explicit approximation for the selected entry. */
@@ -303,6 +304,18 @@ export function checkCompatibility(
   const components = pack.components.filter((c) => nodeIds.has(c.nodeId));
   const systems = components.filter((c) => c.dataType === C.ParticleSystem);
   const systemMap = new Map(systems.map((c) => [c.id, c.data as R<ParticleSystemT>]));
+  try {
+    copySubEmitterUpdateOrder(systemMap, options.subEmitterUpdateOrder);
+  } catch (error) {
+    if (!(error instanceof NatsumeError)) throw error;
+    global.require(
+      false,
+      error.code,
+      'subEmitterUpdateOrder',
+      options.subEmitterUpdateOrder,
+      error.message,
+    );
+  }
   global.issues.push(...subEmitterSupport(systemMap));
   const capacity = systems.reduce(
     (sum, c) => sum + (c.data as R<ParticleSystemT>).main!.maxParticles,
