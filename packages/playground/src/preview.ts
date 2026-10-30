@@ -24,6 +24,7 @@ let app: Application | undefined,
 let initializing: Promise<void> | undefined;
 let observer: ResizeObserver | undefined;
 let frame = 0;
+let physicsAccumulator = 0;
 let centerX = 0,
   centerY = 0,
   scale = 1;
@@ -56,7 +57,14 @@ async function init(): Promise<void> {
       next.ticker.add((ticker) => {
         if (!effect || effect.destroyed) return;
         try {
-          effect.update(ticker.deltaMS / 1000);
+          const deltaSeconds = ticker.deltaMS / 1000;
+          physicsAccumulator += deltaSeconds;
+          const count = Math.min(8, Math.floor(physicsAccumulator / 0.02));
+          physicsAccumulator -= count * 0.02;
+          effect.update(deltaSeconds, {
+            unscaledDeltaSeconds: ticker.elapsedMS / 1000,
+            physicsSteps: Array<number>(count).fill(0.02),
+          });
           overlay?.apply(overlayEnabled);
           if (++frame % 8 === 0) stats();
         } catch (error) {
@@ -247,6 +255,7 @@ export async function showPreview(pack: EffectPack, signal: AbortSignal): Promis
   }
   clearPreview();
   effect = created;
+  physicsAccumulator = 0;
   app!.stage.addChild(effect.container);
   effect.onAnimationEvent((event) => {
     log(
