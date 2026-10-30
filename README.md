@@ -134,6 +134,46 @@ Bridge 行为可实现 `onAnimationEvent(event)`，接收同节点 Animator 的�
 
 回调异常记录诊断，RequireReceiver 无人确认时给出警告；停止、暂停、重播、切状态或销毁取消当前失效批次。回调中启动的新状态，其起始事件延至下一固定步；递归 update 会报错。Avatar / Root Motion、IK / Mirror、AvatarMask、同步层、BlendTree、OverrideController、嵌套状态机和 StateMachineBehaviour 不在当前平面控制器范围。
 
+## Director 与 Timeline
+
+执行 Group、Activation、Animation 和 Control 轨道，包含混合、外插、嵌套 Director、粒子与 Bridge 时间控制；空资产保持为空。
+
+```ts
+const director = effect.getDirector(directorComponentId);
+director.play();
+director.pause();
+director.setTime(1.5); // 只设置时间
+director.evaluate(); // 立即应用，包括激活与受控粒子
+
+director.setBinding({ guid: trackGuid, fileId: trackFileId }, { componentId: animatorId });
+director.setBinding({ exposedName: 'subject' }, { nodeId: targetNodeId });
+director.stop();
+```
+
+`fileId` 使用 bigint。Activation / Control 绑定节点，Animation 绑定 Animator；目标须属于当前实例，`null` 清除绑定。动画重绑定按相对节点路径与组件序号匹配；无效目标在修改播放图前报错。句柄与绑定覆盖在 restart 后保留，销毁后句柄失效。
+
+GameTime 每次 `effect.update(dt)` 推进一次；UnscaledGameTime 和当前无音轨 DSP 使用 `unscaledDeltaSeconds`。Manual 只由 `setTime` / `evaluate` 采样。Timeline 在 Animator 后、普通粒子前执行；手动 Evaluate 不派发持续播放事件。Timeline 的 Transform 缺失通道使用动画流默认值（位置为 0，缩放为 1）。
+
+`stop()` 回到源 initial time，结束状态在下一次 `effect.update()` 边界恢复；pause 保留当前激活状态。Control 使用实例内现有粒子池；向后定位会重新模拟，昂贵定位受模拟预算限制。受控粒子在释放轨道后保持暂停，宿主可用 restart 恢复普通播放。
+
+Control 的 ITimeControl 由 Bridge 行为接收：
+
+```ts
+return {
+  onControlTimeStart() {
+    /* 进入控制区间 */
+  },
+  onControlTime(seconds) {
+    /* 应用片段局部时间 */
+  },
+  onControlTimeStop() {
+    /* 离开区间或停止 */
+  },
+};
+```
+
+回调异常隔离；回调改变播放状态后取消失效采样。禁用脚本仍可接收 ITimeControl，普通 onEnable / update 继续遵守组件启用状态。嵌套控制闭环明确报错。
+
 ## 场景绘制
 
 MeshFilter / MeshRenderer 使用包内真实三角网格，支持可选顶点色、UV0–UV7、材质纹理 ST 和多 submesh。材质槽依次对应 submesh，多出的槽重复最后一个 submesh；空 Mesh、空槽不绘制。粒子 Renderer 的 None 保留模拟，ShadowsOnly 不绘制颜色。
@@ -293,14 +333,15 @@ runtime.registerScript(
 
 以下模块的主要行为已实现，仍受下方共享参数限制。
 
-| 模块                | 支持范围                                                                                                                  |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| Color over Lifetime | 生命周期颜色；Blend / Fixed 渐变及双渐变随机插值                                                                          |
-| Size over Lifetime  | 生命周期尺寸；统一或分轴缩放，三轴共用随机插值因子                                                                        |
-| Size by Speed       | 速度区间、统一 / 分轴尺寸乘数及四种参数模式                                                                               |
-| Rotation by Speed   | 速度区间、Z / 分轴角速度积分及四种参数模式                                                                                |
-| Animation           | 平面参数化状态机、过渡 / 中断、多层混合、三种时钟 / 裁剪、已支持绑定、类型化事件与 Bridge                                 |
-| Trails              | PerParticle / Ribbon、五种纹理模式、颜色 / 宽度 / 寿命、World Space、死亡残留、多 Ribbon 与子发射器分组、独立材质与顶点流 |
+| 模块                | 支持范围                                                                                                                          |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Color over Lifetime | 生命周期颜色；Blend / Fixed 渐变及双渐变随机插值                                                                                  |
+| Size over Lifetime  | 生命周期尺寸；统一或分轴缩放，三轴共用随机插值因子                                                                                |
+| Size by Speed       | 速度区间、统一 / 分轴尺寸乘数及四种参数模式                                                                                       |
+| Rotation by Speed   | 速度区间、Z / 分轴角速度积分及四种参数模式                                                                                        |
+| Animation           | 平面参数化状态机、过渡 / 中断、多层混合、三种时钟 / 裁剪、已支持绑定、类型化事件与 Bridge                                         |
+| Timeline            | PlayableDirector 四种时钟、三种 wrap；Group / Activation / Animation / Control、片段混合与外插、动态绑定、嵌套控制与 ITimeControl |
+| Trails              | PerParticle / Ribbon、五种纹理模式、颜色 / 宽度 / 寿命、World Space、死亡残留、多 Ribbon 与子发射器分组、独立材质与顶点流         |
 
 速度取样包含重力、Velocity 和 Limit，不包含 Speed Multiplier 与 Noise 位移。零宽区间按 Unity 的端点规则处理。
 
@@ -338,18 +379,18 @@ Unity 临时材质对象 ID 不在 NOAP 中；同队列不透明材质分组使�
 
 ### Unsupported
 
-| 模块                      | 未实现行为                                                                                                              |
-| ------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| Inherit Velocity          | 继承发射器速度                                                                                                          |
-| Lifetime by Emitter Speed | 根据发射器速度设置寿命                                                                                                  |
-| Force over Lifetime       | 生命周期内施加力                                                                                                        |
-| Color by Speed            | 根据速度改变颜色                                                                                                        |
-| External Forces           | 外部力场                                                                                                                |
-| Collision                 | 平面及场景碰撞                                                                                                          |
-| Triggers                  | 碰撞区域检测与事件                                                                                                      |
-| Lights                    | 粒子灯光                                                                                                                |
-| Timeline                  | PlayableDirector 与 Timeline 执行                                                                                       |
-| Animator 扩展             | Avatar / Root Motion、IK / Mirror、AvatarMask、同步层、BlendTree、OverrideController、嵌套状态机、StateMachineBehaviour |
+| 模块                      | 未实现行为                                                                                                                      |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Inherit Velocity          | 继承发射器速度                                                                                                                  |
+| Lifetime by Emitter Speed | 根据发射器速度设置寿命                                                                                                          |
+| Force over Lifetime       | 生命周期内施加力                                                                                                                |
+| Color by Speed            | 根据速度改变颜色                                                                                                                |
+| External Forces           | 外部力场                                                                                                                        |
+| Collision                 | 平面及场景碰撞                                                                                                                  |
+| Triggers                  | 碰撞区域检测与事件                                                                                                              |
+| Lights                    | 粒子灯光                                                                                                                        |
+| Timeline 扩展             | Audio、Signal / Marker、自定义轨道 / Playable、Infinite Clip、AvatarMask、prefab 实例化、自定义属性动画与非默认 clip-end action |
+| Animator 扩展             | Avatar / Root Motion、IK / Mirror、AvatarMask、同步层、BlendTree、OverrideController、嵌套状态机、StateMachineBehaviour         |
 
 ## 开发与预览
 

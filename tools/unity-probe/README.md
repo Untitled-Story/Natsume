@@ -101,6 +101,20 @@ NATSUME_NOISE_STATISTICS_INPUT="$PWD/path/to/input.json" pnpm probe:unity --nois
 
 自定义结果写入 `data/unity-baselines/noise-statistics-custom/`，保留默认测量；不允许与 `--update-fixtures` 同用。
 
+## Timeline 对照
+
+另需未修改的 [Unity Timeline 1.7.6 源码](https://github.com/needle-mirror/com.unity.timeline/tree/1.7.6)。设置本地目录后运行：
+
+```sh
+export UNITY_TIMELINE_PACKAGE=/absolute/path/to/com.unity.timeline
+node tools/unity-probe/probe-timeline.mjs
+node tools/unity-probe/compile-timeline-packages.mjs
+node tools/unity-probe/probe-timeline.mjs --playback
+pnpm --filter natsume exec vitest run tests/timeline-native.test.ts tests/timeline-playback-native.test.ts
+```
+
+编译步骤默认使用相邻 Noa 仓库的 `target/debug/noa`，可用 `NOA_BIN` 指定。探针把 Timeline Runtime 复制到独立本地工程，不修改通用探针工程或添加 Natsume 运行依赖；编译器通过原生 MonoScript 身份表识别轨道。覆盖非空轨道求值、停止恢复、共享粒子目标，以及实际 PlayerLoop 的时钟、循环与事件顺序。
+
 ## 更新回归数据
 
 核对结果后，显式更新本地数值夹具：
@@ -159,6 +173,8 @@ node tools/unity-probe/audit-packages.mjs path/to/compile-successes.json path/to
 
 ```sh
 node tools/unity-probe/verify-pack-lifecycle.mjs path/to/packages
+# 可选第二参数：宿主 Sorting Layer ID → rank 的 JSON 文件
+node tools/unity-probe/verify-pack-lifecycle.mjs path/to/packages path/to/sorting-layers.json
 ```
 
 读取目录中的 `.noap`，逐入口检查至少一个非循环发射周期，或两个循环周期，再加寿命窗口；固定步长 1/60 s，每 10 步提交一次 WebGL 绘制。覆盖暂停、停止发射后排空、清空、同种子重播、粒子有限值与容量、WebGL 错误及销毁后的纹理引用释放。单入口检查时长上限 1,000 秒，超出时报错。
