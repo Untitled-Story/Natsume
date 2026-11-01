@@ -10,6 +10,7 @@ import { BoxShapeT } from '../src/format/generated/noa/ir/box-shape.js';
 import { ConeShapeT } from '../src/format/generated/noa/ir/cone-shape.js';
 import { EdgeShapeT } from '../src/format/generated/noa/ir/edge-shape.js';
 import { Vec3T } from '../src/format/generated/noa/ir/vec3.js';
+import { RectangleShapeT } from '../src/format/generated/noa/ir/rectangle-shape.js';
 
 type Point = { x: number; y: number; z: number };
 type Stats = { mean: Point; second: Point; radiusMean: number; radiusSecond: number };
@@ -33,7 +34,10 @@ for (const c of native.cases.filter((c) => !c.align))
     const s = new ShapeModuleT();
     s.randomDirection = c.randomDirection;
     s.sphericalDirection = c.sphericalDirection;
-    if (c.type === 0 || c.type === 2) {
+    if (c.label.startsWith('rectangle')) {
+      s.geometryType = G.RectangleShape;
+      s.geometry = new RectangleShapeT();
+    } else if (c.type === 0 || c.type === 2) {
       s.geometryType = G.SphereShape;
       s.geometry = new SphereShapeT(constant(1), c.thickness, c.type === 2);
     } else if ([5, 15, 16].includes(c.type)) {

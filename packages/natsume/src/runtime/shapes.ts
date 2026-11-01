@@ -14,7 +14,7 @@ import { scalar, random } from './parameters.js';
 export function validateShape(s: R<ShapeModuleT>): void {
   const c = s.geometry;
   check(
-    c && s.geometryType >= G.CircleShape && s.geometryType <= G.SpriteShape,
+    c && s.geometryType >= G.CircleShape && s.geometryType <= G.RectangleShape,
     'CAPABILITY',
     'Unsupported shape',
   );
@@ -73,6 +73,10 @@ export function sampleShape(
     dz = 1;
   if (out.length >= 10) out.fill(1, 6, 10);
   switch (s.geometryType) {
+    case G.RectangleShape:
+      x = rnd(1) - 0.5;
+      y = rnd(2) - 0.5;
+      break;
     case G.SpriteShape: {
       check(sprite, 'CAPABILITY', 'Sprite emission geometry is unavailable');
       const d = sprite.definition;

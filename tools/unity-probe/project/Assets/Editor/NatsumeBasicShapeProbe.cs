@@ -43,6 +43,9 @@ public static class NatsumeBasicShapeProbe
             cases.Add(Measure("box-random", ParticleSystemShapeType.Box, 1, 25, 2, 360, 1));
             cases.Add(Measure("box-spherical", ParticleSystemShapeType.Box, 1, 25, 2, 360, 0, 1));
             cases.Add(Measure("sphere-align", ParticleSystemShapeType.Sphere, 0, 25, 2, 360, 0, 0, true));
+            cases.Add(Measure("rectangle", ParticleSystemShapeType.Rectangle));
+            cases.Add(Measure("rectangle-random", ParticleSystemShapeType.Rectangle, 1, 25, 2, 360, 1));
+            cases.Add(Measure("rectangle-spherical", ParticleSystemShapeType.Rectangle, 1, 25, 2, 360, 0, 1));
             string output = Path.GetFullPath(Path.Combine(Application.dataPath, "../../unity-baselines/basic-shapes")); Directory.CreateDirectory(output);
             File.WriteAllText(Path.Combine(output, "unity-2022.3.21f1.json"), JsonUtility.ToJson(new Output { unityVersion=Application.unityVersion, cases=cases.ToArray() }, true));
         } catch(Exception error) { Debug.LogException(error); EditorApplication.Exit(1); }
