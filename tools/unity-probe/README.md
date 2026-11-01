@@ -35,6 +35,8 @@ pnpm probe:unity --collider-force # 实际 Play 的刚体受力、尺寸 / 速�
 pnpm probe:unity --particle-triggers # 实际 Play 的事件帧、Kill、Collider 查询与子发射器
 pnpm probe:unity --particle-lights # 实际 Play 的颜色、范围、强度和年龄曲线像素
 pnpm probe:unity --light-distribution # 灯光分配、数量限制、死亡补位与随机统计
+pnpm probe:unity --ring-buffer # 环形年龄、循环范围、重力 / Force 与替换后 Death 位置
+pnpm probe:unity --ring-playback # 实际 Play 环形计数、年龄与延迟 Death 事件帧
 pnpm probe:unity --events       # 类型化事件、循环端点与启停顺序
 pnpm probe:unity --boundaries   # 发射、运动、外观与 BakeMesh 边界
 pnpm probe:unity --random       # 随机分布与参数相关性

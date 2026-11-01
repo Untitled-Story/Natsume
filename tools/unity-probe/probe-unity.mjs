@@ -88,6 +88,8 @@ const colliderForcePlayback = process.argv.includes('--collider-force');
 const particleLights = process.argv.includes('--particle-lights');
 const lightDistribution = process.argv.includes('--light-distribution');
 const particleTriggers = process.argv.includes('--particle-triggers');
+const ringBuffer = process.argv.includes('--ring-buffer');
+const ringPlayback = process.argv.includes('--ring-playback');
 const particleProbe = particleModules
   ? ['particle-modules', 'NatsumeParticleModulesProbe.Run']
   : externalForces
@@ -102,7 +104,11 @@ const particleProbe = particleModules
             ? ['particle-lights', 'NatsumeParticleLightsProbe.Run']
             : lightDistribution
               ? ['light-distribution', 'NatsumeParticleLightDistributionProbe.Run']
-              : undefined;
+              : ringBuffer
+                ? ['ring-buffer', 'NatsumeParticleRingBufferProbe.Run']
+                : ringPlayback
+                  ? ['ring-playback', 'NatsumeParticleRingPlaybackProbe.Run']
+                  : undefined;
 const bySpeed = process.argv.includes('--by-speed') || !!particleProbe;
 assert(
   [
@@ -113,6 +119,8 @@ assert(
     particleTriggers,
     particleLights,
     lightDistribution,
+    ringBuffer,
+    ringPlayback,
     process.argv.includes('--by-speed'),
   ].filter(Boolean).length <= 1,
   'Choose one probe mode',
@@ -437,7 +445,8 @@ const child = runEditor(
     colliderForcePlayback ||
     particleTriggers ||
     particleLights ||
-    lightDistribution
+    lightDistribution ||
+    ringPlayback
       ? []
       : ['-quit']),
     '-logFile',
@@ -468,6 +477,19 @@ await new Promise((accept, reject) => {
 });
 const current = JSON.parse(await readFile(baseline, 'utf8'));
 assert.equal(current.unityVersion, version);
+if (ringBuffer || ringPlayback) {
+  assert.equal(current.cases.length, ringBuffer ? 24 : 9);
+  if (process.argv.includes('--update-fixtures'))
+    await saveJson(
+      resolve(
+        root,
+        `data/unity-baselines/fixtures/${ringBuffer ? 'unity-particle-ring-buffer' : 'unity-particle-ring-playback'}.json`,
+      ),
+      JSON.stringify(current, null, 2) + '\n',
+    );
+  console.log(`Ring particle observations: ${current.cases.length}`);
+  process.exit(0);
+}
 if (particleLights || lightDistribution) {
   assert.equal(current.cases.length, particleLights ? 32 : 214);
   if (process.argv.includes('--update-fixtures'))

@@ -27,7 +27,7 @@ export function emitterSupport(
   const rules = new SupportChecks();
   rules.issues.push(...parameterSupport(source));
   const main = source.main!;
-  for (const field of ['clock', 'stopAction', 'ringBuffer'] as const)
+  for (const field of ['clock', 'stopAction'] as const)
     rules.require(
       main[field] === 0,
       'CAPABILITY',

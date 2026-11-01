@@ -57,6 +57,7 @@ import type { ParticleTriggerEvent } from './particle-physics.js';
 import { ParticleTriggers } from './particle-triggers.js';
 import type { TriggerModuleT } from '../format/generated/noa/ir/trigger-module.js';
 import type { LightsModuleT } from '../format/generated/noa/ir/lights-module.js';
+import type { SubEmittersModuleT } from '../format/generated/noa/ir/sub-emitters-module.js';
 import { ParticleLights } from './particle-lights.js';
 
 export interface Diagnostic {
@@ -163,6 +164,12 @@ export class Emitter {
   private readonly birth = new Float64Array(10);
   private readonly spriteShape: SpriteShapeSampler | undefined;
   private nextSerial = 0;
+  private ringWrite = 0;
+  private readonly retiredRingPools: Emitter[] = [];
+  private retiredRingCount = 0;
+  private readonly retireRingDeaths: boolean;
+  /** @internal Replaced looping particles complete their last lifetime outside the visible pool. */
+  onRingDeath: ((pool: Emitter, index: number) => void) | undefined;
   onBirth: ((index: number, phase: number) => void) | undefined;
   onDeath: ((index: number) => void) | undefined;
   onCollision: ((index: number) => void) | undefined;
@@ -210,15 +217,22 @@ export class Emitter {
     readonly source: R<ParticleSystemT>,
     readonly enabled: boolean,
     instanceSeed: number,
-    diagnostics: Diagnostic[],
+    private readonly diagnostics: Diagnostic[],
     gravity?: readonly [number, number, number],
     readonly customSpaceNode?: SceneNode,
-    pack?: EffectPack,
+    private readonly pack?: EffectPack,
     public environment?: ParticleEnvironment,
-    sceneNodes?: ReadonlyMap<number, SceneNode>,
+    private readonly sceneNodes?: ReadonlyMap<number, SceneNode>,
   ) {
     const main = source.main!;
     this.main = main;
+    this.retireRingDeaths = source.modules.some(
+      (module) =>
+        module.dataType === M.SubEmittersModule &&
+        (module.data as R<SubEmittersModuleT>).emitters.some(
+          (edge) => edge.systemComponentId && edge.event === 2,
+        ),
+    );
     assertSupport(
       emitterSupport(
         source,
@@ -580,12 +594,14 @@ export class Emitter {
     return out;
   }
   reset(): void {
+    this.clearRetiredRingParticles();
     this.lights?.clear();
     this.trigger?.clear();
     this.onClear?.();
     this.count = 0;
     this.noiseEvaluator?.reset();
     this.nextSerial = 0;
+    this.ringWrite = 0;
     this.forceStep = 0;
     this.time = 0;
     this.rateTime = 0;
@@ -611,10 +627,12 @@ export class Emitter {
     this.emitting = true;
   }
   clear(): void {
+    this.clearRetiredRingParticles();
     this.lights?.clear();
     this.trigger?.clear();
     this.onClear?.();
     this.count = 0;
+    this.ringWrite = 0;
   }
   /** @internal A stopped root drains its particles before releasing its graph update. */
   get graphPlaying(): boolean {
@@ -635,6 +653,7 @@ export class Emitter {
       this.lastVelocityPosition[axis] = this.node.worldMatrix[12 + axis]!;
     this.updateEmitterVelocity(0);
     if (!active) {
+      this.clearRetiredRingParticles();
       this.lights?.clear();
       this.trigger?.clear();
       this.onDisable?.();
@@ -945,18 +964,32 @@ export class Emitter {
     nativeBirthDelta?: number,
   ): void {
     const capacity = this.ages.length;
+    const ring = this.main.ringBuffer !== 0;
+    check(!ring || amount <= 100_000, 'LIMIT', 'Ring particle birth budget exceeded');
     // Skip births already beyond every authored lifetime; bound saturated-step work.
     const first =
-      spacing > 0
+      spacing > 0 && !ring
         ? Math.max(
             0,
             amount - Math.ceil(this.maximumBirthLifetime / (spacing * (nativeBirthDelta ?? 1))) - 1,
           )
         : 0;
     this.nextSerial += first;
-    for (let n = first; n < amount && n < first + capacity * 2 && this.count < capacity; n++) {
-      const i = this.count++,
-        o = i * 3,
+    for (
+      let n = first;
+      n < amount &&
+      (ring || n < first + capacity * 2) &&
+      (this.count < capacity || this.main.ringBuffer !== 0);
+      n++
+    ) {
+      const replacing = this.count === capacity;
+      const i = replacing ? this.ringWrite : this.count++;
+      if (replacing) {
+        if (this.main.ringBuffer === 2) this.retireRingParticle(i);
+        this.trigger?.forget(this.serials[i]!);
+      }
+      this.ringWrite = (i + 1) % capacity;
+      const o = i * 3,
         serial = this.nextSerial++;
       this.serials[i] = serial;
       if (this.subParentSystems) {
@@ -1129,7 +1162,7 @@ export class Emitter {
                 ),
             )
           : (amount - n - 1 + remainder) * spacing;
-      if (age > 0) this.advanceParticles(age, i);
+      if (age > 0) this.advanceParticles(age, i, i + 1);
     }
   }
   /** Emits into this system's existing pool, including when automatic emission is disabled. */
@@ -1167,9 +1200,14 @@ export class Emitter {
     this.enableSubClock();
     this.subBirth = { parent, properties, parentSystem };
     try {
-      const first = this.count;
+      const first = this.nextSerial;
       this.emit(amount, phase, seconds, spacing, remainder, nativeDelta);
-      if (initialAge > 0) this.advanceParticles(initialAge, first);
+      if (initialAge > 0)
+        for (let i = 0; i < this.count; ) {
+          const serial = this.serials[i]!;
+          if (serial >= first) this.advanceParticles(initialAge, i, i + 1);
+          if (i < this.count && this.serials[i] === serial) i++;
+        }
     } finally {
       this.subBirth = undefined;
     }
@@ -1247,6 +1285,95 @@ export class Emitter {
     }
   }
 
+  private clearRetiredRingParticles(): void {
+    for (const pool of this.retiredRingPools) pool.clear();
+    this.retiredRingCount = 0;
+  }
+  private retireRingParticle(index: number): void {
+    if (!this.onRingDeath || !this.retireRingDeaths) return;
+    check(this.retiredRingCount < 100_000, 'LIMIT', 'Retired ring particle capacity exceeded');
+    let pool = this.retiredRingPools.find((candidate) => candidate.count < candidate.ages.length);
+    if (!pool) {
+      const source = {
+        ...this.source,
+        main: {
+          ...this.main,
+          maxParticles: Math.max(128, Math.min(1024, this.main.maxParticles)),
+          ringBuffer: 0,
+          stopAction: 0,
+          clock: 0,
+          culling: 3,
+          prewarm: false,
+        },
+        modules: this.source.modules.filter(
+          (module) =>
+            module.dataType !== M.LightsModule &&
+            module.dataType !== M.SubEmittersModule &&
+            module.dataType !== M.EmissionModule,
+        ),
+      };
+      pool = new Emitter(
+        this.id,
+        this.node,
+        source,
+        true,
+        this.seed,
+        this.diagnostics,
+        this.gravity,
+        this.customSpaceNode,
+        this.pack,
+        this.environment,
+        this.sceneNodes,
+      );
+      if (this.lifetimeProgress) pool.enableLifetimeProgress();
+      else pool.enableSubClock();
+      const retired = pool;
+      pool.onDeath = (i) => {
+        this.retiredRingCount--;
+        this.onRingDeath?.(retired, i);
+      };
+      this.retiredRingPools.push(pool);
+    }
+    const into = pool.count++;
+    this.retiredRingCount++;
+    for (const field of ['ages', 'lifetimes', 'serials', 'moduleSpeeds'] as const)
+      if (this[field] && pool[field]) pool[field]![into] = this[field]![index]!;
+    for (const field of [
+      'positions',
+      'velocities',
+      'rotations',
+      'startSizes',
+      'renderVelocities',
+      'noiseSizes',
+      'initialInheritedVelocities',
+    ] as const)
+      if (this[field] && pool[field])
+        pool[field]!.set(this[field]!.subarray(index * 3, index * 3 + 3), into * 3);
+    pool.startColors.set(this.startColors.subarray(index * 4, index * 4 + 4), into * 4);
+    if (this.customData && pool.customData)
+      pool.customData.set(this.customData.subarray(index * 8, index * 8 + 8), into * 8);
+    pool.subAges![into] = this.ages[index]!;
+    if (this.lifetimeProgress && pool.lifetimeProgress) {
+      pool.lifetimeProgress[into] = this.lifetimeProgress[index]!;
+      pool.inverseLifetimes![into] = this.inverseLifetimes![index]!;
+    }
+  }
+  private advanceRetiredRingParticles(dt: number): void {
+    for (const pool of this.retiredRingPools) {
+      if (!pool.count) continue;
+      pool.environment = this.environment;
+      pool.gravity = this.gravity;
+      pool.seed = this.seed;
+      pool.time = this.time;
+      pool.forceStep = this.forceStep;
+      pool.emitterVelocity.set(this.emitterVelocity);
+      pool.updateSpace();
+      pool.externalFields = this.externalFields;
+      pool.noiseEvaluator = this.noiseEvaluator;
+      pool.advanceParticles(dt);
+    }
+  }
+
   private advance(dt: number): void {
     this.forceStep++;
     if (this.externalForces)
@@ -1255,6 +1382,7 @@ export class Emitter {
       dt,
       (this.time % this.main.durationSeconds) / this.main.durationSeconds,
     );
+    this.advanceRetiredRingParticles(dt);
     this.advanceParticles(dt);
     this.advanceEmission(dt);
     if (!this.deferPrewarmParticles) this.onAdvanced?.(dt);
@@ -1288,15 +1416,37 @@ export class Emitter {
           : this.subAges
             ? this.subAges[i]! + Math.fround(dt)
             : this.ages[i]! + dt;
+      const ring = this.main.ringBuffer;
+      if (ring !== 0) {
+        const lifetime = this.lifetimes[i]!;
+        const range = this.main.ringBufferLoopRange!;
+        if (this.lifetimeProgress) {
+          let value = progress!;
+          const from = Math.fround(range.x * 100),
+            to = Math.fround(range.y * 100);
+          const width = Math.fround(to - from);
+          if (ring === 2 && width > 0 && value >= to)
+            value = Math.fround(from + Math.fround(Math.fround(value - from) % width));
+          else value = Math.min(value, ring === 1 ? Math.fround(100 - 2 ** -17) : 100);
+          this.lifetimeProgress[i] = value;
+          age = this.progressAge(i);
+        } else {
+          const width = (range.y - range.x) * lifetime;
+          if (ring === 2 && width > 0 && age >= range.y * lifetime)
+            age = range.x * lifetime + ((age - range.x * lifetime) % width);
+          else age = Math.min(age, lifetime * (ring === 1 ? 1 - 2 ** -23 : 1));
+        }
+      }
       const dead =
-        progress !== undefined
+        ring === 0 &&
+        (progress !== undefined
           ? progress > 100
           : this.subAges
             ? age > this.lifetimes[i]!
-            : age >= this.lifetimes[i]!;
+            : age >= this.lifetimes[i]!);
       if (this.deferPrewarmParticles) {
         this.ages[i] = age;
-        if (this.subAges) this.subAges[i] = elapsed;
+        if (this.subAges) this.subAges[i] = ring ? age : elapsed;
         if (dead) {
           this.onDeath?.(i);
           this.remove(i);
@@ -1633,7 +1783,7 @@ export class Emitter {
       // Custom Data, like integrated rotation, samples the start of this simulation step.
       this.updateCustom(i, this.ages[i]! / this.lifetimes[i]!);
       this.ages[i] = age;
-      if (this.subAges) this.subAges[i] = elapsed + collisionAge;
+      if (this.subAges) this.subAges[i] = (ring ? age - collisionAge : elapsed) + collisionAge;
       if (dead) {
         this.onDeath?.(i);
         this.remove(i);

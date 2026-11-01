@@ -79,6 +79,7 @@ export class SubEmitterGraph {
     for (const source of emitters.values()) {
       source.onBirth = (index) => this.birth(source, index);
       source.onDeath = (index) => this.death(source, index);
+      source.onRingDeath = (pool, index) => this.death(pool, index);
       source.onCollision = (index) => {
         for (const [slot, edge] of (this.slots.get(source.id) ?? []).entries())
           if (edge.event === Event.Collision && this.accept(source, index, edge, slot))
