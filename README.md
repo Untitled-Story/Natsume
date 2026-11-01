@@ -309,6 +309,19 @@ effect.setParticleEnvironment({
 
 槽名可从 `pack.describe().requiredHostInputs` 查询；缺少已声明的 Rigidbody 输入会明确报错。Transform 模式由节点世界位移计算速度；Custom 模式使用包内自定义速度。环境更新会复制向量，后续变化通过 setter 提交。
 
+外部力场通过 `particleEnvironment.forceFields` 绑定；单个引用绑定一个 `ParticleForceField`，世界搜索槽绑定力场数组。`sample(query, out)` 接收世界位置、速度、年龄与步长，将世界加速度写入 `out[0..2]`。引用按对象身份去重。
+
+World 碰撞通过 `particleEnvironment.physicsWorlds` 绑定 `ParticlePhysicsWorld`：`sweepSphere(query, outHits)` 填写碰撞对象、进度、表面点和法线。查询包含 3D/2D、层掩码、动态 / 内部筛选、quality、voxelSize 和 maxShapes。Natsume 执行粒子响应；动态 Collider 的 `applyForce(force, point)` 接收世界空间力和作用点。宿主拥有这些服务与物理对象；查询缓冲仅在调用期间有效。
+
+```ts
+const unsubscribe = effect.onParticleCollision((event) => {
+  console.log(event.systemId, event.particleId, event.colliderId, event.planeNodeId);
+});
+unsubscribe();
+```
+
+仅启用 Collision Send Messages 的系统派发公开事件；碰撞子发射器独立自动触发。回调在当前粒子步之后派发，异常记录到 diagnostics；回调内停止、重播或销毁会取消本批失效事件。
+
 ## Script Bridge
 
 在实例化前，用包内 MonoBehaviour 的真实身份注册行为。以下示例将该组件所在节点及其子树绘制到父节点原点，保留粒子模拟与深度：
@@ -367,7 +380,8 @@ runtime.registerScript(
 
 | 模块                         | 已支持                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | 未支持                                                                                                    |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| Sub Emitters                 | Birth / Death、宿主 Collision / Trigger / Manual；概率与五项继承、共享池、重复槽、多级 DAG、连续发射、组合预热                                                                                                                                                                                                                                                                                                                                                                                    | 共享池按串行根调度；Unity 并行与全局注册顺序存在差异，返回 `SHARED_SUB_EMITTER_ORDER`；延迟预热例外见下文 |
+| Sub Emitters                 | Birth / Death / 自动 Collision、宿主 Trigger / Manual；概率与五项继承、共享池、重复槽、多级 DAG、连续发射、组合预热                                                                                                                                                                                                                                                                                                                                                                               | 共享池按串行根调度；Unity 并行与全局注册顺序存在差异，返回 `SHARED_SUB_EMITTER_ORDER`；延迟预热例外见下文 |
+| Collision                    | Planes 节点 +Y 平面；World 3D/2D 宿主球体扫掠、反弹 / 阻尼 / 寿命 / 杀死速度、半径、层 / 动态 / 内部筛选、Collider Force、碰撞事件及自动子发射器                                                                                                                                                                                                                                                                                                                                                  | Medium / Low 原生体素缓存历史由宿主查询策略决定                                                           |
 | Main                         | 循环、初始寿命 / 速度 / 尺寸 / 旋转 / 颜色、旋转翻转、种子；2D / 3D 环境重力、三种发射器速度、启动延迟、Simulation Speed；Local / World / Custom 模拟，Hierarchy / Local / Shape 缩放；有限预热                                                                                                                                                                                                                                                                                                   | Unscaled、StopAction、RingBuffer、可见性裁剪；duration 至少 1/60 s，容量与预热预算有限                    |
 | Emission                     | Rate over Time / Distance、Burst，含正间隔与零间隔无限重复                                                                                                                                                                                                                                                                                                                                                                                                                                        | 短周期重复 Burst 保留已量化的末步计数差异                                                                 |
 | Shape                        | Circle、Sphere / Hemisphere、Box 体积 / 壳 / 边、Cone 底面 / 体积、Edge；Random / Loop / PingPong / Burst Spread、Spread 量化、位置 / 方向扰动、Align to Direction、Shape TRS                                                                                                                                                                                                                                                                                                                     | 其他形状                                                                                                  |
@@ -399,7 +413,6 @@ Unity 临时材质对象 ID 不在 NOAP 中；同队列不透明材质分组使�
 
 | 模块          | 未实现行为                                                                                                                      |
 | ------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| Collision     | 平面及场景碰撞                                                                                                                  |
 | Triggers      | 碰撞区域检测与事件                                                                                                              |
 | Lights        | 粒子灯光                                                                                                                        |
 | Timeline 扩展 | Audio、Signal / Marker、自定义轨道 / Playable、Infinite Clip、AvatarMask、prefab 实例化、自定义属性动画与非默认 clip-end action |

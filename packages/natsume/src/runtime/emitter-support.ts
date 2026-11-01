@@ -13,12 +13,14 @@ import type { ParticleEnvironment } from '../rendering/particle-environment.js';
 import { SupportChecks, type SupportIssue } from './support-checks.js';
 import type { ExternalForcesModuleT } from '../format/generated/noa/ir/external-forces-module.js';
 import { selectForceFields } from './particle-force-fields.js';
+import type { CollisionModuleT } from '../format/generated/noa/ir/collision-module.js';
 
 export function emitterSupport(
   source: R<ParticleSystemT>,
   gravity: readonly [number, number, number] | undefined,
   customSpaceAvailable: boolean,
   environment?: ParticleEnvironment,
+  sceneNodeIds?: ReadonlySet<number>,
 ): readonly SupportIssue[] {
   const rules = new SupportChecks();
   rules.issues.push(...parameterSupport(source));
@@ -110,6 +112,7 @@ export function emitterSupport(
         module.dataType === M.TrailsModule ||
         module.dataType === M.ForceModule ||
         module.dataType === M.ExternalForcesModule ||
+        module.dataType === M.CollisionModule ||
         module.dataType === M.ColorBySpeedModule ||
         module.dataType === M.InheritVelocityModule ||
         module.dataType === M.LifetimeByEmitterSpeedModule,
@@ -130,6 +133,32 @@ export function emitterSupport(
           error instanceof Error ? error.message : 'Missing host force fields',
         );
       }
+    }
+    if (module.dataType === M.CollisionModule) {
+      const collision = module.data as R<CollisionModuleT>;
+      if (collision.type === 1 && collision.quality !== 0)
+        rules.warn(
+          'HOST_COLLISION_QUALITY',
+          `${path}.quality`,
+          collision.quality,
+          'Collision quality and voxel settings are passed to host sphere sweeps; Unity native voxel-cache history is not reproduced.',
+        );
+      if (collision.type === 0)
+        for (const [slot, id] of collision.planes.entries())
+          rules.require(
+            !id || sceneNodeIds?.has(id),
+            'HOST',
+            `${path}.planes.${slot}`,
+            id,
+            'Collision plane is outside this instance',
+          );
+      rules.require(
+        collision.type === 0 || environment?.physicsWorlds?.[String(collision.hostPhysicsSlot)],
+        'HOST',
+        `${path}.hostPhysicsSlot`,
+        collision.hostPhysicsSlot,
+        'Missing host particle physics world',
+      );
     }
     if (module.dataType === M.EmissionModule) {
       const emission = module.data as R<EmissionModuleT>;

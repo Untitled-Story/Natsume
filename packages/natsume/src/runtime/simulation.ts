@@ -84,6 +84,10 @@ export interface AnimationUpdateOptions {
 }
 
 export class Simulation {
+  onParticleCollision:
+    | ((event: import('./particle-physics.js').ParticleCollisionEvent) => void)
+    | undefined;
+  private readonly collisionEvents: import('./particle-physics.js').ParticleCollisionEvent[] = [];
   readonly directors = new Map<number, TimelineDirector>();
   private readonly directorClaims = new Map<number, number>();
   private readonly enabledDirectors = new Set<number>();
@@ -201,8 +205,11 @@ export class Simulation {
           this.scene.nodes.get((c.data as R<ParticleSystemT>).main!.customSpaceNodeId),
           pack,
           options.particleEnvironment,
+          this.scene.nodes,
         ),
       );
+    for (const emitter of this.emitters.values())
+      emitter.onCollisionMessage = (event) => this.collisionEvents.push(event);
     this.subEmitters = new SubEmitterGraph(this.emitters);
     this.subEmitters.setUpdateOrder(options.subEmitterUpdateOrder);
     this.diagnostics.push(
@@ -491,6 +498,7 @@ export class Simulation {
   }
   stop(mode: 'drain' | 'clear' = 'drain'): void {
     this.revision++;
+    this.collisionEvents.length = 0;
     if (mode === 'clear') for (const director of this.directors.values()) director.stop();
     for (const e of this.emitters.values()) {
       e.emitting = false;
@@ -505,6 +513,7 @@ export class Simulation {
   }
   restart(): void {
     this.revision++;
+    this.collisionEvents.length = 0;
     for (const director of this.directors.values()) director.reset();
     this.flushDirectors();
     this.enabledDirectors.clear();
@@ -900,6 +909,14 @@ export class Simulation {
         this.time += this.fixedDelta;
         this.accumulator -= this.fixedDelta;
         steps++;
+        if (this.collisionEvents.length) {
+          const revision = this.revision;
+          const events = this.collisionEvents.splice(0);
+          for (const event of events) {
+            this.onParticleCollision?.(event);
+            if (revision !== this.revision) return;
+          }
+        }
       }
       if (this.state === 'playing' && unscaledDelta !== undefined) {
         const revision = this.revision;

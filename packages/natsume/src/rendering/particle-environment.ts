@@ -1,6 +1,7 @@
 import { Texture } from 'pixi.js';
 import { check } from '../errors.js';
 import { copyForceFields, type ParticleForceFields } from '../runtime/particle-force-fields.js';
+import type { ParticlePhysicsWorld, ParticleCollider } from '../runtime/particle-physics.js';
 
 export type ParticleFog =
   | { readonly mode: 'none' }
@@ -25,6 +26,10 @@ export interface ParticleEnvironment {
   readonly gravity2D?: readonly [number, number] | undefined;
   /** Borrowed force-field services, indexed by source reference or world-search slot. */
   readonly forceFields?: ParticleForceFields | undefined;
+  /** Borrowed sphere-sweep services indexed by the package's physics-world slots. */
+  readonly physicsWorlds?: Readonly<Record<string, ParticlePhysicsWorld>> | undefined;
+  /** Borrowed collider references indexed by source slots. */
+  readonly colliders?: Readonly<Record<string, ParticleCollider>> | undefined;
   /** World-space velocities indexed by the package's host Rigidbody slot. */
   readonly rigidbodyVelocities?:
     | Readonly<Record<string, readonly [number, number, number]>>
@@ -95,6 +100,26 @@ export function copyEnvironment(
       velocities[slot] = [v[0], v[1], v[2]];
     }
   const d = value.depth;
+  for (const [slot, world] of Object.entries(value.physicsWorlds ?? {}))
+    check(
+      slot.length > 0 && world && typeof world.sweepSphere === 'function',
+      'HOST',
+      'Invalid particle physics world',
+    );
+  for (const [slot, collider] of Object.entries(value.colliders ?? {}))
+    check(
+      slot.length > 0 &&
+        collider &&
+        typeof collider.id === 'string' &&
+        collider.id.length > 0 &&
+        Number.isInteger(collider.layer) &&
+        collider.layer >= 0 &&
+        collider.layer < 32 &&
+        typeof collider.overlapSphere === 'function' &&
+        (collider.applyForce === undefined || typeof collider.applyForce === 'function'),
+      'HOST',
+      'Invalid particle collider',
+    );
   const velocity = value.viewVelocity;
   const position = value.viewPosition;
   check(
@@ -140,6 +165,8 @@ export function copyEnvironment(
     gravity: g ? [g[0], g[1], g[2]] : undefined,
     gravity2D: g2 ? [g2[0], g2[1]] : undefined,
     forceFields: copyForceFields(value.forceFields),
+    physicsWorlds: value.physicsWorlds ? { ...value.physicsWorlds } : undefined,
+    colliders: value.colliders ? { ...value.colliders } : undefined,
     rigidbodyVelocities: value.rigidbodyVelocities ? velocities : undefined,
     viewVelocity: velocity ? [velocity[0], velocity[1], velocity[2]] : undefined,
     viewPosition: position ? [position[0], position[1], position[2]] : undefined,

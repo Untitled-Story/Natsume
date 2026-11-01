@@ -155,6 +155,9 @@ export class EffectInstance {
     componentId?: number;
   }[] = [];
   private readonly eventHandlers = new Set<AnimationEventHandler>();
+  private readonly collisionHandlers = new Set<
+    (event: import('./particle-physics.js').ParticleCollisionEvent) => void
+  >();
   private readonly missingReceivers = new Set<string>();
   private updating = false;
   private eventRevision = 0;
@@ -172,6 +175,28 @@ export class EffectInstance {
     options: InstanceOptions,
   ) {
     simulation.onAnimationEvent = (event) => this.dispatchAnimationEvent(event);
+    simulation.onParticleCollision = (event) => {
+      if (this.disposed || this.dispatchingEvent) return;
+      this.dispatchingEvent = true;
+      const revision = this.eventRevision;
+      try {
+        for (const handler of [...this.collisionHandlers]) {
+          if (this.disposed || revision !== this.eventRevision) break;
+          if (!this.collisionHandlers.has(handler)) continue;
+          try {
+            handler(event);
+          } catch (error) {
+            this.simulation.diagnostics.push({
+              code: 'PARTICLE_COLLISION_EVENT_ERROR',
+              componentId: event.systemId,
+              message: error instanceof Error ? error.message : String(error),
+            });
+          }
+        }
+      } finally {
+        this.dispatchingEvent = false;
+      }
+    };
     simulation.onControlTime = (nodeId, phase, seconds, isCurrent) => {
       for (const b of this.behaviors) {
         if (phase !== 'stop' && !isCurrent()) return;
@@ -447,6 +472,17 @@ export class EffectInstance {
     this.eventHandlers.add(handler);
     return () => {
       this.eventHandlers.delete(handler);
+    };
+  }
+  /** Subscribes to contacts from systems with collision messages enabled. */
+  onParticleCollision(
+    handler: (event: import('./particle-physics.js').ParticleCollisionEvent) => void,
+  ): () => void {
+    this.assertAlive();
+    check(typeof handler === 'function', 'HOST', 'Particle collision handler must be a function');
+    this.collisionHandlers.add(handler);
+    return () => {
+      this.collisionHandlers.delete(handler);
     };
   }
   private dispatchAnimationEvent(event: NatsumeAnimationEvent): void {
@@ -729,6 +765,8 @@ export class EffectInstance {
     this.simulation.emitters.clear();
     this.nodeViews.clear();
     this.eventHandlers.clear();
+    this.collisionHandlers.clear();
+    this.simulation.onParticleCollision = undefined;
     this.simulation.onAnimationEvent = undefined;
     this.behaviors.length = 0;
     this.container.destroy();

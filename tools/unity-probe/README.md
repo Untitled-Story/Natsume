@@ -30,6 +30,8 @@ pnpm probe:unity --animator-playback # 实际 Play 时钟、可见性、裁剪�
 pnpm probe:unity --animation    # 动画时钟、循环与多关键帧曲线
 pnpm probe:unity --particle-modules # 力、速度颜色、速度继承、发射器速度寿命与随机统计
 pnpm probe:unity --external-forces # 力场过滤、列表合并、局部坐标与年龄乘数
+pnpm probe:unity --particle-collisions # 平面 / World 反弹、阻尼、寿命与初始穿透
+pnpm probe:unity --collider-force # 实际 Play 的刚体受力、尺寸 / 速度 / 角度乘数
 pnpm probe:unity --events       # 类型化事件、循环端点与启停顺序
 pnpm probe:unity --boundaries   # 发射、运动、外观与 BakeMesh 边界
 pnpm probe:unity --random       # 随机分布与参数相关性

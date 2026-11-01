@@ -50,6 +50,9 @@ export { prewarmDuration } from './prewarm.js';
 import { emitterSupport } from './emitter-support.js';
 import { assertSupport } from './support-checks.js';
 import type { ParticleSnapshot } from './particle-snapshot.js';
+import { ParticleCollisions } from './particle-collisions.js';
+import type { CollisionModuleT } from '../format/generated/noa/ir/collision-module.js';
+import type { ParticleCollisionEvent } from './particle-physics.js';
 
 export interface Diagnostic {
   readonly code: string;
@@ -65,6 +68,7 @@ export class Emitter {
   readonly colorModule: R<ColorModuleT> | undefined;
   readonly colorBySpeed: R<ColorBySpeedModuleT> | undefined;
   readonly forceModule: R<ForceModuleT> | undefined;
+  readonly collision: ParticleCollisions | undefined;
   readonly externalForces: R<ExternalForcesModuleT> | undefined;
   private externalFields: readonly ParticleForceField[] = [];
   private readonly forcePosition = new Float64Array(3);
@@ -154,6 +158,8 @@ export class Emitter {
   private nextSerial = 0;
   onBirth: ((index: number, phase: number) => void) | undefined;
   onDeath: ((index: number) => void) | undefined;
+  onCollision: ((index: number) => void) | undefined;
+  onCollisionMessage: ((event: ParticleCollisionEvent) => void) | undefined;
   onClear: (() => void) | undefined;
   onDisable: (() => void) | undefined;
   /** @internal Birth-driven systems emit through parent channels, even after Play(). */
@@ -200,10 +206,19 @@ export class Emitter {
     readonly customSpaceNode?: SceneNode,
     pack?: EffectPack,
     public environment?: ParticleEnvironment,
+    sceneNodes?: ReadonlyMap<number, SceneNode>,
   ) {
     const main = source.main!;
     this.main = main;
-    assertSupport(emitterSupport(source, gravity, !!customSpaceNode, environment));
+    assertSupport(
+      emitterSupport(
+        source,
+        gravity,
+        !!customSpaceNode,
+        environment,
+        sceneNodes ? new Set(sceneNodes.keys()) : new Set([node.id]),
+      ),
+    );
     this.setGravity(this.resolveEnvironment(environment, gravity));
     check(
       main.space !== Space.Custom || customSpaceNode,
@@ -242,6 +257,9 @@ export class Emitter {
           break;
         case M.ExternalForcesModule:
           this.externalForces = m.data as R<ExternalForcesModuleT>;
+          break;
+        case M.CollisionModule:
+          this.collision = new ParticleCollisions(m.data as R<CollisionModuleT>, sceneNodes);
           break;
         case M.InheritVelocityModule:
           this.inheritVelocity = m.data as R<InheritVelocityModuleT>;
@@ -400,6 +418,14 @@ export class Emitter {
       `System ${this.id}: missing Rigidbody velocity slot ${this.main.hostRigidbodyVelocitySlot}`,
     );
     if (this.externalForces) selectForceFields(this.externalForces, value?.forceFields);
+    const collision = this.collision?.definition;
+    check(
+      !collision ||
+        collision.type === 0 ||
+        value?.physicsWorlds?.[String(collision.hostPhysicsSlot)],
+      'HOST',
+      `System ${this.id}: missing physics world ${collision?.hostPhysicsSlot}`,
+    );
     return this.resolveGravity(
       this.main.gravitySource === 1
         ? value?.gravity2D && [value.gravity2D[0], value.gravity2D[1], 0]
@@ -1222,7 +1248,7 @@ export class Emitter {
           ? Math.fround(this.subAges[i]! + Math.fround(dt))
           : this.subAges[i]! + Math.fround(dt)
         : 0;
-      const age =
+      let age =
         progress !== undefined
           ? this.progressAge(i)
           : this.subAges
@@ -1555,10 +1581,18 @@ export class Emitter {
       this.positions[o] = x + vx * dt;
       this.positions[o + 1] = y + vy * dt;
       this.positions[o + 2] = z + vz * dt;
+      let collisionAge = 0;
+      if (this.collision) {
+        const previous = age;
+        age = this.collision.resolve(this, i, dt, age, x, y, z);
+        collisionAge = age - previous;
+        if (collisionAge && this.lifetimeProgress)
+          this.lifetimeProgress[i] = (age / this.lifetimes[i]!) * 100;
+      }
       // Custom Data, like integrated rotation, samples the start of this simulation step.
       this.updateCustom(i, this.ages[i]! / this.lifetimes[i]!);
       this.ages[i] = age;
-      if (this.subAges) this.subAges[i] = elapsed;
+      if (this.subAges) this.subAges[i] = elapsed + collisionAge;
       if (dead) {
         this.onDeath?.(i);
         this.remove(i);

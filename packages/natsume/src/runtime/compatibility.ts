@@ -407,7 +407,13 @@ export function checkCompatibility(
         'Animated gravityMultiplier requires particleEnvironment.gravity',
       );
       rules.issues.push(
-        ...emitterSupport(source, gravity, nodeIds.has(source.main!.customSpaceNodeId), env),
+        ...emitterSupport(
+          source,
+          gravity,
+          nodeIds.has(source.main!.customSpaceNodeId),
+          env,
+          nodeIds,
+        ),
       );
       for (const [index, module] of source.modules.entries()) {
         if (module.dataType !== ParticleModuleData.ShapeModule) continue;

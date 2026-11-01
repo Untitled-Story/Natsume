@@ -83,7 +83,28 @@ const sceneMaterials = process.argv.includes('--scene-materials');
 const events = process.argv.includes('--events');
 const particleModules = process.argv.includes('--particle-modules');
 const externalForces = process.argv.includes('--external-forces');
-const bySpeed = process.argv.includes('--by-speed') || particleModules || externalForces;
+const particleCollisions = process.argv.includes('--particle-collisions');
+const colliderForcePlayback = process.argv.includes('--collider-force');
+const particleProbe = particleModules
+  ? ['particle-modules', 'NatsumeParticleModulesProbe.Run']
+  : externalForces
+    ? ['external-forces', 'NatsumeExternalForcesProbe.Run']
+    : particleCollisions
+      ? ['particle-collisions', 'NatsumeParticleCollisionProbe.Run']
+      : colliderForcePlayback
+        ? ['collider-force', 'NatsumeParticleForcePlaybackProbe.Run']
+        : undefined;
+const bySpeed = process.argv.includes('--by-speed') || !!particleProbe;
+assert(
+  [
+    particleModules,
+    externalForces,
+    particleCollisions,
+    colliderForcePlayback,
+    process.argv.includes('--by-speed'),
+  ].filter(Boolean).length <= 1,
+  'Choose one probe mode',
+);
 assert(
   !(externalForces && (particleModules || process.argv.includes('--by-speed'))),
   'Choose one probe mode',
@@ -191,11 +212,7 @@ const output = resolve(
                           : events
                             ? 'events'
                             : bySpeed
-                              ? particleModules
-                                ? 'particle-modules'
-                                : externalForces
-                                  ? 'external-forces'
-                                  : 'by-speed'
+                              ? (particleProbe?.[0] ?? 'by-speed')
                               : bindings
                                 ? 'animation-bindings'
                                 : animation
@@ -322,8 +339,7 @@ const child = runEditor(
     noiseOptions ||
     stretch ||
     noiseStatistics ||
-    particleModules ||
-    externalForces
+    particleProbe
       ? []
       : ['-nographics']),
     '-projectPath',
@@ -362,11 +378,7 @@ const child = runEditor(
                             : events
                               ? 'NatsumeEventProbe.Run'
                               : bySpeed
-                                ? particleModules
-                                  ? 'NatsumeParticleModulesProbe.Run'
-                                  : externalForces
-                                    ? 'NatsumeExternalForcesProbe.Run'
-                                    : 'NatsumeBySpeedProbe.Run'
+                                ? (particleProbe?.[1] ?? 'NatsumeBySpeedProbe.Run')
                                 : bindings
                                   ? 'NatsumeBindingProbe.Run'
                                   : animation
@@ -406,7 +418,9 @@ const child = runEditor(
                                                                     : fitting
                                                                       ? 'NatsumeNoiseFitProbe.Run'
                                                                       : 'NatsumeProbe.Run',
-    ...(stretch || bindings || playback || controllerPlayback ? [] : ['-quit']),
+    ...(stretch || bindings || playback || controllerPlayback || colliderForcePlayback
+      ? []
+      : ['-quit']),
     '-logFile',
     log,
   ],
@@ -435,6 +449,19 @@ await new Promise((accept, reject) => {
 });
 const current = JSON.parse(await readFile(baseline, 'utf8'));
 assert.equal(current.unityVersion, version);
+if (particleCollisions || colliderForcePlayback) {
+  assert.equal(current.cases.length, particleCollisions ? 162 : 72);
+  if (process.argv.includes('--update-fixtures'))
+    await saveJson(
+      resolve(
+        root,
+        `data/unity-baselines/fixtures/${particleCollisions ? 'unity-particle-collisions' : 'unity-particle-collider-force'}.json`,
+      ),
+      JSON.stringify(current, null, 2) + '\n',
+    );
+  console.log(`Particle collision observations: ${current.cases.length}`);
+  process.exit(0);
+}
 if (externalForces) {
   assert.equal(current.cases.length, 384);
   if (process.argv.includes('--update-fixtures'))

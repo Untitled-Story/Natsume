@@ -20,6 +20,14 @@ export { type Diagnostic } from './runtime/emitter.js';
 export { NatsumePlugin } from './application-plugin.js';
 export { type ParticleEnvironment, type ParticleFog } from './rendering/particle-environment.js';
 export type {
+  ParticleSphereQuery,
+  ParticleSweepQuery,
+  ParticleSweepHit,
+  ParticleCollider,
+  ParticlePhysicsWorld,
+  ParticleCollisionEvent,
+} from './runtime/particle-physics.js';
+export type {
   ParticleForceField,
   ParticleForceFields,
   ParticleForceQuery,
