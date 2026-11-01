@@ -1,4 +1,5 @@
 import type { SpriteShapeSampler } from './sprite-shape.js';
+import type { MeshShapeSampler } from './mesh-shape.js';
 import { check } from '../errors.js';
 import type { DeepReadonly as R } from '../pack.js';
 import type { ShapeModuleT } from '../format/generated/noa/ir/shape-module.js';
@@ -14,7 +15,7 @@ import { scalar, random } from './parameters.js';
 export function validateShape(s: R<ShapeModuleT>): void {
   const c = s.geometry;
   check(
-    c && s.geometryType >= G.CircleShape && s.geometryType <= G.RectangleShape,
+    c && s.geometryType >= G.CircleShape && s.geometryType <= G.MeshShape,
     'CAPABILITY',
     'Unsupported shape',
   );
@@ -62,7 +63,7 @@ export function sampleShape(
   out: Float64Array,
   seconds = phase,
   duration = 1,
-  sprite?: SpriteShapeSampler,
+  sprite?: SpriteShapeSampler | MeshShapeSampler,
 ): void {
   const rnd = (ch: number) => random(seed, serial, ch);
   let x = 0,
@@ -77,15 +78,22 @@ export function sampleShape(
       x = rnd(1) - 0.5;
       y = rnd(2) - 0.5;
       break;
-    case G.SpriteShape: {
-      check(sprite, 'CAPABILITY', 'Sprite emission geometry is unavailable');
+    case G.SpriteShape:
+    case G.MeshShape: {
+      check(sprite, 'CAPABILITY', 'Emission geometry is unavailable');
       const d = sprite.definition;
+      const meshShape = s.geometryType === G.MeshShape;
+      let distance = travel(d.spawnSpeed, seconds, duration, random(seed, 0, 74));
+      if (meshShape) {
+        distance = Math.fround(distance);
+        if (d.spawnSpread > 0) distance = Math.floor(distance / d.spawnSpread) * d.spawnSpread;
+      }
       const progress = sweep(
         d.spawnMode === 1 ? 1 : 2,
-        travel(d.spawnSpeed, seconds, duration, random(seed, 0, 74)),
+        distance,
         0,
         0,
-        d.spawnSpread,
+        meshShape ? 0 : d.spawnSpread,
       );
       sprite.sample(rnd(1), rnd(2), rnd(3), serial, out, progress);
       [x, y, z, dx, dy, dz] = out as unknown as [number, number, number, number, number, number];

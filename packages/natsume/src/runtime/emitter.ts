@@ -6,6 +6,8 @@ import {
 import { mat4, quat, vec3 } from 'gl-matrix';
 import { check } from '../errors.js';
 import { SpriteShapeSampler } from './sprite-shape.js';
+import { MeshShapeSampler } from './mesh-shape.js';
+import type { MeshShapeT } from '../format/generated/noa/ir/mesh-shape.js';
 import { ShapeGeometry } from '../format/generated/noa/ir/shape-geometry.js';
 import type { SpriteShapeT } from '../format/generated/noa/ir/sprite-shape.js';
 import type { EffectPack, DeepReadonly as R } from '../pack.js';
@@ -162,7 +164,7 @@ export class Emitter {
   private readonly bakeInitialInheritance: boolean;
   private readonly direction = vec3.create();
   private readonly birth = new Float64Array(10);
-  private readonly spriteShape: SpriteShapeSampler | undefined;
+  private readonly spriteShape: SpriteShapeSampler | MeshShapeSampler | undefined;
   private nextSerial = 0;
   private ringWrite = 0;
   private readonly retiredRingPools: Emitter[] = [];
@@ -378,6 +380,10 @@ export class Emitter {
     if (this.shape?.geometryType === ShapeGeometry.SpriteShape) {
       check(pack, 'CAPABILITY', 'Sprite emission requires source assets');
       this.spriteShape = new SpriteShapeSampler(pack, this.shape.geometry as R<SpriteShapeT>);
+    }
+    if (this.shape?.geometryType === ShapeGeometry.MeshShape) {
+      check(pack, 'CAPABILITY', 'Mesh emission requires source assets');
+      this.spriteShape = new MeshShapeSampler(pack, this.shape.geometry as R<MeshShapeT>);
     }
     if (this.velocityModule || this.sheet?.timeMode === SheetTime.Speed || this.inheritVelocity)
       this.renderVelocities = new Float32Array(cap * 3);

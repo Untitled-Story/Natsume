@@ -93,31 +93,34 @@ const ringPlayback = process.argv.includes('--ring-playback');
 const particleClockPlayback = process.argv.includes('--particle-clocks');
 const particleMainPlayback = process.argv.includes('--particle-main');
 const particleCullingPlayback = process.argv.includes('--particle-culling');
-const particleProbe = particleModules
-  ? ['particle-modules', 'NatsumeParticleModulesProbe.Run']
-  : externalForces
-    ? ['external-forces', 'NatsumeExternalForcesProbe.Run']
-    : particleCollisions
-      ? ['particle-collisions', 'NatsumeParticleCollisionProbe.Run']
-      : colliderForcePlayback
-        ? ['collider-force', 'NatsumeParticleForcePlaybackProbe.Run']
-        : particleTriggers
-          ? ['particle-triggers', 'NatsumeParticleTriggerPlaybackProbe.Run']
-          : particleLights
-            ? ['particle-lights', 'NatsumeParticleLightsProbe.Run']
-            : lightDistribution
-              ? ['light-distribution', 'NatsumeParticleLightDistributionProbe.Run']
-              : ringBuffer
-                ? ['ring-buffer', 'NatsumeParticleRingBufferProbe.Run']
-                : ringPlayback
-                  ? ['ring-playback', 'NatsumeParticleRingPlaybackProbe.Run']
-                  : particleClockPlayback
-                    ? ['particle-clocks', 'NatsumeParticleClockPlaybackProbe.Run']
-                    : particleMainPlayback
-                      ? ['particle-main', 'NatsumeParticleMainPlaybackProbe.Run']
-                      : particleCullingPlayback
-                        ? ['particle-culling', 'NatsumeParticleCullingPlaybackProbe.Run']
-                        : undefined;
+const meshShapes = process.argv.includes('--mesh-shapes');
+const particleProbe = meshShapes
+  ? ['mesh-shapes', 'NatsumeMeshShapeProbe.Run']
+  : particleModules
+    ? ['particle-modules', 'NatsumeParticleModulesProbe.Run']
+    : externalForces
+      ? ['external-forces', 'NatsumeExternalForcesProbe.Run']
+      : particleCollisions
+        ? ['particle-collisions', 'NatsumeParticleCollisionProbe.Run']
+        : colliderForcePlayback
+          ? ['collider-force', 'NatsumeParticleForcePlaybackProbe.Run']
+          : particleTriggers
+            ? ['particle-triggers', 'NatsumeParticleTriggerPlaybackProbe.Run']
+            : particleLights
+              ? ['particle-lights', 'NatsumeParticleLightsProbe.Run']
+              : lightDistribution
+                ? ['light-distribution', 'NatsumeParticleLightDistributionProbe.Run']
+                : ringBuffer
+                  ? ['ring-buffer', 'NatsumeParticleRingBufferProbe.Run']
+                  : ringPlayback
+                    ? ['ring-playback', 'NatsumeParticleRingPlaybackProbe.Run']
+                    : particleClockPlayback
+                      ? ['particle-clocks', 'NatsumeParticleClockPlaybackProbe.Run']
+                      : particleMainPlayback
+                        ? ['particle-main', 'NatsumeParticleMainPlaybackProbe.Run']
+                        : particleCullingPlayback
+                          ? ['particle-culling', 'NatsumeParticleCullingPlaybackProbe.Run']
+                          : undefined;
 const bySpeed = process.argv.includes('--by-speed') || !!particleProbe;
 assert(
   [
@@ -133,6 +136,7 @@ assert(
     particleClockPlayback,
     particleMainPlayback,
     particleCullingPlayback,
+    meshShapes,
     process.argv.includes('--by-speed'),
   ].filter(Boolean).length <= 1,
   'Choose one probe mode',
@@ -492,6 +496,18 @@ await new Promise((accept, reject) => {
 });
 const current = JSON.parse(await readFile(baseline, 'utf8'));
 assert.equal(current.unityVersion, version);
+if (meshShapes) {
+  assert.equal(current.cases.length, 56);
+  assert.equal(current.variants.length, 3);
+  assert(current.variants.every((v) => v.cases.length === 12));
+  if (process.argv.includes('--update-fixtures'))
+    await saveJson(
+      resolve(root, 'data/unity-baselines/fixtures/unity-mesh-shape.json'),
+      JSON.stringify(current, null, 2) + '\n',
+    );
+  console.log('Mesh shape observations: 92 cases');
+  process.exit(0);
+}
 if (particleClockPlayback || particleMainPlayback || particleCullingPlayback) {
   assert.equal(current.cases.length, particleClockPlayback ? 18 : particleMainPlayback ? 60 : 84);
   if (process.argv.includes('--update-fixtures'))

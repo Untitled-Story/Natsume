@@ -15,6 +15,8 @@ import type { TextureSheetModuleT } from '../format/generated/noa/ir/texture-she
 import type { ShapeModuleT } from '../format/generated/noa/ir/shape-module.js';
 import { ShapeGeometry } from '../format/generated/noa/ir/shape-geometry.js';
 import type { SpriteShapeT } from '../format/generated/noa/ir/sprite-shape.js';
+import type { MeshShapeT } from '../format/generated/noa/ir/mesh-shape.js';
+import { MeshShapeSampler } from './mesh-shape.js';
 import type { SpriteRendererT } from '../format/generated/noa/ir/sprite-renderer.js';
 import { copyRenderEnvironment } from '../rendering/render-environment.js';
 import { materialSupport, rendererEnvironmentSupport } from '../rendering/material-support.js';
@@ -418,6 +420,22 @@ export function checkCompatibility(
       for (const [index, module] of source.modules.entries()) {
         if (module.dataType !== ParticleModuleData.ShapeModule) continue;
         const shape = module.data as R<ShapeModuleT>;
+        if (shape.geometryType === ShapeGeometry.MeshShape) {
+          const definition = shape.geometry as R<MeshShapeT>;
+          try {
+            new MeshShapeSampler(pack, definition);
+          } catch (error) {
+            if (!(error instanceof NatsumeError)) throw error;
+            rules.require(
+              false,
+              error.code,
+              `modules.${index}.geometry`,
+              definition,
+              error.message,
+            );
+          }
+          continue;
+        }
         if (shape.geometryType !== ShapeGeometry.SpriteShape) continue;
         const id = (shape.geometry as R<SpriteShapeT>).spriteAssetId;
         const sprite = pack.document.assets.find((a) => a.id === id)?.sprite;
