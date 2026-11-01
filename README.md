@@ -244,7 +244,7 @@ if (particle) effect.emitSubEmitter(systemId, slot, particle.id);
 effect.emitSubEmitter(systemId, slot); // 对所有存活粒子触发
 ```
 
-`systemId` 为源 ParticleSystem 组件 ID，`slot` 为源包中的零起始槽序号，空槽不发射。Birth / Death 由运行时自动触发；Collision / Trigger / Manual 由宿主通知，Natsume 不执行碰撞检测。失效粒子 ID 或不存在的系统 / 槽会报错。
+`systemId` 为源 ParticleSystem 组件 ID，`slot` 为源包中的零起始槽序号，空槽不发射。Birth / Death 由运行时自动触发；Collision / Trigger 根据宿主物理查询自动触发，也可与 Manual 一样由宿主通知。失效粒子 ID 或不存在的系统 / 槽会报错。
 
 多个独立根共享子系统时，默认使用稳定调度。Unity 的任务交错可能改变出生年龄及寿命边界的数量，运行时保留 `SHARED_SUB_EMITTER_ORDER` 诊断。宿主可显式指定每个固定步的执行顺序；例如仅含 A、B 和共享子系统的实例：
 
@@ -324,6 +324,9 @@ unsubscribe();
 
 Trigger 引用通过 `particleEnvironment.colliders` 绑定。Collider 的 `sweepSphere(query)` 判断整步球体扫掠是否相交，包含起点和终点重叠；`overlapSphere(query)` 提供静态重叠。事件使用 `effect.onParticleTrigger(callback)` 订阅，`kind` 为 `inside / outside / enter / exit`，`colliders` 保留源槽号与宿主身份。只有 Callback 派发公开事件；Kill 和 Callback 均自动触发 Trigger 子发射器。
 
+粒子灯光通过 `particleEnvironment.lights[slot]` 绑定宿主模板。模板提供 `color`、`range`、`intensity` 和 `create()`；返回的句柄实现 `update(state)`、`destroy()`。位置和范围使用世界单位，`state` 及其数组只在调用期间有效。Natsume 复用句柄并在粒子死亡、停止清空、替换模板或实例销毁时释放；模板由宿主持有。
+
+
 ## Script Bridge
 
 在实例化前，用包内 MonoBehaviour 的真实身份注册行为。以下示例将该组件所在节点及其子树绘制到父节点原点，保留粒子模拟与深度：
@@ -376,6 +379,7 @@ runtime.registerScript(
 | Color by Speed            | 速度区间、四种颜色参数、HDR 输入及粒子颜色量化                                                                                    |
 | External Forces           | LayerMask / List / LayerMaskAndList；宿主世界空间力场采样、身份去重、动态启用与年龄乘数                                           |
 | Triggers                  | Inside / Outside / Enter / Exit、Ignore / Kill / Callback；宿主球体扫掠、三种 Collider 查询、重复槽与自动子发射器                 |
+| Lights                    | 宿主模板与独立灯光句柄、随机 / 均匀分配、数量上限、粒子颜色 / 尺寸 / Alpha 与年龄曲线 |
 
 速度取样包含重力、Velocity 和 Limit，不包含 Speed Multiplier 与 Noise 位移。零宽区间按 Unity 的端点规则处理。
 
@@ -416,7 +420,6 @@ Unity 临时材质对象 ID 不在 NOAP 中；同队列不透明材质分组使�
 
 | 模块          | 未实现行为                                                                                                                      |
 | ------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| Lights        | 粒子灯光                                                                                                                        |
 | Timeline 扩展 | Audio、Signal / Marker、自定义轨道 / Playable、Infinite Clip、AvatarMask、prefab 实例化、自定义属性动画与非默认 clip-end action |
 | Animator 扩展 | Avatar / Root Motion、IK / Mirror、AvatarMask、同步层、BlendTree、OverrideController、嵌套状态机、StateMachineBehaviour         |
 

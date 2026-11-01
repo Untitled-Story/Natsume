@@ -64,6 +64,7 @@ export const SUPPORTED_FEATURES: Readonly<Record<string, number>> = Object.freez
       'particle.external-forces',
       'particle.collision',
       'particle.trigger',
+      'particle.lights',
       'particle.color-by-speed',
       'ui.canvas',
       'material.unity-ui-default',

@@ -33,6 +33,8 @@ pnpm probe:unity --external-forces # 力场过滤、列表合并、局部坐标�
 pnpm probe:unity --particle-collisions # 平面 / World 反弹、阻尼、寿命与初始穿透
 pnpm probe:unity --collider-force # 实际 Play 的刚体受力、尺寸 / 速度 / 角度乘数
 pnpm probe:unity --particle-triggers # 实际 Play 的事件帧、Kill、Collider 查询与子发射器
+pnpm probe:unity --particle-lights # 实际 Play 的颜色、范围、强度和年龄曲线像素
+pnpm probe:unity --light-distribution # 灯光分配、数量限制、死亡补位与随机统计
 pnpm probe:unity --events       # 类型化事件、循环端点与启停顺序
 pnpm probe:unity --boundaries   # 发射、运动、外观与 BakeMesh 边界
 pnpm probe:unity --random       # 随机分布与参数相关性

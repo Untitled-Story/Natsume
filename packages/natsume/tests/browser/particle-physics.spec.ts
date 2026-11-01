@@ -48,3 +48,21 @@ test('preserves Trigger query slots and cancels queued events when a callback pa
   expect(result.resumedAt).toBeCloseTo(2 / 60);
   expect(result.diagnostics).toContain('PARTICLE_TRIGGER_EVENT_ERROR');
 });
+
+test('owns particle-light handles across replacement, stop, restart and disposal', async ({
+  page,
+}) => {
+  await page.goto('/');
+  const result = await page.evaluate(
+    async (path) => (await import('/@fs' + path)).checkParticleLightLifecycle(),
+    new URL('./particle-physics-fixture.ts', import.meta.url).pathname,
+  );
+  expect(result).toMatchObject({
+    blocked: true,
+    first: { created: 1, destroyed: 0 },
+    replaced: { created: 2, destroyed: 1 },
+    cleared: { created: 2, destroyed: 2 },
+    final: { created: 3, destroyed: 3 },
+  });
+  expect(result.updates).toBeGreaterThan(2);
+});

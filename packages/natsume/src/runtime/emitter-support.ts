@@ -15,6 +15,7 @@ import type { ExternalForcesModuleT } from '../format/generated/noa/ir/external-
 import { selectForceFields } from './particle-force-fields.js';
 import type { CollisionModuleT } from '../format/generated/noa/ir/collision-module.js';
 import type { TriggerModuleT } from '../format/generated/noa/ir/trigger-module.js';
+import type { LightsModuleT } from '../format/generated/noa/ir/lights-module.js';
 
 export function emitterSupport(
   source: R<ParticleSystemT>,
@@ -115,6 +116,7 @@ export function emitterSupport(
         module.dataType === M.ExternalForcesModule ||
         module.dataType === M.CollisionModule ||
         module.dataType === M.TriggerModule ||
+        module.dataType === M.LightsModule ||
         module.dataType === M.ColorBySpeedModule ||
         module.dataType === M.InheritVelocityModule ||
         module.dataType === M.LifetimeByEmitterSpeedModule,
@@ -171,6 +173,16 @@ export function emitterSupport(
           reference.hostSlot,
           'Missing host particle collider',
         );
+    if (module.dataType === M.LightsModule) {
+      const slot = (module.data as R<LightsModuleT>).light?.hostSlot;
+      rules.require(
+        !slot || environment?.lights?.[String(slot)],
+        'HOST',
+        `${path}.light.hostSlot`,
+        slot,
+        'Missing host particle light template',
+      );
+    }
     if (module.dataType === M.EmissionModule) {
       const emission = module.data as R<EmissionModuleT>;
       const count = emission.bursts.reduce(

@@ -704,6 +704,7 @@ export class EffectInstance {
     this.container.boundsArea = bounds;
   }
   private render(): void {
+    for (const emitter of this.simulation.emitters.values()) emitter.lights?.sync(emitter);
     this.syncLayoutBounds();
     const scene = this.simulation.scene;
     for (let pass = 0; pass < 2; pass++)

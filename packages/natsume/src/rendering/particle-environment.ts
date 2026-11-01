@@ -2,6 +2,7 @@ import { Texture } from 'pixi.js';
 import { check } from '../errors.js';
 import { copyForceFields, type ParticleForceFields } from '../runtime/particle-force-fields.js';
 import type { ParticlePhysicsWorld, ParticleCollider } from '../runtime/particle-physics.js';
+import type { ParticleLightTemplate } from '../runtime/particle-lights.js';
 
 export type ParticleFog =
   | { readonly mode: 'none' }
@@ -30,6 +31,8 @@ export interface ParticleEnvironment {
   readonly physicsWorlds?: Readonly<Record<string, ParticlePhysicsWorld>> | undefined;
   /** Borrowed collider references indexed by source slots. */
   readonly colliders?: Readonly<Record<string, ParticleCollider>> | undefined;
+  /** Borrowed templates. Natsume owns only the handles returned by template.create(). */
+  readonly lights?: Readonly<Record<string, ParticleLightTemplate>> | undefined;
   /** World-space velocities indexed by the package's host Rigidbody slot. */
   readonly rigidbodyVelocities?:
     | Readonly<Record<string, readonly [number, number, number]>>
@@ -100,6 +103,21 @@ export function copyEnvironment(
       velocities[slot] = [v[0], v[1], v[2]];
     }
   const d = value.depth;
+  for (const [slot, template] of Object.entries(value.lights ?? {}))
+    check(
+      slot.length > 0 &&
+        template &&
+        typeof template.create === 'function' &&
+        Array.isArray(template.color) &&
+        template.color.length === 3 &&
+        template.color.every((v) => Number.isFinite(v) && v >= 0) &&
+        Number.isFinite(template.range) &&
+        template.range >= 0 &&
+        Number.isFinite(template.intensity) &&
+        template.intensity >= 0,
+      'HOST',
+      'Invalid particle light template',
+    );
   for (const [slot, world] of Object.entries(value.physicsWorlds ?? {}))
     check(
       slot.length > 0 && world && typeof world.sweepSphere === 'function',
@@ -168,6 +186,7 @@ export function copyEnvironment(
     forceFields: copyForceFields(value.forceFields),
     physicsWorlds: value.physicsWorlds ? { ...value.physicsWorlds } : undefined,
     colliders: value.colliders ? { ...value.colliders } : undefined,
+    lights: value.lights ? { ...value.lights } : undefined,
     rigidbodyVelocities: value.rigidbodyVelocities ? velocities : undefined,
     viewVelocity: velocity ? [velocity[0], velocity[1], velocity[2]] : undefined,
     viewPosition: position ? [position[0], position[1], position[2]] : undefined,

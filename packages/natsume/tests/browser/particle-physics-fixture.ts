@@ -179,3 +179,84 @@ export async function checkTriggerEvents() {
   app.destroy();
   return { events, recursive, paused, pausedAt, resumedAt, unsubscribed, diagnostics, disposed };
 }
+
+export async function checkParticleLightLifecycle() {
+  const app = new Application();
+  await app.init({
+    preference: 'webgl',
+    preferWebGLVersion: 2,
+    width: 32,
+    height: 32,
+    autoStart: false,
+  });
+  const runtime = new NatsumeRuntime(app.renderer as WebGLRenderer);
+  const doc = minimalDocument(),
+    source = particleSource();
+  source.modules.push(
+    new I.ParticleModuleT(
+      I.ParticleModuleData.LightsModule,
+      new I.LightsModuleT(
+        1,
+        false,
+        true,
+        true,
+        true,
+        8,
+        new I.EnvironmentReferenceT(I.EnvironmentKind.Light, null, null, 'light'),
+        constant(1),
+        constant(1),
+      ),
+    ),
+  );
+  doc.features = [new I.FeatureRequirementT('particle.lights')];
+  doc.components = [new I.ComponentT(5, 1, true, I.ComponentData.ParticleSystem, source)];
+  const pack = new EffectPack(
+    doc,
+    { format: 'noa-package', version: 1, noir_version: [1, 0], document: 'scene.noir', files: [] },
+    new Map(),
+    new Map(),
+  );
+  let created = 0,
+    destroyed = 0,
+    updates = 0;
+  const template = {
+    color: [1, 1, 1] as const,
+    range: 1,
+    intensity: 1,
+    create() {
+      created++;
+      return {
+        update() {
+          updates++;
+        },
+        destroy() {
+          destroyed++;
+        },
+      };
+    },
+  };
+  const environment = { fog: { mode: 'none' as const }, lights: { light: template } };
+  const blocked = !runtime.checkCompatibility(pack).compatible;
+  const effect = await runtime.instantiate(pack, { particleEnvironment: environment });
+  effect.play();
+  manualParticle(effect.simulation.emitters.get(5)!);
+  effect.update(1 / 60);
+  const first = { created, destroyed };
+  effect.pause();
+  effect.update(0);
+  effect.setParticleEnvironment({ ...environment, lights: { light: { ...template } } });
+  const replaced = { created, destroyed };
+  effect.stop('clear');
+  const cleared = { created, destroyed };
+  effect.restart();
+  effect.play();
+  manualParticle(effect.simulation.emitters.get(5)!);
+  effect.update(1 / 60);
+  effect.destroy();
+  effect.destroy();
+  const final = { created, destroyed };
+  pack.dispose();
+  runtime.destroy();
+  app.destroy();
+  return { blocked, first, replaced, cleared, final, updates };
+}

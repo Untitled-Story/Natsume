@@ -85,6 +85,8 @@ const particleModules = process.argv.includes('--particle-modules');
 const externalForces = process.argv.includes('--external-forces');
 const particleCollisions = process.argv.includes('--particle-collisions');
 const colliderForcePlayback = process.argv.includes('--collider-force');
+const particleLights = process.argv.includes('--particle-lights');
+const lightDistribution = process.argv.includes('--light-distribution');
 const particleTriggers = process.argv.includes('--particle-triggers');
 const particleProbe = particleModules
   ? ['particle-modules', 'NatsumeParticleModulesProbe.Run']
@@ -96,7 +98,11 @@ const particleProbe = particleModules
         ? ['collider-force', 'NatsumeParticleForcePlaybackProbe.Run']
         : particleTriggers
           ? ['particle-triggers', 'NatsumeParticleTriggerPlaybackProbe.Run']
-          : undefined;
+          : particleLights
+            ? ['particle-lights', 'NatsumeParticleLightsProbe.Run']
+            : lightDistribution
+              ? ['light-distribution', 'NatsumeParticleLightDistributionProbe.Run']
+              : undefined;
 const bySpeed = process.argv.includes('--by-speed') || !!particleProbe;
 assert(
   [
@@ -105,6 +111,8 @@ assert(
     particleCollisions,
     colliderForcePlayback,
     particleTriggers,
+    particleLights,
+    lightDistribution,
     process.argv.includes('--by-speed'),
   ].filter(Boolean).length <= 1,
   'Choose one probe mode',
@@ -427,7 +435,9 @@ const child = runEditor(
     playback ||
     controllerPlayback ||
     colliderForcePlayback ||
-    particleTriggers
+    particleTriggers ||
+    particleLights ||
+    lightDistribution
       ? []
       : ['-quit']),
     '-logFile',
@@ -458,6 +468,19 @@ await new Promise((accept, reject) => {
 });
 const current = JSON.parse(await readFile(baseline, 'utf8'));
 assert.equal(current.unityVersion, version);
+if (particleLights || lightDistribution) {
+  assert.equal(current.cases.length, particleLights ? 32 : 214);
+  if (process.argv.includes('--update-fixtures'))
+    await saveJson(
+      resolve(
+        root,
+        `data/unity-baselines/fixtures/${particleLights ? 'unity-particle-lights' : 'unity-particle-light-distribution'}.json`,
+      ),
+      JSON.stringify(current, null, 2) + '\n',
+    );
+  console.log(`Particle light observations: ${current.cases.length}`);
+  process.exit(0);
+}
 if (particleTriggers) {
   assert.equal(current.cases.length, 216);
   if (process.argv.includes('--update-fixtures'))

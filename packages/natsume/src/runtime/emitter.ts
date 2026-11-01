@@ -56,6 +56,8 @@ import type { ParticleCollisionEvent } from './particle-physics.js';
 import type { ParticleTriggerEvent } from './particle-physics.js';
 import { ParticleTriggers } from './particle-triggers.js';
 import type { TriggerModuleT } from '../format/generated/noa/ir/trigger-module.js';
+import type { LightsModuleT } from '../format/generated/noa/ir/lights-module.js';
+import { ParticleLights } from './particle-lights.js';
 
 export interface Diagnostic {
   readonly code: string;
@@ -73,6 +75,7 @@ export class Emitter {
   readonly forceModule: R<ForceModuleT> | undefined;
   readonly collision: ParticleCollisions | undefined;
   readonly trigger: ParticleTriggers | undefined;
+  readonly lights: ParticleLights | undefined;
   readonly externalForces: R<ExternalForcesModuleT> | undefined;
   private externalFields: readonly ParticleForceField[] = [];
   private readonly forcePosition = new Float64Array(3);
@@ -270,6 +273,9 @@ export class Emitter {
         case M.TriggerModule:
           this.trigger = new ParticleTriggers(m.data as R<TriggerModuleT>);
           break;
+        case M.LightsModule:
+          this.lights = new ParticleLights(m.data as R<LightsModuleT>, diagnostics);
+          break;
         case M.InheritVelocityModule:
           this.inheritVelocity = m.data as R<InheritVelocityModuleT>;
           break;
@@ -428,6 +434,12 @@ export class Emitter {
     );
     if (this.externalForces) selectForceFields(this.externalForces, value?.forceFields);
     const collision = this.collision?.definition;
+    const lightSlot = this.lights?.definition.light?.hostSlot;
+    check(
+      !lightSlot || value?.lights?.[String(lightSlot)],
+      'HOST',
+      `Missing particle light template ${lightSlot}`,
+    );
     if (this.trigger)
       for (const reference of this.trigger.definition.colliders)
         check(
@@ -568,6 +580,7 @@ export class Emitter {
     return out;
   }
   reset(): void {
+    this.lights?.clear();
     this.trigger?.clear();
     this.onClear?.();
     this.count = 0;
@@ -598,6 +611,7 @@ export class Emitter {
     this.emitting = true;
   }
   clear(): void {
+    this.lights?.clear();
     this.trigger?.clear();
     this.onClear?.();
     this.count = 0;
@@ -621,6 +635,7 @@ export class Emitter {
       this.lastVelocityPosition[axis] = this.node.worldMatrix[12 + axis]!;
     this.updateEmitterVelocity(0);
     if (!active) {
+      this.lights?.clear();
       this.trigger?.clear();
       this.onDisable?.();
       this.count = 0;
