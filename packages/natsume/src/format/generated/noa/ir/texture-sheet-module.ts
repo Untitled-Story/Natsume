@@ -110,8 +110,18 @@ uvChannelMask():number {
   return offset ? this.bb!.readUint32(this.bb_pos + offset) : 1;
 }
 
+flipUProbability():number {
+  const offset = this.bb!.__offset(this.bb_pos, 32);
+  return offset ? this.bb!.readFloat32(this.bb_pos + offset) : 0.0;
+}
+
+flipVProbability():number {
+  const offset = this.bb!.__offset(this.bb_pos, 34);
+  return offset ? this.bb!.readFloat32(this.bb_pos + offset) : 0.0;
+}
+
 static startTextureSheetModule(builder:flatbuffers.Builder) {
-  builder.startObject(14);
+  builder.startObject(16);
 }
 
 static addMode(builder:flatbuffers.Builder, mode:SheetMode) {
@@ -187,6 +197,14 @@ static addUvChannelMask(builder:flatbuffers.Builder, uvChannelMask:number) {
   builder.addFieldInt32(13, uvChannelMask, 1);
 }
 
+static addFlipUProbability(builder:flatbuffers.Builder, flipUProbability:number) {
+  builder.addFieldFloat32(14, flipUProbability, 0.0);
+}
+
+static addFlipVProbability(builder:flatbuffers.Builder, flipVProbability:number) {
+  builder.addFieldFloat32(15, flipVProbability, 0.0);
+}
+
 static endTextureSheetModule(builder:flatbuffers.Builder):flatbuffers.Offset {
   const offset = builder.endObject();
   return offset;
@@ -208,7 +226,9 @@ unpack(): TextureSheetModuleT {
     this.row(),
     this.fps(),
     (this.speedRange() !== null ? this.speedRange()!.unpack() : null),
-    this.uvChannelMask()
+    this.uvChannelMask(),
+    this.flipUProbability(),
+    this.flipVProbability()
   );
 }
 
@@ -228,6 +248,8 @@ unpackTo(_o: TextureSheetModuleT): void {
   _o.fps = this.fps();
   _o.speedRange = (this.speedRange() !== null ? this.speedRange()!.unpack() : null);
   _o.uvChannelMask = this.uvChannelMask();
+  _o.flipUProbability = this.flipUProbability();
+  _o.flipVProbability = this.flipVProbability();
 }
 }
 
@@ -246,7 +268,9 @@ constructor(
   public row: number = 0,
   public fps: number = 30.0,
   public speedRange: Vec2T|null = null,
-  public uvChannelMask: number = 1
+  public uvChannelMask: number = 1,
+  public flipUProbability: number = 0.0,
+  public flipVProbability: number = 0.0
 ){}
 
 
@@ -270,6 +294,8 @@ pack(builder:flatbuffers.Builder): flatbuffers.Offset {
   TextureSheetModule.addFps(builder, this.fps);
   TextureSheetModule.addSpeedRange(builder, (this.speedRange !== null ? this.speedRange!.pack(builder) : 0));
   TextureSheetModule.addUvChannelMask(builder, this.uvChannelMask);
+  TextureSheetModule.addFlipUProbability(builder, this.flipUProbability);
+  TextureSheetModule.addFlipVProbability(builder, this.flipVProbability);
 
   return TextureSheetModule.endTextureSheetModule(builder);
 }

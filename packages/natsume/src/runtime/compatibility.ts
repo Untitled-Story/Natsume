@@ -1,3 +1,4 @@
+import { SourceResolution } from '../format/generated/noa/ir/source-resolution.js';
 import { MaterialModel as M } from '../format/generated/noa/ir/material-model.js';
 import { canvasSortingRank } from '../rendering/canvas-sorting.js';
 import { imageGeometry } from '../rendering/image-geometry.js';
@@ -153,6 +154,28 @@ export function checkCompatibility(
         feature.revision,
         'Required feature is not implemented',
       );
+  for (const [index, reference] of (pack.document.sourceExport?.references ?? []).entries())
+    if (
+      reference.resolution === SourceResolution.MissingAsset ||
+      reference.resolution === SourceResolution.MissingObject
+    )
+      global.require(
+        false,
+        'CAPABILITY',
+        `sourceExport.references.${index}`,
+        reference,
+        'Source dependency is unresolved; provide the original dependency and recompile',
+      );
+  for (const animation of pack.document.animations)
+    for (const [index, track] of animation.tracks.entries())
+      if (track.binding?.property === AnimationProperty.SourceBinding)
+        global.require(
+          false,
+          'CAPABILITY',
+          `animations.${animation.id}.tracks.${index}.binding.source`,
+          track.binding.source,
+          'Unity source animation binding requires an execution adapter',
+        );
   global.require(entry, 'HOST', 'entryId', options.entryId, 'Unknown entry');
   global.require(
     options.maxTrailPoints === undefined ||
@@ -280,7 +303,7 @@ export function checkCompatibility(
     'CAPABILITY',
     'cameraPolicy',
     entry.cameraPolicy,
-    'Embedded cameras are not implemented; use a host display matrix',
+    'Authored and source-preserved cameras require an execution adapter',
   );
   const children = new Map<number, number[]>();
   for (const node of pack.nodes) {
@@ -356,6 +379,14 @@ export function checkCompatibility(
   let uiScene: Scene | undefined;
   for (const c of components) {
     const rules = new SupportChecks();
+    if (c.dataType === C.UnityComponent)
+      rules.require(
+        false,
+        'CAPABILITY',
+        'sourceObjectIndex',
+        c.data && 'sourceObjectIndex' in c.data ? c.data.sourceObjectIndex : undefined,
+        'Unity source component requires an execution adapter',
+      );
     if (c.dataType === C.ParticleSystem) {
       const source = c.data as R<ParticleSystemT>;
       const animatedGravity = pack.document.animations.some((a) =>

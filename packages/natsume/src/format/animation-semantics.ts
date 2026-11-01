@@ -52,15 +52,61 @@ export function validateAnimationBindings(d: DocumentT, required: (name: string)
       const b = track.binding!,
         c = d.components.find((c) => c.id === b.targetId),
         ps = c?.dataType === C.ParticleSystem ? (c.data as ParticleSystemT) : undefined;
-      const identity = `${b.targetId}:${b.property}:${b.parameter}:${b.propertyName}:${b.slotIndex}`;
+      const identity =
+        b.property === P.SourceBinding
+          ? JSON.stringify([
+              b.source?.rootNodeId,
+              b.source?.path,
+              b.source?.classId,
+              b.source?.attribute,
+              b.source?.script?.guid,
+              String(b.source?.script?.fileId),
+              b.source?.flags,
+            ])
+          : `${b.targetId}:${b.property}:${b.parameter}:${b.propertyName}:${b.slotIndex}`;
       check(!seen.has(identity), 'SEMANTIC', 'Conflicting animation bindings');
       seen.add(identity);
       const vector = track.dataType === D.Vector3Track ? (track.data as Vector3TrackT) : undefined;
       const color = track.dataType === D.ColorTrack ? (track.data as ColorTrackT) : undefined;
       const hasVector = !!(vector && (vector.x || vector.y || vector.z));
       const hasColor = !!(color && (color.r || color.g || color.b || color.a));
+      check(
+        b.property === P.SourceBinding || !b.source,
+        'SEMANTIC',
+        'Source metadata on normalized animation binding',
+      );
       let valid = true;
       switch (b.property) {
+        case P.SourceBinding:
+          required('animation.source-binding');
+          valid =
+            track.dataType === D.FloatTrack &&
+            !!b.source &&
+            d.nodes.some((n) => n.id === b.source!.rootNodeId) &&
+            typeof b.source.path === 'string' &&
+            typeof b.source.attribute === 'string' &&
+            b.source.sourceRootFileId !== 0n &&
+            !!b.source.attribute &&
+            b.parameter === 0 &&
+            !b.propertyName &&
+            b.slotIndex === 0 &&
+            (!b.source.script || b.source.script.fileId !== 0n) &&
+            (b.source.hasPathHash || b.source.pathHash === 0) &&
+            (b.source.hasPropertyHash || b.source.propertyHash === 0) &&
+            (b.source.resolution === 1
+              ? b.targetId === 0
+              : !!c || d.nodes.some((n) => n.id === b.targetId));
+          break;
+        case P.CameraFov:
+        case P.CameraOrthoSize:
+        case P.CameraNear:
+        case P.CameraFar:
+        case P.CameraActive:
+          required('animation.camera');
+          valid =
+            c?.dataType === C.Camera &&
+            track.dataType === (b.property === P.CameraActive ? D.BoolTrack : D.FloatTrack);
+          break;
         case P.NodePosition:
         case P.NodeScale:
           required('animation.transform');

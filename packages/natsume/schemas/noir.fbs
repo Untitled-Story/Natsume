@@ -1,4 +1,4 @@
-// NOIR candidate wire 3.0, schema draft 0.6. Not yet a stable release.
+// NOIR 1.0. Version reset at T5; old beta packages must be recompiled.
 // Beta schema: changes are recorded in docs/temp; regenerate consumer bindings.
 namespace Noa.IR;
 
@@ -10,7 +10,7 @@ struct Color { r:float; g:float; b:float; a:float; }
 
 // All entity IDs are package-local uint32, nonzero and globally unique.
 // Ref 0 means absent, never a vector index. IDs are stable for fixed inputs.
-enum AssetKind:ubyte { Unknown, Image, Mesh, ShaderData, Sprite }
+enum AssetKind:ubyte { Unknown, Image, Mesh, ShaderData, Sprite, SourceData }
 enum CurveDomain:ubyte { Seconds, Normalized }
 enum WrapMode:ubyte { Clamp, Loop, PingPong, UnitySerialized }
 enum Interpolation:ubyte { Step, Linear, CubicHermite, WeightedBezier }
@@ -22,7 +22,7 @@ enum ScalingMode:ubyte { Hierarchy, Local, Shape }
 enum Projection:ubyte { Perspective, Orthographic, Custom }
 enum FovAxis:ubyte { Vertical, Horizontal }
 enum AspectMode:ubyte { FromViewport, Fixed }
-enum CameraPolicy:ubyte { HostRequired, Embedded }
+enum CameraPolicy:ubyte { HostRequired, Embedded, SourcePreserved }
 enum BlendFactor:ubyte { Zero, One, SrcColor, OneMinusSrcColor, SrcAlpha, OneMinusSrcAlpha, DstColor, OneMinusDstColor, DstAlpha, OneMinusDstAlpha }
 enum BlendOp:ubyte { Add, Subtract, ReverseSubtract, Min, Max }
 enum CompareOp:ubyte { Never, Less, Equal, LessEqual, Greater, NotEqual, GreaterEqual, Always }
@@ -33,7 +33,7 @@ enum AddressMode:ubyte { Clamp, Repeat, Mirror }
 enum MaterialModel:ubyte {
   Unknown, ParticleUnlit, ParticleAddAlpha, ParticleMultiply,
   // Unity legacy particle shaders: 2 * vertexColor * tint * texture, alpha saturated.
-  LegacyParticleAdditive, LegacyParticleAlphaBlend, SpriteDefault, UIDefault, TextureVertexColor
+  LegacyParticleAdditive, LegacyParticleAlphaBlend, SpriteDefault, UIDefault, TextureVertexColor, UnityShader
 }
 enum RenderMode:ubyte { Billboard, StretchedBillboard, HorizontalBillboard, VerticalBillboard, Mesh, None }
 enum Alignment:ubyte { View, World, Local, Facing, Velocity }
@@ -48,7 +48,7 @@ enum AnimationProperty:ushort {
   RendererMaterial, RendererMesh, MaterialTexture,
   RectAnchoredPosition, RectSizeDelta, RectAnchorMin, RectAnchorMax, RectPivot,
   RendererMaterialTint, RendererMaterialFloat, RendererTextureST, ComponentEnabled,
-  ParticleColor, ParticleCustomColor, ParticleLoop, SpriteColor
+  ParticleColor, ParticleCustomColor, ParticleLoop, SpriteColor, SourceBinding
 }
 enum ParticleParameter:ushort {
   Unknown, StartLifetime, StartSpeed, StartSizeX, StartSizeY, StartSizeZ,
@@ -155,6 +155,8 @@ table Material {
   render_queue:int = 3000;
   source_shader:string;
   shader_data_asset_id:uint;
+  // Complete authored material when the program needs a Unity source importer.
+  source_data:SerializedValue;
 }
 
 table Transform { position:Vec3; rotation:Quaternion; scale:Vec3; }
@@ -172,7 +174,13 @@ table RectLayout {
 }
 // Column-major, column vectors; 16 elements required by semantic validation.
 table Matrix4 { values:[float] (required); }
+enum GateFit:ubyte { None, Vertical, Horizontal, Fill, Overscan }
+enum CameraClear:ubyte { Skybox, SolidColor, DepthOnly, Nothing }
 table Camera {
+  physical:bool; sensor_size_mm:Vec2; lens_shift:Vec2; focal_length_mm:float;
+  gate_fit:GateFit; clear:CameraClear; background:Color;
+  hdr:bool; msaa:bool; dynamic_resolution:bool; target_display:uint;
+
   projection:Projection;
   fov_radians:float = 1.0471976;
   fov_axis:FovAxis;
@@ -181,7 +189,7 @@ table Camera {
   aspect_mode:AspectMode; aspect:float = 1;
   viewport:Vec4;
   culling_mask:uint = 4294967295;
-  order:int;
+  order:float;
   custom_projection:Matrix4;
 }
 
@@ -191,7 +199,18 @@ table Burst {
   cycles:uint = 1; interval_seconds:float;
   probability:float = 1;
 }
+enum ParticleClock:ubyte { Scaled, Unscaled }
+enum StopAction:ubyte { None, Disable, Destroy, Callback }
+enum RingBufferMode:ubyte { Disabled, PauseUntilReplaced, LoopUntilReplaced }
+enum ParticleCulling:ubyte { Automatic, PauseAndCatchup, Pause, AlwaysSimulate }
+enum EmitterVelocityMode:ubyte { Transform, Rigidbody, Custom }
+enum GravitySource:ubyte { Physics3D, Physics2D }
 table MainModule {
+  clock:ParticleClock; stop_action:StopAction; ring_buffer:RingBufferMode;
+  ring_buffer_loop_range:Vec2; culling:ParticleCulling;
+  emitter_velocity_mode:EmitterVelocityMode; custom_emitter_velocity:Vec3;
+  gravity_source:GravitySource;
+  host_rigidbody_velocity_slot:string;
   duration_seconds:float = 5;
   loop:bool; prewarm:bool; play_on_enable:bool = true;
   start_delay:ScalarParameter;
@@ -253,14 +272,28 @@ table DonutShape {
 }
 enum GeometryPlacement:ubyte { Vertex, Edge, Triangle }
 table SpriteShape {
+  source_renderer_component_id:uint;
   sprite_asset_id:uint;
   placement:GeometryPlacement; normal_offset:float;
   use_mesh_colors:bool;
   spawn_mode:ShapeSweep; spawn_speed:ScalarParameter; spawn_spread:float;
 }
 // Sprite sampling uses authored geometry/placement; texture alpha is not a shape mask.
-union ShapeGeometry { CircleShape, BoxShape, SphereShape, ConeShape, EdgeShape, DonutShape, SpriteShape }
+// Rectangle is a unit XY plane centered at origin, direction +Z.
+table RectangleShape {}
+table MeshShape {
+  source_renderer_component_id:uint;
+  mesh_asset_id:uint; placement:GeometryPlacement; normal_offset:float; use_mesh_colors:bool;
+  use_material_index:bool; material_index:uint;
+  spawn_mode:ShapeSweep; spawn_speed:ScalarParameter; spawn_spread:float;
+}
+table ShapeTexture {
+  image_asset_id:uint; clip_channel:ubyte = 3; clip_threshold:float; uv_channel:ubyte;
+  color_affects_particles:bool; alpha_affects_particles:bool; bilinear_filtering:bool;
+}
+union ShapeGeometry { CircleShape, BoxShape, SphereShape, ConeShape, EdgeShape, DonutShape, SpriteShape, RectangleShape, MeshShape }
 table ShapeModule {
+  texture:ShapeTexture;
   geometry:ShapeGeometry;
   transform:Transform (required);
   align_to_direction:bool;
@@ -304,6 +337,7 @@ table TextureSheetModule {
   animation:SheetAnimation; row_mode:SheetRow; row:uint;
   fps:float = 30; speed_range:Vec2;
   uv_channel_mask:uint = 1;
+  flip_u_probability:float; flip_v_probability:float;
 }
 enum CustomDataMode:ubyte { Disabled, Vector, Color }
 table CustomDataStream {
@@ -339,9 +373,54 @@ table TrailsModule {
   color_over_lifetime:ColorParameter (required); width_over_trail:ScalarParameter (required);
   color_over_trail:ColorParameter (required);
 }
+enum InheritVelocityMode:ubyte { Initial, Current }
+table InheritVelocityModule { mode:InheritVelocityMode; multiplier:ScalarParameter (required); }
+table LifetimeByEmitterSpeedModule { multiplier:ScalarParameter (required); speed_range:Vec2; }
+table ForceModule { force:VectorParameter (required); space:Space; randomize_per_frame:bool; }
+table ColorBySpeedModule { color:ColorParameter (required); speed_range:Vec2; }
+// Environmental resources are explicit host inputs, never implicit Unity objects.
+// An empty slot has no source and no host_slot; ordered null slots are preserved.
+enum EnvironmentKind:ubyte { ForceField, Collider3D, Collider2D, Light }
+table EnvironmentReference {
+  kind:EnvironmentKind; source:SourceReference; source_asset:string; host_slot:string;
+}
+enum InfluenceFilter:ubyte { LayerMask, List, LayerMaskAndList }
+table ExternalForcesModule {
+  multiplier:ScalarParameter (required); filter:InfluenceFilter;
+  layer_mask:uint = 4294967295; influences:[EnvironmentReference] (required);
+  host_force_fields_slot:string;
+}
+enum CollisionType:ubyte { Planes, World }
+enum PhysicsDimension:ubyte { Physics3D, Physics2D }
+enum CollisionQuality:ubyte { High, Medium, Low }
+// Zero node IDs retain null plane slots. Plane orientation is local +Y.
+table CollisionModule {
+  type:CollisionType; dimension:PhysicsDimension; planes:[uint] (required);
+  dampen:ScalarParameter (required); bounce:ScalarParameter (required);
+  lifetime_loss:ScalarParameter (required);
+  min_kill_speed:float; max_kill_speed:float; radius_scale:float = 1;
+  layer_mask:uint = 4294967295; dynamic_colliders:bool; interior_collisions:bool;
+  quality:CollisionQuality; voxel_size:float; max_shapes:uint;
+  send_messages:bool; collider_force:float;
+  multiply_force_by_size:bool; multiply_force_by_speed:bool; multiply_force_by_angle:bool;
+  host_physics_slot:string;
+}
+enum OverlapAction:ubyte { Ignore, Kill, Callback }
+enum ColliderQuery:ubyte { Disabled, One, All }
+table TriggerModule {
+  inside:OverlapAction; outside:OverlapAction; enter:OverlapAction; exit:OverlapAction;
+  query:ColliderQuery; radius_scale:float = 1;
+  colliders:[EnvironmentReference] (required);
+}
+table LightsModule {
+  ratio:float; random_distribution:bool; use_particle_color:bool;
+  size_affects_range:bool; alpha_affects_intensity:bool; max_lights:uint;
+  light:EnvironmentReference (required);
+  range_multiplier:ScalarParameter (required); intensity_multiplier:ScalarParameter (required);
+}
 union ParticleModuleData {
   EmissionModule, ShapeModule, ColorModule, SizeModule, RotationModule,
-  VelocityModule, LimitVelocityModule, NoiseModule, TextureSheetModule, CustomDataModule, SizeBySpeedModule, RotationBySpeedModule, SubEmittersModule, TrailsModule
+  VelocityModule, LimitVelocityModule, NoiseModule, TextureSheetModule, CustomDataModule, SizeBySpeedModule, RotationBySpeedModule, SubEmittersModule, TrailsModule, InheritVelocityModule, LifetimeByEmitterSpeedModule, ForceModule, ColorBySpeedModule, ExternalForcesModule, CollisionModule, TriggerModule, LightsModule
 }
 table ParticleModule { data:ParticleModuleData; }
 table ParticleSystem {
@@ -350,7 +429,7 @@ table ParticleSystem {
 }
 enum VertexSemantic:ubyte {
   Position, Normal, Color, UV0, UV1, UV2, UV3, Size, Rotation,
-  Velocity, AgeNormalized, Custom1, Custom2, Center, VertexId, Tangent, NextTrailCenter, PreviousTrailCenter, PercentageAlongTrail, TrailWidth
+  Velocity, AgeNormalized, Custom1, Custom2, Center, VertexId, Tangent, NextTrailCenter, PreviousTrailCenter, PercentageAlongTrail, TrailWidth, AnimBlend, AnimFrame, RotationSpeed, Speed, InverseStartLifetime, StableRandom, VaryingRandom, NoiseSum, NoiseImpulse, MeshIndex, ParticleIndex, ColorPacked, MeshAxisOfRotation
 }
 table VertexStream { semantic:VertexSemantic; components:ubyte; }
 enum MeshDistribution:ubyte { UniformRandom, NonUniformRandom }
@@ -376,7 +455,7 @@ table ParticleRenderer {
   source_sorting_layer_id:int;
   // Material slot 0 draws particles; slot 1 draws trails. No implicit fallback.
   trail_vertex_streams:[VertexStream];
-  // Absent in older packages: uniform selection ignores mesh_weights.
+  // Uniform selection ignores mesh_weights.
   mesh_distribution:MeshDistribution;
 }
 // Custom scripts carry serialized data only. Host factories are never embedded.
@@ -390,6 +469,8 @@ table SourceReference { guid:string; file_id:long; }
 enum ReferenceKind:ubyte { Unknown, Node, Component, Material, Asset, Animation }
 table TypedReference { kind:ReferenceKind; id:uint; }
 table ReferenceValue { source:SourceReference (required); target:TypedReference; }
+enum SpecialFloat:ubyte { NaN, PositiveInfinity, NegativeInfinity }
+table SpecialFloatValue { kind:SpecialFloat; }
 table NullValue {}
 table BooleanValue { value:bool; }
 table SignedValue { value:long; }
@@ -400,7 +481,7 @@ table ArrayValue { values:[SerializedValue] (required); }
 table ObjectValue { fields:[SerializedField] (required); }
 union SerializedValueData {
   NullValue, BooleanValue, SignedValue, UnsignedValue, DoubleValue,
-  StringValue, ArrayValue, ObjectValue, ReferenceValue
+  StringValue, ArrayValue, ObjectValue, ReferenceValue, SpecialFloatValue
 }
 table SerializedValue { data:SerializedValueData; }
 table SerializedField {
@@ -549,7 +630,9 @@ table UIMask { graphic_component_id:uint; show_graphic:bool = true; }
 table RectMask2D { padding:Vec4; softness:Vec2; }
 table CanvasGroup { alpha:float = 1; ignore_parent_groups:bool; }
 
-union ComponentData { RectLayout, Camera, ParticleSystem, ParticleRenderer, CustomComponent, Animator, MeshRenderer, SpriteRenderer, SpriteMask, Canvas, CanvasRenderer, MeshFilter, UIImage, UIMask, RectMask2D, CanvasGroup, PlayableDirector }
+// A preserved native component is data requiring a consumer importer, not an inert replacement.
+table UnityComponent { source_object_index:uint; }
+union ComponentData { RectLayout, Camera, ParticleSystem, ParticleRenderer, CustomComponent, Animator, MeshRenderer, SpriteRenderer, SpriteMask, Canvas, CanvasRenderer, MeshFilter, UIImage, UIMask, RectMask2D, CanvasGroup, PlayableDirector, UnityComponent }
 table Component { id:uint; node_id:uint; enabled:bool = true; data:ComponentData; }
 
 table FloatTrack { curve:ScalarCurve (required); }
@@ -561,7 +644,16 @@ table BoolTrack { keys:[BoolKey] (required); }
 table ReferenceTrack { keys:[RefKey] (required); }
 table Vector4Track { x:ScalarCurve; y:ScalarCurve; z:ScalarCurve; w:ScalarCurve; }
 union TrackData { FloatTrack, Vector3Track, RotationTrack, ColorTrack, BoolTrack, ReferenceTrack, Vector4Track }
+enum BindingResolution:ubyte { Resolved, Deferred }
+table UnityAnimationBinding {
+  root_node_id:uint; source_root_file_id:long;
+  path:string (required); class_id:uint; attribute:string (required);
+  script:SourceReference; flags:uint; resolution:BindingResolution;
+  path_hash:uint; has_path_hash:bool; property_hash:uint; has_property_hash:bool;
+  diagnostic:string;
+}
 table Binding {
+  source:UnityAnimationBinding;
   target_id:uint;
   property:AnimationProperty;
   parameter:ParticleParameter;
@@ -600,7 +692,29 @@ table EntryPoint {
 }
 table SourceRecord { entity_id:uint; asset_path:string; object_identity:string; property_path:string; }
 table Metadata { name:string (required); value:string; }
+enum NormalizationStatus:ubyte { Complete, SourcePreserved }
+enum DependencyStatus:ubyte { Complete, Unresolved }
+enum SourceResolution:ubyte { Object, Asset, ScriptMetadata, Builtin, MissingAsset, MissingObject }
+table ExportDiagnostic { severity:string (required); code:string (required); message:string (required); asset:string; property:string; file_id:long; has_file_id:bool; }
+table UnitySourceFile { path:string (required); guid:string; asset_id:uint; metadata:SerializedValue; }
+table UnitySourceObject {
+  file_index:uint; file_id:long; class_id:uint; stripped:bool; type_name:string (required);
+  data:SerializedValue (required); script:ScriptIdentity;
+}
+table UnitySourceReference {
+  owner_object_index:uint; property:string (required); source:SourceReference (required);
+  resolution:SourceResolution; target_object_index:uint; target_asset_id:uint;
+  script:ScriptIdentity;
+}
+table SourceExport {
+  entry_file_index:uint;
+  files:[UnitySourceFile] (required); objects:[UnitySourceObject] (required);
+  references:[UnitySourceReference] (required); diagnostics:[ExportDiagnostic] (required);
+}
 table Document {
+  normalization:NormalizationStatus; dependencies:DependencyStatus;
+  source_export:SourceExport;
+  contract_id:string (required);
   format_major:ushort;
   format_minor:ushort;
   semantics_revision:uint = 1;

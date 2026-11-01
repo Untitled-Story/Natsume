@@ -1,3 +1,5 @@
+import { validateParticleContracts } from './particle-contracts.js';
+import { validateSource } from './source-semantics.js';
 import { validateControl } from './control-semantics.js';
 import { validateAnimationBindings } from './animation-semantics.js';
 import { validateSceneAssets } from './scene-semantics.js';
@@ -54,6 +56,7 @@ const unit = (value: number, name: string) =>
 export const SUPPORTED_FEATURES: Readonly<Record<string, number>> = Object.freeze(
   Object.fromEntries(
     [
+      'unity.source-graph',
       'ui.canvas',
       'material.unity-ui-default',
       'render.sprite-mask',
@@ -114,19 +117,45 @@ export const SUPPORTED_FEATURES: Readonly<Record<string, number>> = Object.freez
       'host.legacy-particle-environment',
     ]
       .map((name) => [name, 1])
-      .concat([['mesh.noms', 2]]),
+      .concat([['mesh.noms', 1]]),
   ),
 );
 
 /** Recognized source contracts; recognition alone does not enable playback. */
 export const KNOWN_FEATURES: Readonly<Record<string, number>> = Object.freeze({
   ...SUPPORTED_FEATURES,
-  ...Object.fromEntries(['timeline.director', 'timeline.graph'].map((name) => [name, 1])),
+  ...Object.fromEntries(
+    [
+      'unity.source-graph',
+      'unity.source-components',
+      'material.unity-source',
+      'animation.source-binding',
+      'host.particle-environment',
+      'particle.inherit-velocity',
+      'particle.lifetime-by-emitter-speed',
+      'particle.force',
+      'particle.color-by-speed',
+      'particle.external-forces',
+      'particle.collision',
+      'particle.trigger',
+      'particle.lights',
+      'particle.shape.rectangle',
+      'particle.shape.mesh',
+      'particle.shape.renderer',
+      'particle.shape.texture',
+      'camera.authored',
+      'camera.embedded',
+      'animation.camera',
+    ].map((name) => [name, 1]),
+  ),
 });
 
 export function validateDocument(document: DocumentT): void {
   check(
-    document.formatMajor === 3 && document.formatMinor === 0 && document.semanticsRevision === 1,
+    document.contractId === 'noa.effects/1.0' &&
+      document.formatMajor === 1 &&
+      document.formatMinor === 0 &&
+      document.semanticsRevision === 1,
     'VERSION',
     'Unsupported NOIR version or semantics revision',
   );
@@ -208,11 +237,17 @@ export function validateDocument(document: DocumentT): void {
     for (const root of entry.roots) ref(root, 'node');
     if (entry.cameraPolicy === 0)
       check(entry.hostCameraSlot, 'SEMANTIC', 'Missing host camera slot');
-    else
+    else if (entry.cameraPolicy === 1)
       check(
         components.get(entry.cameraComponentId)?.dataType === 2,
         'SEMANTIC',
         'Invalid embedded camera',
+      );
+    else
+      check(
+        document.sourceExport && document.normalization === 1,
+        'SEMANTIC',
+        'Source-preserved camera requires a source graph',
       );
     for (const action of entry.actions) {
       if (action.kind <= 1) {
@@ -382,6 +417,8 @@ export function validateDocument(document: DocumentT): void {
           'edge',
           'donut',
           'sprite',
+          'rectangle',
+          'mesh',
         ][Number(o.geometryType)];
         requireFeature(`particle.shape.${feature}`);
         unit(number(o, 'randomDirection'), 'random direction');
@@ -490,7 +527,11 @@ export function validateDocument(document: DocumentT): void {
         check(o.dataType !== 0 && o.data, 'SEMANTIC', 'Missing track payload');
         const binding = object(o.binding),
           target = number(binding, 'targetId');
-        check(ids.has(target), 'SEMANTIC', 'Missing animation target');
+        check(
+          binding.property === 30 ? target === 0 || ids.has(target) : ids.has(target),
+          'SEMANTIC',
+          'Missing animation target',
+        );
         for (const curve of Object.values(object(o.data))) {
           if (!curve || typeof curve !== 'object' || !('domain' in curve)) continue;
           check(object(curve).domain === 0, 'SEMANTIC', 'Animation curves require Seconds domain');
@@ -543,15 +584,17 @@ export function validateDocument(document: DocumentT): void {
         break;
     }
   };
-  const visit = (type: string, value: unknown) => {
+  const visit = (type: string, value: unknown, source = false) => {
     if (value === null || value === undefined) return;
     if (type.startsWith('[')) {
-      for (const item of value as unknown[]) visit(type.slice(1, -1), item);
+      for (const item of value as unknown[]) visit(type.slice(1, -1), item, source);
       return;
     }
     const definition = definitions[type];
     if (!definition?.fields) return;
     const o = object(value);
+    if (type === 'SpecialFloatValue')
+      check(source, 'SEMANTIC', 'Special floats are only allowed in source data');
     checkTable(type, o);
     for (const field of definition.fields) {
       const key = camel(field.name),
@@ -583,11 +626,18 @@ export function validateDocument(document: DocumentT): void {
         continue;
       if (union?.kind === 'union') {
         const tag = Number(o[`${key}Type`]);
-        if (tag !== 0) visit(union.values?.[tag] ?? '', o[key]);
-      } else visit(field.type, o[key]);
+        if (tag !== 0) visit(union.values?.[tag] ?? '', o[key], source);
+      } else
+        visit(
+          field.type,
+          o[key],
+          source || type === 'SourceExport' || (type === 'Material' && key === 'sourceData'),
+        );
     }
   };
   visit('Document', document);
+  validateParticleContracts(document, requireFeature);
+  validateSource(document, requireFeature);
   validateControl(document, requireFeature);
   validateSceneAssets(document, requireFeature);
   validateAnimationBindings(document, requireFeature);
@@ -605,7 +655,11 @@ export function validateDocument(document: DocumentT): void {
 }
 
 export function validateMesh(mesh: MeshT): void {
-  check(mesh.formatMajor === 2 && mesh.formatMinor === 0, 'VERSION', 'Unsupported mesh version');
+  check(
+    mesh.contractId === 'noa.mesh/1.0' && mesh.formatMajor === 1 && mesh.formatMinor === 0,
+    'VERSION',
+    'Unsupported mesh version',
+  );
   check(
     mesh.positions.length > 0 && mesh.indices.length > 0 && mesh.indices.length % 3 === 0,
     'SEMANTIC',

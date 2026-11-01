@@ -22,6 +22,7 @@ import { SpriteMask, SpriteMaskT } from '../../noa/ir/sprite-mask.js';
 import { SpriteRenderer, SpriteRendererT } from '../../noa/ir/sprite-renderer.js';
 import { UIImage, UIImageT } from '../../noa/ir/uiimage.js';
 import { UIMask, UIMaskT } from '../../noa/ir/uimask.js';
+import { UnityComponent, UnityComponentT } from '../../noa/ir/unity-component.js';
 
 
 export class Component implements flatbuffers.IUnpackableObject<ComponentT> {
@@ -140,7 +141,7 @@ constructor(
   public nodeId: number = 0,
   public enabled: boolean = true,
   public dataType: ComponentData = ComponentData.NONE,
-  public data: AnimatorT|CameraT|CanvasGroupT|CanvasRendererT|CanvasT|CustomComponentT|MeshFilterT|MeshRendererT|ParticleRendererT|ParticleSystemT|PlayableDirectorT|RectLayoutT|RectMask2DT|SpriteMaskT|SpriteRendererT|UIImageT|UIMaskT|null = null
+  public data: AnimatorT|CameraT|CanvasGroupT|CanvasRendererT|CanvasT|CustomComponentT|MeshFilterT|MeshRendererT|ParticleRendererT|ParticleSystemT|PlayableDirectorT|RectLayoutT|RectMask2DT|SpriteMaskT|SpriteRendererT|UIImageT|UIMaskT|UnityComponentT|null = null
 ){}
 
 

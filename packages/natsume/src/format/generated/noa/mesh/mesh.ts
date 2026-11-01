@@ -32,116 +32,127 @@ static bufferHasIdentifier(bb:flatbuffers.ByteBuffer):boolean {
   return bb.__has_identifier('NOMS');
 }
 
-formatMajor():number {
+contractId():string|null
+contractId(optionalEncoding:flatbuffers.Encoding):string|Uint8Array|null
+contractId(optionalEncoding?:any):string|Uint8Array|null {
   const offset = this.bb!.__offset(this.bb_pos, 4);
+  return offset ? this.bb!.__string(this.bb_pos + offset, optionalEncoding) : null;
+}
+
+formatMajor():number {
+  const offset = this.bb!.__offset(this.bb_pos, 6);
   return offset ? this.bb!.readUint16(this.bb_pos + offset) : 0;
 }
 
 formatMinor():number {
-  const offset = this.bb!.__offset(this.bb_pos, 6);
+  const offset = this.bb!.__offset(this.bb_pos, 8);
   return offset ? this.bb!.readUint16(this.bb_pos + offset) : 0;
 }
 
 name():string|null
 name(optionalEncoding:flatbuffers.Encoding):string|Uint8Array|null
 name(optionalEncoding?:any):string|Uint8Array|null {
-  const offset = this.bb!.__offset(this.bb_pos, 8);
+  const offset = this.bb!.__offset(this.bb_pos, 10);
   return offset ? this.bb!.__string(this.bb_pos + offset, optionalEncoding) : null;
 }
 
 positions(index: number, obj?:Vec3):Vec3|null {
-  const offset = this.bb!.__offset(this.bb_pos, 10);
+  const offset = this.bb!.__offset(this.bb_pos, 12);
   return offset ? (obj || new Vec3()).__init(this.bb!.__vector(this.bb_pos + offset) + index * 12, this.bb!) : null;
 }
 
 positionsLength():number {
-  const offset = this.bb!.__offset(this.bb_pos, 10);
+  const offset = this.bb!.__offset(this.bb_pos, 12);
   return offset ? this.bb!.__vector_len(this.bb_pos + offset) : 0;
 }
 
 normals(index: number, obj?:Vec3):Vec3|null {
-  const offset = this.bb!.__offset(this.bb_pos, 12);
+  const offset = this.bb!.__offset(this.bb_pos, 14);
   return offset ? (obj || new Vec3()).__init(this.bb!.__vector(this.bb_pos + offset) + index * 12, this.bb!) : null;
 }
 
 normalsLength():number {
-  const offset = this.bb!.__offset(this.bb_pos, 12);
+  const offset = this.bb!.__offset(this.bb_pos, 14);
   return offset ? this.bb!.__vector_len(this.bb_pos + offset) : 0;
 }
 
 tangents(index: number, obj?:Vec4):Vec4|null {
-  const offset = this.bb!.__offset(this.bb_pos, 14);
+  const offset = this.bb!.__offset(this.bb_pos, 16);
   return offset ? (obj || new Vec4()).__init(this.bb!.__vector(this.bb_pos + offset) + index * 16, this.bb!) : null;
 }
 
 tangentsLength():number {
-  const offset = this.bb!.__offset(this.bb_pos, 14);
+  const offset = this.bb!.__offset(this.bb_pos, 16);
   return offset ? this.bb!.__vector_len(this.bb_pos + offset) : 0;
 }
 
 colors(index: number, obj?:Vec4):Vec4|null {
-  const offset = this.bb!.__offset(this.bb_pos, 16);
+  const offset = this.bb!.__offset(this.bb_pos, 18);
   return offset ? (obj || new Vec4()).__init(this.bb!.__vector(this.bb_pos + offset) + index * 16, this.bb!) : null;
 }
 
 colorsLength():number {
-  const offset = this.bb!.__offset(this.bb_pos, 16);
+  const offset = this.bb!.__offset(this.bb_pos, 18);
   return offset ? this.bb!.__vector_len(this.bb_pos + offset) : 0;
 }
 
 texcoords(index: number, obj?:TexCoord):TexCoord|null {
-  const offset = this.bb!.__offset(this.bb_pos, 18);
+  const offset = this.bb!.__offset(this.bb_pos, 20);
   return offset ? (obj || new TexCoord()).__init(this.bb!.__indirect(this.bb!.__vector(this.bb_pos + offset) + index * 4), this.bb!) : null;
 }
 
 texcoordsLength():number {
-  const offset = this.bb!.__offset(this.bb_pos, 18);
+  const offset = this.bb!.__offset(this.bb_pos, 20);
   return offset ? this.bb!.__vector_len(this.bb_pos + offset) : 0;
 }
 
 indices(index: number):number|null {
-  const offset = this.bb!.__offset(this.bb_pos, 20);
+  const offset = this.bb!.__offset(this.bb_pos, 22);
   return offset ? this.bb!.readUint32(this.bb!.__vector(this.bb_pos + offset) + index * 4) : 0;
 }
 
 indicesLength():number {
-  const offset = this.bb!.__offset(this.bb_pos, 20);
+  const offset = this.bb!.__offset(this.bb_pos, 22);
   return offset ? this.bb!.__vector_len(this.bb_pos + offset) : 0;
 }
 
 indicesArray():Uint32Array|null {
-  const offset = this.bb!.__offset(this.bb_pos, 20);
+  const offset = this.bb!.__offset(this.bb_pos, 22);
   return offset ? new Uint32Array(this.bb!.bytes().buffer, this.bb!.bytes().byteOffset + this.bb!.__vector(this.bb_pos + offset), this.bb!.__vector_len(this.bb_pos + offset)) : null;
 }
 
 submeshes(index: number, obj?:Submesh):Submesh|null {
-  const offset = this.bb!.__offset(this.bb_pos, 22);
+  const offset = this.bb!.__offset(this.bb_pos, 24);
   return offset ? (obj || new Submesh()).__init(this.bb!.__indirect(this.bb!.__vector(this.bb_pos + offset) + index * 4), this.bb!) : null;
 }
 
 submeshesLength():number {
-  const offset = this.bb!.__offset(this.bb_pos, 22);
+  const offset = this.bb!.__offset(this.bb_pos, 24);
   return offset ? this.bb!.__vector_len(this.bb_pos + offset) : 0;
 }
 
 static startMesh(builder:flatbuffers.Builder) {
-  builder.startObject(10);
+  builder.startObject(11);
+}
+
+static addContractId(builder:flatbuffers.Builder, contractIdOffset:flatbuffers.Offset) {
+  builder.addFieldOffset(0, contractIdOffset, 0);
 }
 
 static addFormatMajor(builder:flatbuffers.Builder, formatMajor:number) {
-  builder.addFieldInt16(0, formatMajor, 0);
+  builder.addFieldInt16(1, formatMajor, 0);
 }
 
 static addFormatMinor(builder:flatbuffers.Builder, formatMinor:number) {
-  builder.addFieldInt16(1, formatMinor, 0);
+  builder.addFieldInt16(2, formatMinor, 0);
 }
 
 static addName(builder:flatbuffers.Builder, nameOffset:flatbuffers.Offset) {
-  builder.addFieldOffset(2, nameOffset, 0);
+  builder.addFieldOffset(3, nameOffset, 0);
 }
 
 static addPositions(builder:flatbuffers.Builder, positionsOffset:flatbuffers.Offset) {
-  builder.addFieldOffset(3, positionsOffset, 0);
+  builder.addFieldOffset(4, positionsOffset, 0);
 }
 
 static startPositionsVector(builder:flatbuffers.Builder, numElems:number) {
@@ -149,7 +160,7 @@ static startPositionsVector(builder:flatbuffers.Builder, numElems:number) {
 }
 
 static addNormals(builder:flatbuffers.Builder, normalsOffset:flatbuffers.Offset) {
-  builder.addFieldOffset(4, normalsOffset, 0);
+  builder.addFieldOffset(5, normalsOffset, 0);
 }
 
 static startNormalsVector(builder:flatbuffers.Builder, numElems:number) {
@@ -157,7 +168,7 @@ static startNormalsVector(builder:flatbuffers.Builder, numElems:number) {
 }
 
 static addTangents(builder:flatbuffers.Builder, tangentsOffset:flatbuffers.Offset) {
-  builder.addFieldOffset(5, tangentsOffset, 0);
+  builder.addFieldOffset(6, tangentsOffset, 0);
 }
 
 static startTangentsVector(builder:flatbuffers.Builder, numElems:number) {
@@ -165,7 +176,7 @@ static startTangentsVector(builder:flatbuffers.Builder, numElems:number) {
 }
 
 static addColors(builder:flatbuffers.Builder, colorsOffset:flatbuffers.Offset) {
-  builder.addFieldOffset(6, colorsOffset, 0);
+  builder.addFieldOffset(7, colorsOffset, 0);
 }
 
 static startColorsVector(builder:flatbuffers.Builder, numElems:number) {
@@ -173,7 +184,7 @@ static startColorsVector(builder:flatbuffers.Builder, numElems:number) {
 }
 
 static addTexcoords(builder:flatbuffers.Builder, texcoordsOffset:flatbuffers.Offset) {
-  builder.addFieldOffset(7, texcoordsOffset, 0);
+  builder.addFieldOffset(8, texcoordsOffset, 0);
 }
 
 static createTexcoordsVector(builder:flatbuffers.Builder, data:flatbuffers.Offset[]):flatbuffers.Offset {
@@ -189,7 +200,7 @@ static startTexcoordsVector(builder:flatbuffers.Builder, numElems:number) {
 }
 
 static addIndices(builder:flatbuffers.Builder, indicesOffset:flatbuffers.Offset) {
-  builder.addFieldOffset(8, indicesOffset, 0);
+  builder.addFieldOffset(9, indicesOffset, 0);
 }
 
 static createIndicesVector(builder:flatbuffers.Builder, data:number[]|Uint32Array):flatbuffers.Offset;
@@ -210,7 +221,7 @@ static startIndicesVector(builder:flatbuffers.Builder, numElems:number) {
 }
 
 static addSubmeshes(builder:flatbuffers.Builder, submeshesOffset:flatbuffers.Offset) {
-  builder.addFieldOffset(9, submeshesOffset, 0);
+  builder.addFieldOffset(10, submeshesOffset, 0);
 }
 
 static createSubmeshesVector(builder:flatbuffers.Builder, data:flatbuffers.Offset[]):flatbuffers.Offset {
@@ -227,9 +238,10 @@ static startSubmeshesVector(builder:flatbuffers.Builder, numElems:number) {
 
 static endMesh(builder:flatbuffers.Builder):flatbuffers.Offset {
   const offset = builder.endObject();
-  builder.requiredField(offset, 10) // positions
-  builder.requiredField(offset, 20) // indices
-  builder.requiredField(offset, 22) // submeshes
+  builder.requiredField(offset, 4) // contract_id
+  builder.requiredField(offset, 12) // positions
+  builder.requiredField(offset, 22) // indices
+  builder.requiredField(offset, 24) // submeshes
   return offset;
 }
 
@@ -241,8 +253,9 @@ static finishSizePrefixedMeshBuffer(builder:flatbuffers.Builder, offset:flatbuff
   builder.finish(offset, 'NOMS', true);
 }
 
-static createMesh(builder:flatbuffers.Builder, formatMajor:number, formatMinor:number, nameOffset:flatbuffers.Offset, positionsOffset:flatbuffers.Offset, normalsOffset:flatbuffers.Offset, tangentsOffset:flatbuffers.Offset, colorsOffset:flatbuffers.Offset, texcoordsOffset:flatbuffers.Offset, indicesOffset:flatbuffers.Offset, submeshesOffset:flatbuffers.Offset):flatbuffers.Offset {
+static createMesh(builder:flatbuffers.Builder, contractIdOffset:flatbuffers.Offset, formatMajor:number, formatMinor:number, nameOffset:flatbuffers.Offset, positionsOffset:flatbuffers.Offset, normalsOffset:flatbuffers.Offset, tangentsOffset:flatbuffers.Offset, colorsOffset:flatbuffers.Offset, texcoordsOffset:flatbuffers.Offset, indicesOffset:flatbuffers.Offset, submeshesOffset:flatbuffers.Offset):flatbuffers.Offset {
   Mesh.startMesh(builder);
+  Mesh.addContractId(builder, contractIdOffset);
   Mesh.addFormatMajor(builder, formatMajor);
   Mesh.addFormatMinor(builder, formatMinor);
   Mesh.addName(builder, nameOffset);
@@ -258,6 +271,7 @@ static createMesh(builder:flatbuffers.Builder, formatMajor:number, formatMinor:n
 
 unpack(): MeshT {
   return new MeshT(
+    this.contractId(),
     this.formatMajor(),
     this.formatMinor(),
     this.name(),
@@ -273,6 +287,7 @@ unpack(): MeshT {
 
 
 unpackTo(_o: MeshT): void {
+  _o.contractId = this.contractId();
   _o.formatMajor = this.formatMajor();
   _o.formatMinor = this.formatMinor();
   _o.name = this.name();
@@ -288,6 +303,7 @@ unpackTo(_o: MeshT): void {
 
 export class MeshT implements flatbuffers.IGeneratedObject {
 constructor(
+  public contractId: string|Uint8Array|null = null,
   public formatMajor: number = 0,
   public formatMinor: number = 0,
   public name: string|Uint8Array|null = null,
@@ -302,6 +318,7 @@ constructor(
 
 
 pack(builder:flatbuffers.Builder): flatbuffers.Offset {
+  const contractId = (this.contractId !== null ? builder.createString(this.contractId!) : 0);
   const name = (this.name !== null ? builder.createString(this.name!) : 0);
   const positions = builder.createStructOffsetList(this.positions, Mesh.startPositionsVector);
   const normals = builder.createStructOffsetList(this.normals, Mesh.startNormalsVector);
@@ -312,6 +329,7 @@ pack(builder:flatbuffers.Builder): flatbuffers.Offset {
   const submeshes = Mesh.createSubmeshesVector(builder, builder.createObjectOffsetList(this.submeshes));
 
   return Mesh.createMesh(builder,
+    contractId,
     this.formatMajor,
     this.formatMinor,
     name,

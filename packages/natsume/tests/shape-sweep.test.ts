@@ -44,6 +44,7 @@ for (const c of native.cases)
       geometry.arcSpread = spread;
     }
     const shape = new ShapeModuleT(
+      null,
       c.label.startsWith('edge')
         ? G.EdgeShape
         : c.label.startsWith('cone')
@@ -98,6 +99,7 @@ for (const c of native.cases.filter((c) => c.label.includes('aligned')))
         ? new EdgeShapeT(constant(2), 1, constant(0.5))
         : new CircleShapeT(constant(2), Math.PI, 0, 0, null, 0, 1, constant(0.5));
       const shape = new ShapeModuleT(
+        null,
         c.label.startsWith('edge') ? G.EdgeShape : G.CircleShape,
         geometry,
         structuredClone(document.nodes[0]!.transform),

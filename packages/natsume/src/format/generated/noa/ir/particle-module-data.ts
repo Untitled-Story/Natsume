@@ -2,9 +2,16 @@
 
 /* eslint-disable @typescript-eslint/no-unused-vars, @typescript-eslint/no-explicit-any, @typescript-eslint/no-non-null-assertion */
 
+import { CollisionModule, CollisionModuleT } from '../../noa/ir/collision-module.js';
+import { ColorBySpeedModule, ColorBySpeedModuleT } from '../../noa/ir/color-by-speed-module.js';
 import { ColorModule, ColorModuleT } from '../../noa/ir/color-module.js';
 import { CustomDataModule, CustomDataModuleT } from '../../noa/ir/custom-data-module.js';
 import { EmissionModule, EmissionModuleT } from '../../noa/ir/emission-module.js';
+import { ExternalForcesModule, ExternalForcesModuleT } from '../../noa/ir/external-forces-module.js';
+import { ForceModule, ForceModuleT } from '../../noa/ir/force-module.js';
+import { InheritVelocityModule, InheritVelocityModuleT } from '../../noa/ir/inherit-velocity-module.js';
+import { LifetimeByEmitterSpeedModule, LifetimeByEmitterSpeedModuleT } from '../../noa/ir/lifetime-by-emitter-speed-module.js';
+import { LightsModule, LightsModuleT } from '../../noa/ir/lights-module.js';
 import { LimitVelocityModule, LimitVelocityModuleT } from '../../noa/ir/limit-velocity-module.js';
 import { NoiseModule, NoiseModuleT } from '../../noa/ir/noise-module.js';
 import { RotationBySpeedModule, RotationBySpeedModuleT } from '../../noa/ir/rotation-by-speed-module.js';
@@ -15,6 +22,7 @@ import { SizeModule, SizeModuleT } from '../../noa/ir/size-module.js';
 import { SubEmittersModule, SubEmittersModuleT } from '../../noa/ir/sub-emitters-module.js';
 import { TextureSheetModule, TextureSheetModuleT } from '../../noa/ir/texture-sheet-module.js';
 import { TrailsModule, TrailsModuleT } from '../../noa/ir/trails-module.js';
+import { TriggerModule, TriggerModuleT } from '../../noa/ir/trigger-module.js';
 import { VelocityModule, VelocityModuleT } from '../../noa/ir/velocity-module.js';
 
 
@@ -33,13 +41,21 @@ export enum ParticleModuleData {
   SizeBySpeedModule = 11,
   RotationBySpeedModule = 12,
   SubEmittersModule = 13,
-  TrailsModule = 14
+  TrailsModule = 14,
+  InheritVelocityModule = 15,
+  LifetimeByEmitterSpeedModule = 16,
+  ForceModule = 17,
+  ColorBySpeedModule = 18,
+  ExternalForcesModule = 19,
+  CollisionModule = 20,
+  TriggerModule = 21,
+  LightsModule = 22
 }
 
 export function unionToParticleModuleData(
   type: ParticleModuleData,
-  accessor: (obj:ColorModule|CustomDataModule|EmissionModule|LimitVelocityModule|NoiseModule|RotationBySpeedModule|RotationModule|ShapeModule|SizeBySpeedModule|SizeModule|SubEmittersModule|TextureSheetModule|TrailsModule|VelocityModule) => ColorModule|CustomDataModule|EmissionModule|LimitVelocityModule|NoiseModule|RotationBySpeedModule|RotationModule|ShapeModule|SizeBySpeedModule|SizeModule|SubEmittersModule|TextureSheetModule|TrailsModule|VelocityModule|null
-): ColorModule|CustomDataModule|EmissionModule|LimitVelocityModule|NoiseModule|RotationBySpeedModule|RotationModule|ShapeModule|SizeBySpeedModule|SizeModule|SubEmittersModule|TextureSheetModule|TrailsModule|VelocityModule|null {
+  accessor: (obj:CollisionModule|ColorBySpeedModule|ColorModule|CustomDataModule|EmissionModule|ExternalForcesModule|ForceModule|InheritVelocityModule|LifetimeByEmitterSpeedModule|LightsModule|LimitVelocityModule|NoiseModule|RotationBySpeedModule|RotationModule|ShapeModule|SizeBySpeedModule|SizeModule|SubEmittersModule|TextureSheetModule|TrailsModule|TriggerModule|VelocityModule) => CollisionModule|ColorBySpeedModule|ColorModule|CustomDataModule|EmissionModule|ExternalForcesModule|ForceModule|InheritVelocityModule|LifetimeByEmitterSpeedModule|LightsModule|LimitVelocityModule|NoiseModule|RotationBySpeedModule|RotationModule|ShapeModule|SizeBySpeedModule|SizeModule|SubEmittersModule|TextureSheetModule|TrailsModule|TriggerModule|VelocityModule|null
+): CollisionModule|ColorBySpeedModule|ColorModule|CustomDataModule|EmissionModule|ExternalForcesModule|ForceModule|InheritVelocityModule|LifetimeByEmitterSpeedModule|LightsModule|LimitVelocityModule|NoiseModule|RotationBySpeedModule|RotationModule|ShapeModule|SizeBySpeedModule|SizeModule|SubEmittersModule|TextureSheetModule|TrailsModule|TriggerModule|VelocityModule|null {
   switch(ParticleModuleData[type]) {
     case 'NONE': return null;
     case 'EmissionModule': return accessor(new EmissionModule())! as EmissionModule;
@@ -56,15 +72,23 @@ export function unionToParticleModuleData(
     case 'RotationBySpeedModule': return accessor(new RotationBySpeedModule())! as RotationBySpeedModule;
     case 'SubEmittersModule': return accessor(new SubEmittersModule())! as SubEmittersModule;
     case 'TrailsModule': return accessor(new TrailsModule())! as TrailsModule;
+    case 'InheritVelocityModule': return accessor(new InheritVelocityModule())! as InheritVelocityModule;
+    case 'LifetimeByEmitterSpeedModule': return accessor(new LifetimeByEmitterSpeedModule())! as LifetimeByEmitterSpeedModule;
+    case 'ForceModule': return accessor(new ForceModule())! as ForceModule;
+    case 'ColorBySpeedModule': return accessor(new ColorBySpeedModule())! as ColorBySpeedModule;
+    case 'ExternalForcesModule': return accessor(new ExternalForcesModule())! as ExternalForcesModule;
+    case 'CollisionModule': return accessor(new CollisionModule())! as CollisionModule;
+    case 'TriggerModule': return accessor(new TriggerModule())! as TriggerModule;
+    case 'LightsModule': return accessor(new LightsModule())! as LightsModule;
     default: return null;
   }
 }
 
 export function unionListToParticleModuleData(
   type: ParticleModuleData,
-  accessor: (index: number, obj:ColorModule|CustomDataModule|EmissionModule|LimitVelocityModule|NoiseModule|RotationBySpeedModule|RotationModule|ShapeModule|SizeBySpeedModule|SizeModule|SubEmittersModule|TextureSheetModule|TrailsModule|VelocityModule) => ColorModule|CustomDataModule|EmissionModule|LimitVelocityModule|NoiseModule|RotationBySpeedModule|RotationModule|ShapeModule|SizeBySpeedModule|SizeModule|SubEmittersModule|TextureSheetModule|TrailsModule|VelocityModule|null,
+  accessor: (index: number, obj:CollisionModule|ColorBySpeedModule|ColorModule|CustomDataModule|EmissionModule|ExternalForcesModule|ForceModule|InheritVelocityModule|LifetimeByEmitterSpeedModule|LightsModule|LimitVelocityModule|NoiseModule|RotationBySpeedModule|RotationModule|ShapeModule|SizeBySpeedModule|SizeModule|SubEmittersModule|TextureSheetModule|TrailsModule|TriggerModule|VelocityModule) => CollisionModule|ColorBySpeedModule|ColorModule|CustomDataModule|EmissionModule|ExternalForcesModule|ForceModule|InheritVelocityModule|LifetimeByEmitterSpeedModule|LightsModule|LimitVelocityModule|NoiseModule|RotationBySpeedModule|RotationModule|ShapeModule|SizeBySpeedModule|SizeModule|SubEmittersModule|TextureSheetModule|TrailsModule|TriggerModule|VelocityModule|null,
   index: number
-): ColorModule|CustomDataModule|EmissionModule|LimitVelocityModule|NoiseModule|RotationBySpeedModule|RotationModule|ShapeModule|SizeBySpeedModule|SizeModule|SubEmittersModule|TextureSheetModule|TrailsModule|VelocityModule|null {
+): CollisionModule|ColorBySpeedModule|ColorModule|CustomDataModule|EmissionModule|ExternalForcesModule|ForceModule|InheritVelocityModule|LifetimeByEmitterSpeedModule|LightsModule|LimitVelocityModule|NoiseModule|RotationBySpeedModule|RotationModule|ShapeModule|SizeBySpeedModule|SizeModule|SubEmittersModule|TextureSheetModule|TrailsModule|TriggerModule|VelocityModule|null {
   switch(ParticleModuleData[type]) {
     case 'NONE': return null;
     case 'EmissionModule': return accessor(index, new EmissionModule())! as EmissionModule;
@@ -81,6 +105,14 @@ export function unionListToParticleModuleData(
     case 'RotationBySpeedModule': return accessor(index, new RotationBySpeedModule())! as RotationBySpeedModule;
     case 'SubEmittersModule': return accessor(index, new SubEmittersModule())! as SubEmittersModule;
     case 'TrailsModule': return accessor(index, new TrailsModule())! as TrailsModule;
+    case 'InheritVelocityModule': return accessor(index, new InheritVelocityModule())! as InheritVelocityModule;
+    case 'LifetimeByEmitterSpeedModule': return accessor(index, new LifetimeByEmitterSpeedModule())! as LifetimeByEmitterSpeedModule;
+    case 'ForceModule': return accessor(index, new ForceModule())! as ForceModule;
+    case 'ColorBySpeedModule': return accessor(index, new ColorBySpeedModule())! as ColorBySpeedModule;
+    case 'ExternalForcesModule': return accessor(index, new ExternalForcesModule())! as ExternalForcesModule;
+    case 'CollisionModule': return accessor(index, new CollisionModule())! as CollisionModule;
+    case 'TriggerModule': return accessor(index, new TriggerModule())! as TriggerModule;
+    case 'LightsModule': return accessor(index, new LightsModule())! as LightsModule;
     default: return null;
   }
 }

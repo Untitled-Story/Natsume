@@ -127,7 +127,7 @@ export async function measureLegacyMaterials(nativeCases: readonly NativeLegacyC
         Object.assign(new FloatKeyT(), { time: 1, value: 0 }),
       ];
       const track = new TrackT(
-        new BindingT(4, AnimationProperty.RendererMaterialTint, 0, '_TintColor'),
+        new BindingT(null, 4, AnimationProperty.RendererMaterialTint, 0, '_TintColor'),
         TrackData.ColorTrack,
         new ColorTrackT(curve),
       );
@@ -137,7 +137,7 @@ export async function measureLegacyMaterials(nativeCases: readonly NativeLegacyC
         {
           format: 'noa-package',
           version: 1,
-          noir_version: [3, 0],
+          noir_version: [1, 0],
           document: 'scene.noir',
           files: [],
         },

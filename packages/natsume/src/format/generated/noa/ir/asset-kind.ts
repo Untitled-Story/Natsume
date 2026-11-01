@@ -7,5 +7,6 @@ export enum AssetKind {
   Image = 1,
   Mesh = 2,
   ShaderData = 3,
-  Sprite = 4
+  Sprite = 4,
+  SourceData = 5
 }

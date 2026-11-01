@@ -5,9 +5,13 @@
 import * as flatbuffers from 'flatbuffers';
 
 import { AspectMode } from '../../noa/ir/aspect-mode.js';
+import { CameraClear } from '../../noa/ir/camera-clear.js';
+import { Color, ColorT } from '../../noa/ir/color.js';
 import { FovAxis } from '../../noa/ir/fov-axis.js';
+import { GateFit } from '../../noa/ir/gate-fit.js';
 import { Matrix4, Matrix4T } from '../../noa/ir/matrix4.js';
 import { Projection } from '../../noa/ir/projection.js';
+import { Vec2, Vec2T } from '../../noa/ir/vec2.js';
 import { Vec4, Vec4T } from '../../noa/ir/vec4.js';
 
 
@@ -29,116 +33,215 @@ static getSizePrefixedRootAsCamera(bb:flatbuffers.ByteBuffer, obj?:Camera):Camer
   return (obj || new Camera()).__init(bb.readInt32(bb.position()) + bb.position(), bb);
 }
 
-projection():Projection {
+physical():boolean {
   const offset = this.bb!.__offset(this.bb_pos, 4);
+  return offset ? !!this.bb!.readInt8(this.bb_pos + offset) : false;
+}
+
+sensorSizeMm(obj?:Vec2):Vec2|null {
+  const offset = this.bb!.__offset(this.bb_pos, 6);
+  return offset ? (obj || new Vec2()).__init(this.bb_pos + offset, this.bb!) : null;
+}
+
+lensShift(obj?:Vec2):Vec2|null {
+  const offset = this.bb!.__offset(this.bb_pos, 8);
+  return offset ? (obj || new Vec2()).__init(this.bb_pos + offset, this.bb!) : null;
+}
+
+focalLengthMm():number {
+  const offset = this.bb!.__offset(this.bb_pos, 10);
+  return offset ? this.bb!.readFloat32(this.bb_pos + offset) : 0.0;
+}
+
+gateFit():GateFit {
+  const offset = this.bb!.__offset(this.bb_pos, 12);
+  return offset ? this.bb!.readUint8(this.bb_pos + offset) : GateFit.None;
+}
+
+clear():CameraClear {
+  const offset = this.bb!.__offset(this.bb_pos, 14);
+  return offset ? this.bb!.readUint8(this.bb_pos + offset) : CameraClear.Skybox;
+}
+
+background(obj?:Color):Color|null {
+  const offset = this.bb!.__offset(this.bb_pos, 16);
+  return offset ? (obj || new Color()).__init(this.bb_pos + offset, this.bb!) : null;
+}
+
+hdr():boolean {
+  const offset = this.bb!.__offset(this.bb_pos, 18);
+  return offset ? !!this.bb!.readInt8(this.bb_pos + offset) : false;
+}
+
+msaa():boolean {
+  const offset = this.bb!.__offset(this.bb_pos, 20);
+  return offset ? !!this.bb!.readInt8(this.bb_pos + offset) : false;
+}
+
+dynamicResolution():boolean {
+  const offset = this.bb!.__offset(this.bb_pos, 22);
+  return offset ? !!this.bb!.readInt8(this.bb_pos + offset) : false;
+}
+
+targetDisplay():number {
+  const offset = this.bb!.__offset(this.bb_pos, 24);
+  return offset ? this.bb!.readUint32(this.bb_pos + offset) : 0;
+}
+
+projection():Projection {
+  const offset = this.bb!.__offset(this.bb_pos, 26);
   return offset ? this.bb!.readUint8(this.bb_pos + offset) : Projection.Perspective;
 }
 
 fovRadians():number {
-  const offset = this.bb!.__offset(this.bb_pos, 6);
+  const offset = this.bb!.__offset(this.bb_pos, 28);
   return offset ? this.bb!.readFloat32(this.bb_pos + offset) : 1.0471976;
 }
 
 fovAxis():FovAxis {
-  const offset = this.bb!.__offset(this.bb_pos, 8);
+  const offset = this.bb!.__offset(this.bb_pos, 30);
   return offset ? this.bb!.readUint8(this.bb_pos + offset) : FovAxis.Vertical;
 }
 
 orthoHalfHeight():number {
-  const offset = this.bb!.__offset(this.bb_pos, 10);
+  const offset = this.bb!.__offset(this.bb_pos, 32);
   return offset ? this.bb!.readFloat32(this.bb_pos + offset) : 5.0;
 }
 
 nearPlane():number {
-  const offset = this.bb!.__offset(this.bb_pos, 12);
+  const offset = this.bb!.__offset(this.bb_pos, 34);
   return offset ? this.bb!.readFloat32(this.bb_pos + offset) : 0.1;
 }
 
 farPlane():number {
-  const offset = this.bb!.__offset(this.bb_pos, 14);
+  const offset = this.bb!.__offset(this.bb_pos, 36);
   return offset ? this.bb!.readFloat32(this.bb_pos + offset) : 1000.0;
 }
 
 aspectMode():AspectMode {
-  const offset = this.bb!.__offset(this.bb_pos, 16);
+  const offset = this.bb!.__offset(this.bb_pos, 38);
   return offset ? this.bb!.readUint8(this.bb_pos + offset) : AspectMode.FromViewport;
 }
 
 aspect():number {
-  const offset = this.bb!.__offset(this.bb_pos, 18);
+  const offset = this.bb!.__offset(this.bb_pos, 40);
   return offset ? this.bb!.readFloat32(this.bb_pos + offset) : 1.0;
 }
 
 viewport(obj?:Vec4):Vec4|null {
-  const offset = this.bb!.__offset(this.bb_pos, 20);
+  const offset = this.bb!.__offset(this.bb_pos, 42);
   return offset ? (obj || new Vec4()).__init(this.bb_pos + offset, this.bb!) : null;
 }
 
 cullingMask():number {
-  const offset = this.bb!.__offset(this.bb_pos, 22);
+  const offset = this.bb!.__offset(this.bb_pos, 44);
   return offset ? this.bb!.readUint32(this.bb_pos + offset) : 4294967295;
 }
 
 order():number {
-  const offset = this.bb!.__offset(this.bb_pos, 24);
-  return offset ? this.bb!.readInt32(this.bb_pos + offset) : 0;
+  const offset = this.bb!.__offset(this.bb_pos, 46);
+  return offset ? this.bb!.readFloat32(this.bb_pos + offset) : 0.0;
 }
 
 customProjection(obj?:Matrix4):Matrix4|null {
-  const offset = this.bb!.__offset(this.bb_pos, 26);
+  const offset = this.bb!.__offset(this.bb_pos, 48);
   return offset ? (obj || new Matrix4()).__init(this.bb!.__indirect(this.bb_pos + offset), this.bb!) : null;
 }
 
 static startCamera(builder:flatbuffers.Builder) {
-  builder.startObject(12);
+  builder.startObject(23);
+}
+
+static addPhysical(builder:flatbuffers.Builder, physical:boolean) {
+  builder.addFieldInt8(0, +physical, +false);
+}
+
+static addSensorSizeMm(builder:flatbuffers.Builder, sensorSizeMmOffset:flatbuffers.Offset) {
+  builder.addFieldStruct(1, sensorSizeMmOffset, 0);
+}
+
+static addLensShift(builder:flatbuffers.Builder, lensShiftOffset:flatbuffers.Offset) {
+  builder.addFieldStruct(2, lensShiftOffset, 0);
+}
+
+static addFocalLengthMm(builder:flatbuffers.Builder, focalLengthMm:number) {
+  builder.addFieldFloat32(3, focalLengthMm, 0.0);
+}
+
+static addGateFit(builder:flatbuffers.Builder, gateFit:GateFit) {
+  builder.addFieldInt8(4, gateFit, GateFit.None);
+}
+
+static addClear(builder:flatbuffers.Builder, clear:CameraClear) {
+  builder.addFieldInt8(5, clear, CameraClear.Skybox);
+}
+
+static addBackground(builder:flatbuffers.Builder, backgroundOffset:flatbuffers.Offset) {
+  builder.addFieldStruct(6, backgroundOffset, 0);
+}
+
+static addHdr(builder:flatbuffers.Builder, hdr:boolean) {
+  builder.addFieldInt8(7, +hdr, +false);
+}
+
+static addMsaa(builder:flatbuffers.Builder, msaa:boolean) {
+  builder.addFieldInt8(8, +msaa, +false);
+}
+
+static addDynamicResolution(builder:flatbuffers.Builder, dynamicResolution:boolean) {
+  builder.addFieldInt8(9, +dynamicResolution, +false);
+}
+
+static addTargetDisplay(builder:flatbuffers.Builder, targetDisplay:number) {
+  builder.addFieldInt32(10, targetDisplay, 0);
 }
 
 static addProjection(builder:flatbuffers.Builder, projection:Projection) {
-  builder.addFieldInt8(0, projection, Projection.Perspective);
+  builder.addFieldInt8(11, projection, Projection.Perspective);
 }
 
 static addFovRadians(builder:flatbuffers.Builder, fovRadians:number) {
-  builder.addFieldFloat32(1, fovRadians, 1.0471976);
+  builder.addFieldFloat32(12, fovRadians, 1.0471976);
 }
 
 static addFovAxis(builder:flatbuffers.Builder, fovAxis:FovAxis) {
-  builder.addFieldInt8(2, fovAxis, FovAxis.Vertical);
+  builder.addFieldInt8(13, fovAxis, FovAxis.Vertical);
 }
 
 static addOrthoHalfHeight(builder:flatbuffers.Builder, orthoHalfHeight:number) {
-  builder.addFieldFloat32(3, orthoHalfHeight, 5.0);
+  builder.addFieldFloat32(14, orthoHalfHeight, 5.0);
 }
 
 static addNearPlane(builder:flatbuffers.Builder, nearPlane:number) {
-  builder.addFieldFloat32(4, nearPlane, 0.1);
+  builder.addFieldFloat32(15, nearPlane, 0.1);
 }
 
 static addFarPlane(builder:flatbuffers.Builder, farPlane:number) {
-  builder.addFieldFloat32(5, farPlane, 1000.0);
+  builder.addFieldFloat32(16, farPlane, 1000.0);
 }
 
 static addAspectMode(builder:flatbuffers.Builder, aspectMode:AspectMode) {
-  builder.addFieldInt8(6, aspectMode, AspectMode.FromViewport);
+  builder.addFieldInt8(17, aspectMode, AspectMode.FromViewport);
 }
 
 static addAspect(builder:flatbuffers.Builder, aspect:number) {
-  builder.addFieldFloat32(7, aspect, 1.0);
+  builder.addFieldFloat32(18, aspect, 1.0);
 }
 
 static addViewport(builder:flatbuffers.Builder, viewportOffset:flatbuffers.Offset) {
-  builder.addFieldStruct(8, viewportOffset, 0);
+  builder.addFieldStruct(19, viewportOffset, 0);
 }
 
 static addCullingMask(builder:flatbuffers.Builder, cullingMask:number) {
-  builder.addFieldInt32(9, cullingMask, 4294967295);
+  builder.addFieldInt32(20, cullingMask, 4294967295);
 }
 
 static addOrder(builder:flatbuffers.Builder, order:number) {
-  builder.addFieldInt32(10, order, 0);
+  builder.addFieldFloat32(21, order, 0.0);
 }
 
 static addCustomProjection(builder:flatbuffers.Builder, customProjectionOffset:flatbuffers.Offset) {
-  builder.addFieldOffset(11, customProjectionOffset, 0);
+  builder.addFieldOffset(22, customProjectionOffset, 0);
 }
 
 static endCamera(builder:flatbuffers.Builder):flatbuffers.Offset {
@@ -149,6 +252,17 @@ static endCamera(builder:flatbuffers.Builder):flatbuffers.Offset {
 
 unpack(): CameraT {
   return new CameraT(
+    this.physical(),
+    (this.sensorSizeMm() !== null ? this.sensorSizeMm()!.unpack() : null),
+    (this.lensShift() !== null ? this.lensShift()!.unpack() : null),
+    this.focalLengthMm(),
+    this.gateFit(),
+    this.clear(),
+    (this.background() !== null ? this.background()!.unpack() : null),
+    this.hdr(),
+    this.msaa(),
+    this.dynamicResolution(),
+    this.targetDisplay(),
     this.projection(),
     this.fovRadians(),
     this.fovAxis(),
@@ -166,6 +280,17 @@ unpack(): CameraT {
 
 
 unpackTo(_o: CameraT): void {
+  _o.physical = this.physical();
+  _o.sensorSizeMm = (this.sensorSizeMm() !== null ? this.sensorSizeMm()!.unpack() : null);
+  _o.lensShift = (this.lensShift() !== null ? this.lensShift()!.unpack() : null);
+  _o.focalLengthMm = this.focalLengthMm();
+  _o.gateFit = this.gateFit();
+  _o.clear = this.clear();
+  _o.background = (this.background() !== null ? this.background()!.unpack() : null);
+  _o.hdr = this.hdr();
+  _o.msaa = this.msaa();
+  _o.dynamicResolution = this.dynamicResolution();
+  _o.targetDisplay = this.targetDisplay();
   _o.projection = this.projection();
   _o.fovRadians = this.fovRadians();
   _o.fovAxis = this.fovAxis();
@@ -183,6 +308,17 @@ unpackTo(_o: CameraT): void {
 
 export class CameraT implements flatbuffers.IGeneratedObject {
 constructor(
+  public physical: boolean = false,
+  public sensorSizeMm: Vec2T|null = null,
+  public lensShift: Vec2T|null = null,
+  public focalLengthMm: number = 0.0,
+  public gateFit: GateFit = GateFit.None,
+  public clear: CameraClear = CameraClear.Skybox,
+  public background: ColorT|null = null,
+  public hdr: boolean = false,
+  public msaa: boolean = false,
+  public dynamicResolution: boolean = false,
+  public targetDisplay: number = 0,
   public projection: Projection = Projection.Perspective,
   public fovRadians: number = 1.0471976,
   public fovAxis: FovAxis = FovAxis.Vertical,
@@ -193,7 +329,7 @@ constructor(
   public aspect: number = 1.0,
   public viewport: Vec4T|null = null,
   public cullingMask: number = 4294967295,
-  public order: number = 0,
+  public order: number = 0.0,
   public customProjection: Matrix4T|null = null
 ){}
 
@@ -202,6 +338,17 @@ pack(builder:flatbuffers.Builder): flatbuffers.Offset {
   const customProjection = (this.customProjection !== null ? this.customProjection!.pack(builder) : 0);
 
   Camera.startCamera(builder);
+  Camera.addPhysical(builder, this.physical);
+  Camera.addSensorSizeMm(builder, (this.sensorSizeMm !== null ? this.sensorSizeMm!.pack(builder) : 0));
+  Camera.addLensShift(builder, (this.lensShift !== null ? this.lensShift!.pack(builder) : 0));
+  Camera.addFocalLengthMm(builder, this.focalLengthMm);
+  Camera.addGateFit(builder, this.gateFit);
+  Camera.addClear(builder, this.clear);
+  Camera.addBackground(builder, (this.background !== null ? this.background!.pack(builder) : 0));
+  Camera.addHdr(builder, this.hdr);
+  Camera.addMsaa(builder, this.msaa);
+  Camera.addDynamicResolution(builder, this.dynamicResolution);
+  Camera.addTargetDisplay(builder, this.targetDisplay);
   Camera.addProjection(builder, this.projection);
   Camera.addFovRadians(builder, this.fovRadians);
   Camera.addFovAxis(builder, this.fovAxis);

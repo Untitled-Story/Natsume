@@ -109,21 +109,31 @@ export function validateControl(d: DocumentT, required: (name: string) => void):
           V.Center,
           V.NextTrailCenter,
           V.PreviousTrailCenter,
+          V.MeshAxisOfRotation,
         ].includes(s.semantic)
           ? s.components === 3
           : [V.Color, V.Tangent].includes(s.semantic)
             ? s.components === 4
-            : [V.UV0, V.UV1, V.UV2, V.UV3].includes(s.semantic)
+            : [V.UV0, V.UV1, V.UV2, V.UV3, V.ColorPacked].includes(s.semantic)
               ? s.components === 2
-              : s.semantic === V.Size
+              : [V.Size, V.NoiseSum, V.NoiseImpulse].includes(s.semantic)
                 ? s.components >= 1 && s.components <= 3
-                : s.semantic === V.Rotation
+                : [V.Rotation, V.RotationSpeed].includes(s.semantic)
                   ? s.components === 1 || s.components === 3
-                  : [V.Custom1, V.Custom2].includes(s.semantic)
+                  : [V.Custom1, V.Custom2, V.StableRandom, V.VaryingRandom].includes(s.semantic)
                     ? s.components >= 1 && s.components <= 4
-                    : [V.AgeNormalized, V.VertexId, V.PercentageAlongTrail, V.TrailWidth].includes(
-                        s.semantic,
-                      ) && s.components === 1;
+                    : [
+                        V.AgeNormalized,
+                        V.VertexId,
+                        V.PercentageAlongTrail,
+                        V.TrailWidth,
+                        V.AnimBlend,
+                        V.AnimFrame,
+                        V.Speed,
+                        V.InverseStartLifetime,
+                        V.MeshIndex,
+                        V.ParticleIndex,
+                      ].includes(s.semantic) && s.components === 1;
         check(
           valid,
           'SEMANTIC',

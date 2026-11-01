@@ -27,71 +27,80 @@ static getSizePrefixedRootAsSpriteShape(bb:flatbuffers.ByteBuffer, obj?:SpriteSh
   return (obj || new SpriteShape()).__init(bb.readInt32(bb.position()) + bb.position(), bb);
 }
 
-spriteAssetId():number {
+sourceRendererComponentId():number {
   const offset = this.bb!.__offset(this.bb_pos, 4);
   return offset ? this.bb!.readUint32(this.bb_pos + offset) : 0;
 }
 
-placement():GeometryPlacement {
+spriteAssetId():number {
   const offset = this.bb!.__offset(this.bb_pos, 6);
+  return offset ? this.bb!.readUint32(this.bb_pos + offset) : 0;
+}
+
+placement():GeometryPlacement {
+  const offset = this.bb!.__offset(this.bb_pos, 8);
   return offset ? this.bb!.readUint8(this.bb_pos + offset) : GeometryPlacement.Vertex;
 }
 
 normalOffset():number {
-  const offset = this.bb!.__offset(this.bb_pos, 8);
+  const offset = this.bb!.__offset(this.bb_pos, 10);
   return offset ? this.bb!.readFloat32(this.bb_pos + offset) : 0.0;
 }
 
 useMeshColors():boolean {
-  const offset = this.bb!.__offset(this.bb_pos, 10);
+  const offset = this.bb!.__offset(this.bb_pos, 12);
   return offset ? !!this.bb!.readInt8(this.bb_pos + offset) : false;
 }
 
 spawnMode():ShapeSweep {
-  const offset = this.bb!.__offset(this.bb_pos, 12);
+  const offset = this.bb!.__offset(this.bb_pos, 14);
   return offset ? this.bb!.readUint8(this.bb_pos + offset) : ShapeSweep.Random;
 }
 
 spawnSpeed(obj?:ScalarParameter):ScalarParameter|null {
-  const offset = this.bb!.__offset(this.bb_pos, 14);
+  const offset = this.bb!.__offset(this.bb_pos, 16);
   return offset ? (obj || new ScalarParameter()).__init(this.bb!.__indirect(this.bb_pos + offset), this.bb!) : null;
 }
 
 spawnSpread():number {
-  const offset = this.bb!.__offset(this.bb_pos, 16);
+  const offset = this.bb!.__offset(this.bb_pos, 18);
   return offset ? this.bb!.readFloat32(this.bb_pos + offset) : 0.0;
 }
 
 static startSpriteShape(builder:flatbuffers.Builder) {
-  builder.startObject(7);
+  builder.startObject(8);
+}
+
+static addSourceRendererComponentId(builder:flatbuffers.Builder, sourceRendererComponentId:number) {
+  builder.addFieldInt32(0, sourceRendererComponentId, 0);
 }
 
 static addSpriteAssetId(builder:flatbuffers.Builder, spriteAssetId:number) {
-  builder.addFieldInt32(0, spriteAssetId, 0);
+  builder.addFieldInt32(1, spriteAssetId, 0);
 }
 
 static addPlacement(builder:flatbuffers.Builder, placement:GeometryPlacement) {
-  builder.addFieldInt8(1, placement, GeometryPlacement.Vertex);
+  builder.addFieldInt8(2, placement, GeometryPlacement.Vertex);
 }
 
 static addNormalOffset(builder:flatbuffers.Builder, normalOffset:number) {
-  builder.addFieldFloat32(2, normalOffset, 0.0);
+  builder.addFieldFloat32(3, normalOffset, 0.0);
 }
 
 static addUseMeshColors(builder:flatbuffers.Builder, useMeshColors:boolean) {
-  builder.addFieldInt8(3, +useMeshColors, +false);
+  builder.addFieldInt8(4, +useMeshColors, +false);
 }
 
 static addSpawnMode(builder:flatbuffers.Builder, spawnMode:ShapeSweep) {
-  builder.addFieldInt8(4, spawnMode, ShapeSweep.Random);
+  builder.addFieldInt8(5, spawnMode, ShapeSweep.Random);
 }
 
 static addSpawnSpeed(builder:flatbuffers.Builder, spawnSpeedOffset:flatbuffers.Offset) {
-  builder.addFieldOffset(5, spawnSpeedOffset, 0);
+  builder.addFieldOffset(6, spawnSpeedOffset, 0);
 }
 
 static addSpawnSpread(builder:flatbuffers.Builder, spawnSpread:number) {
-  builder.addFieldFloat32(6, spawnSpread, 0.0);
+  builder.addFieldFloat32(7, spawnSpread, 0.0);
 }
 
 static endSpriteShape(builder:flatbuffers.Builder):flatbuffers.Offset {
@@ -102,6 +111,7 @@ static endSpriteShape(builder:flatbuffers.Builder):flatbuffers.Offset {
 
 unpack(): SpriteShapeT {
   return new SpriteShapeT(
+    this.sourceRendererComponentId(),
     this.spriteAssetId(),
     this.placement(),
     this.normalOffset(),
@@ -114,6 +124,7 @@ unpack(): SpriteShapeT {
 
 
 unpackTo(_o: SpriteShapeT): void {
+  _o.sourceRendererComponentId = this.sourceRendererComponentId();
   _o.spriteAssetId = this.spriteAssetId();
   _o.placement = this.placement();
   _o.normalOffset = this.normalOffset();
@@ -126,6 +137,7 @@ unpackTo(_o: SpriteShapeT): void {
 
 export class SpriteShapeT implements flatbuffers.IGeneratedObject {
 constructor(
+  public sourceRendererComponentId: number = 0,
   public spriteAssetId: number = 0,
   public placement: GeometryPlacement = GeometryPlacement.Vertex,
   public normalOffset: number = 0.0,
@@ -140,6 +152,7 @@ pack(builder:flatbuffers.Builder): flatbuffers.Offset {
   const spawnSpeed = (this.spawnSpeed !== null ? this.spawnSpeed!.pack(builder) : 0);
 
   SpriteShape.startSpriteShape(builder);
+  SpriteShape.addSourceRendererComponentId(builder, this.sourceRendererComponentId);
   SpriteShape.addSpriteAssetId(builder, this.spriteAssetId);
   SpriteShape.addPlacement(builder, this.placement);
   SpriteShape.addNormalOffset(builder, this.normalOffset);

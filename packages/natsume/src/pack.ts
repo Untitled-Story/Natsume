@@ -91,6 +91,13 @@ export class EffectPack {
     const visit = (value: unknown) => {
       if (!value || typeof value !== 'object') return;
       for (const [key, child] of Object.entries(value)) {
+        if (
+          'hostForceFieldsSlot' in value &&
+          'filter' in value &&
+          ((key === 'influences' && value.filter === 0) ||
+            (key === 'hostForceFieldsSlot' && value.filter === 1))
+        )
+          continue;
         if (key.startsWith('host') && key.endsWith('Slot') && typeof child === 'string' && child)
           slots.add(child);
         else visit(child);

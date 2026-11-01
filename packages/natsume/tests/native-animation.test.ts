@@ -143,7 +143,7 @@ it.skipIf(!hasNativeFixture('unity-animation.json'))(
       const keys = [new BoolKeyT(0, true), new BoolKeyT(0.25, false), new BoolKeyT(0.75, true)];
       d.animations = [
         new AnimationT(6, 'active', 1, true, [
-          new TrackT(new BindingT(3, 1), 5, new BoolTrackT(keys)),
+          new TrackT(new BindingT(null, 3, 1), 5, new BoolTrackT(keys)),
         ]),
       ];
       d.components = [
@@ -172,7 +172,7 @@ it.skipIf(!hasNativeFixture('unity-animation.json'))(
         {
           format: 'noa-package',
           version: 1,
-          noir_version: [3, 0],
+          noir_version: [1, 0],
           document: 'scene.noir',
           files: [],
         },

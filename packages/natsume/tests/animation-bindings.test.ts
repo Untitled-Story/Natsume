@@ -56,7 +56,7 @@ import type { DocumentT } from '../src/format/generated/noa/ir/document.js';
 export function packDocument(d: DocumentT): EffectPack {
   return new EffectPack(
     d,
-    { format: 'noa-package', version: 1, noir_version: [3, 0], document: 'scene.noir', files: [] },
+    { format: 'noa-package', version: 1, noir_version: [1, 0], document: 'scene.noir', files: [] },
     new Map(),
     new Map(),
   );
@@ -107,7 +107,7 @@ const vtrack = (
   x = animationCurve(),
   y: ScalarCurveT | null = null,
   z: ScalarCurveT | null = null,
-) => new TrackT(new BindingT(target, property), D.Vector3Track, new Vector3TrackT(x, y, z));
+) => new TrackT(new BindingT(null, target, property), D.Vector3Track, new Vector3TrackT(x, y, z));
 
 it('uses action-entry channels without accumulating and isolates two instances through restart', () => {
   const p = packDocument(fixture([vtrack(P.NodePosition)])),
@@ -161,7 +161,7 @@ it('starts an initially inactive Animator on activation and freezes a disabled c
 it('uses Euler ZXY and normalizes sampled quaternion components', () => {
   const d = fixture([
     new TrackT(
-      new BindingT(3, P.NodeRotation),
+      new BindingT(null, 3, P.NodeRotation),
       D.RotationTrack,
       new RotationTrackT(
         1,
@@ -180,7 +180,7 @@ it('uses Euler ZXY and normalizes sampled quaternion components', () => {
     Math.abs(q.x * expected[0] + q.y * expected[1] + q.z * expected[2] + q.w * expected[3]),
   ).toBeCloseTo(1, 5);
   const r = new TrackT(
-    new BindingT(3, P.NodeRotation),
+    new BindingT(null, 3, P.NodeRotation),
     D.RotationTrack,
     new RotationTrackT(
       0,
@@ -232,7 +232,7 @@ it.each([ScalarMode.Constant, ScalarMode.TwoConstants, ScalarMode.Curve, ScalarM
   'writes MinMaxCurve source branches without changing mode %s',
   (mode) => {
     const t = new TrackT(
-      new BindingT(5, P.ParticleParameter, PP.StartSizeX, 'scalar'),
+      new BindingT(null, 5, P.ParticleParameter, PP.StartSizeX, 'scalar'),
       D.FloatTrack,
       new FloatTrackT(animationCurve(2, 4)),
     );
@@ -291,24 +291,24 @@ it('updates particle colors, custom slots, loop, emission, velocity and all sour
   for (let p = PP.StartLifetime; p <= PP.VelocityZ; p++)
     tracks.push(
       new TrackT(
-        new BindingT(5, P.ParticleParameter, p, 'scalar'),
+        new BindingT(null, 5, P.ParticleParameter, p, 'scalar'),
         D.FloatTrack,
         new FloatTrackT(animationCurve(2, 4)),
       ),
     );
   tracks.push(
     new TrackT(
-      new BindingT(5, P.ParticleColor, 0, 'maxColor'),
+      new BindingT(null, 5, P.ParticleColor, 0, 'maxColor'),
       D.ColorTrack,
       new ColorTrackT(animationCurve(0.2, 0.8)),
     ),
     new TrackT(
-      new BindingT(5, P.ParticleCustomColor, 0, 'minColor', 1),
+      new BindingT(null, 5, P.ParticleCustomColor, 0, 'minColor', 1),
       D.ColorTrack,
       new ColorTrackT(null, animationCurve(0.3, 0.7)),
     ),
     new TrackT(
-      new BindingT(5, P.ParticleLoop),
+      new BindingT(null, 5, P.ParticleLoop),
       D.BoolTrack,
       new BoolTrackT([new BoolKeyT(0, true), new BoolKeyT(0.5, false)]),
     ),
@@ -333,17 +333,17 @@ it('updates particle colors, custom slots, loop, emission, velocity and all sour
 it('isolates renderer overrides from another renderer sharing its material and from other instances', () => {
   const tracks = [
     new TrackT(
-      new BindingT(5, P.RendererMaterialTint, 0, '_TintColor'),
+      new BindingT(null, 5, P.RendererMaterialTint, 0, '_TintColor'),
       D.ColorTrack,
       new ColorTrackT(animationCurve(0.2, 0.8)),
     ),
     new TrackT(
-      new BindingT(5, P.RendererMaterialFloat, 0, '_InvFade'),
+      new BindingT(null, 5, P.RendererMaterialFloat, 0, '_InvFade'),
       D.FloatTrack,
       new FloatTrackT(animationCurve(2, 4)),
     ),
     new TrackT(
-      new BindingT(5, P.RendererTextureST, 0, '_MainTex'),
+      new BindingT(null, 5, P.RendererTextureST, 0, '_MainTex'),
       D.Vector4Track,
       new Vector4TrackT(animationCurve(2, 4), null, null, animationCurve(0.1, 0.9)),
     ),
@@ -379,7 +379,7 @@ it('rejects source branches and targets that cannot execute', () => {
   expect(() => validateAnimationBindings(d, () => {})).toThrow('Invalid animation');
   d.animations[0]!.tracks = [
     new TrackT(
-      new BindingT(4, P.ComponentEnabled),
+      new BindingT(null, 4, P.ComponentEnabled),
       D.BoolTrack,
       new BoolTrackT([new BoolKeyT(0, true)]),
     ),
@@ -524,7 +524,7 @@ it('isolates Sprite color channels and restores source values on restart', () =>
   doc.animations = [clip];
   const pack = new EffectPack(
     doc,
-    { format: 'noa-package', version: 1, noir_version: [3, 0], document: 'scene.noir', files: [] },
+    { format: 'noa-package', version: 1, noir_version: [1, 0], document: 'scene.noir', files: [] },
     new Map(),
     new Map(),
   );

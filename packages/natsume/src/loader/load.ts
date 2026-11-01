@@ -13,7 +13,7 @@ export interface LoadOptions {
   signal?: AbortSignal;
   limits?: Partial<LoadLimits>;
 }
-function validateShader(bytes: Uint8Array, path: string) {
+async function validateShader(bytes: Uint8Array, path: string) {
   const shader = parseJson(bytes, path);
   check(
     record(shader) &&
@@ -24,6 +24,29 @@ function validateShader(bytes: Uint8Array, path: string) {
     'Unsupported shader recipe',
     path,
   );
+  if (shader.model === 'unity-source') {
+    check(
+      Object.keys(shader).length === 6 &&
+        typeof shader.program_sha256 === 'string' &&
+        /^[0-9a-f]{64}$/.test(shader.program_sha256) &&
+        record(shader.source) &&
+        typeof shader.source.compressedBlob === 'string' &&
+        /^(?:[0-9a-fA-F]{2})+$/.test(shader.source.compressedBlob),
+      'SEMANTIC',
+      'Invalid Unity source shader',
+      path,
+    );
+    const blob = String((shader.source as Record<string, unknown>).compressedBlob);
+    const program = Uint8Array.from(blob.match(/../g)!, (hex) => Number.parseInt(hex, 16));
+    const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', program));
+    check(
+      Array.from(digest, (v) => v.toString(16).padStart(2, '0')).join('') === shader.program_sha256,
+      'HASH',
+      'Unity source program hash mismatch',
+      path,
+    );
+    return shader.model;
+  }
   if (
     shader.model === 'unity-legacy-particle-additive' ||
     shader.model === 'unity-legacy-particle-alpha-blend'
@@ -278,7 +301,9 @@ export async function loadPack(
       continue;
     }
     check(
-      file && file.kind === ['unknown', 'image', 'mesh', 'shader_data'][asset.kind],
+      file &&
+        file.kind ===
+          ['unknown', 'image', 'mesh', 'shader_data', 'sprite', 'source_data'][asset.kind],
       'MANIFEST',
       'NOIR/manifest asset kind differs',
     );
@@ -290,7 +315,7 @@ export async function loadPack(
       validateMesh(mesh);
       meshes.set(asset.id, mesh);
     }
-    if (asset.kind === 3) shaderModels.set(asset.id, String(validateShader(data, file.path)));
+    if (asset.kind === 3) shaderModels.set(asset.id, String(await validateShader(data, file.path)));
     if (asset.kind === 1)
       check(
         data.length >= 24 &&
@@ -310,6 +335,7 @@ export async function loadPack(
       6: 'unity-sprites-default',
       7: 'unity-ui-default',
       8: 'texture-vertex-color',
+      9: 'unity-source',
     };
     if (material.model === 4 || material.model === 5 || material.shaderDataAssetId)
       check(

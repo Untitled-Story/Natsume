@@ -182,11 +182,25 @@ export function verifyBuffer(bytes: Uint8Array, format: keyof typeof schemas): v
         return scalar(field.type, pos);
       };
       check(
-        version('format_major', 0) === (format === 'noir' ? 3 : 2) &&
+        version('format_major', 0) === 1 &&
           version('format_minor', 0) === 0 &&
           (format !== 'noir' || version('semantics_revision', 1) === 1),
         'VERSION',
         `Unsupported ${schema.identifier} version or semantics revision`,
+      );
+      const contract = definition.fields?.find((f) => f.name === 'contract_id');
+      const pos = contract && fieldAt(contract.slot ?? 0);
+      check(pos && pos + 4 <= table + objectSize, 'VERSION', 'Missing contract identity');
+      const start = pointer(pos);
+      bounds(start, 4, 4);
+      const length = view.getUint32(start, true);
+      bounds(start + 4, length);
+      const expected = format === 'noir' ? 'noa.effects/1.0' : 'noa.mesh/1.0';
+      check(
+        length === expected.length &&
+          expected.split('').every((c, i) => bytes[start + 4 + i] === c.charCodeAt(0)),
+        'VERSION',
+        `Unsupported ${schema.identifier} contract identity`,
       );
     }
     for (const field of definition.fields ?? []) {

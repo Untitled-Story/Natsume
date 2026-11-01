@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Noa shader data recipes v1",
+  "title": "Noa shader data recipes 1.0",
   "oneOf": [
     {
       "$ref": "#/$defs/particle-add-alpha"
@@ -13,6 +13,9 @@
     },
     {
       "$ref": "#/$defs/unity-sprite-ui"
+    },
+    {
+      "$ref": "#/$defs/unity-source"
     }
   ],
   "$defs": {
@@ -461,6 +464,48 @@
         "lighting",
         "stencil"
       ]
+    },
+    "unity-source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "format",
+        "version",
+        "revision",
+        "model",
+        "program_sha256",
+        "source"
+      ],
+      "properties": {
+        "format": {
+          "const": "noa-shader-data"
+        },
+        "version": {
+          "const": 1
+        },
+        "revision": {
+          "const": 1
+        },
+        "model": {
+          "const": "unity-source"
+        },
+        "program_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "source": {
+          "type": "object",
+          "required": [
+            "compressedBlob"
+          ],
+          "properties": {
+            "compressedBlob": {
+              "type": "string",
+              "pattern": "^([0-9a-fA-F]{2})+$"
+            }
+          }
+        }
+      }
     }
   }
 }

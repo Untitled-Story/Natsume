@@ -97,7 +97,7 @@ export async function measureImages(native: {
   doc.assets = [new AssetT(3, 4, sprite)];
   const pack = new EffectPack(
     doc,
-    { format: 'noa-package', version: 1, noir_version: [3, 0], document: 'scene.noir', files: [] },
+    { format: 'noa-package', version: 1, noir_version: [1, 0], document: 'scene.noir', files: [] },
     new Map(),
     new Map([[2, source]]),
   );

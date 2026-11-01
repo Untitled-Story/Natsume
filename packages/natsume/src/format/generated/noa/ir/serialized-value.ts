@@ -12,6 +12,7 @@ import { ObjectValue, ObjectValueT } from '../../noa/ir/object-value.js';
 import { ReferenceValue, ReferenceValueT } from '../../noa/ir/reference-value.js';
 import { SerializedValueData, unionToSerializedValueData, unionListToSerializedValueData } from '../../noa/ir/serialized-value-data.js';
 import { SignedValue, SignedValueT } from '../../noa/ir/signed-value.js';
+import { SpecialFloatValue, SpecialFloatValueT } from '../../noa/ir/special-float-value.js';
 import { StringValue, StringValueT } from '../../noa/ir/string-value.js';
 import { UnsignedValue, UnsignedValueT } from '../../noa/ir/unsigned-value.js';
 
@@ -93,7 +94,7 @@ unpackTo(_o: SerializedValueT): void {
 export class SerializedValueT implements flatbuffers.IGeneratedObject {
 constructor(
   public dataType: SerializedValueData = SerializedValueData.NONE,
-  public data: ArrayValueT|BooleanValueT|DoubleValueT|NullValueT|ObjectValueT|ReferenceValueT|SignedValueT|StringValueT|UnsignedValueT|null = null
+  public data: ArrayValueT|BooleanValueT|DoubleValueT|NullValueT|ObjectValueT|ReferenceValueT|SignedValueT|SpecialFloatValueT|StringValueT|UnsignedValueT|null = null
 ){}
 
 

@@ -9,7 +9,10 @@ import { CircleShape, CircleShapeT } from '../../noa/ir/circle-shape.js';
 import { ConeShape, ConeShapeT } from '../../noa/ir/cone-shape.js';
 import { DonutShape, DonutShapeT } from '../../noa/ir/donut-shape.js';
 import { EdgeShape, EdgeShapeT } from '../../noa/ir/edge-shape.js';
+import { MeshShape, MeshShapeT } from '../../noa/ir/mesh-shape.js';
+import { RectangleShape, RectangleShapeT } from '../../noa/ir/rectangle-shape.js';
 import { ShapeGeometry, unionToShapeGeometry, unionListToShapeGeometry } from '../../noa/ir/shape-geometry.js';
+import { ShapeTexture, ShapeTextureT } from '../../noa/ir/shape-texture.js';
 import { SphereShape, SphereShapeT } from '../../noa/ir/sphere-shape.js';
 import { SpriteShape, SpriteShapeT } from '../../noa/ir/sprite-shape.js';
 import { Transform, TransformT } from '../../noa/ir/transform.js';
@@ -33,82 +36,92 @@ static getSizePrefixedRootAsShapeModule(bb:flatbuffers.ByteBuffer, obj?:ShapeMod
   return (obj || new ShapeModule()).__init(bb.readInt32(bb.position()) + bb.position(), bb);
 }
 
-geometryType():ShapeGeometry {
+texture(obj?:ShapeTexture):ShapeTexture|null {
   const offset = this.bb!.__offset(this.bb_pos, 4);
+  return offset ? (obj || new ShapeTexture()).__init(this.bb!.__indirect(this.bb_pos + offset), this.bb!) : null;
+}
+
+geometryType():ShapeGeometry {
+  const offset = this.bb!.__offset(this.bb_pos, 6);
   return offset ? this.bb!.readUint8(this.bb_pos + offset) : ShapeGeometry.NONE;
 }
 
 geometry<T extends flatbuffers.Table>(obj:any):any|null {
-  const offset = this.bb!.__offset(this.bb_pos, 6);
+  const offset = this.bb!.__offset(this.bb_pos, 8);
   return offset ? this.bb!.__union(obj, this.bb_pos + offset) : null;
 }
 
 transform(obj?:Transform):Transform|null {
-  const offset = this.bb!.__offset(this.bb_pos, 8);
+  const offset = this.bb!.__offset(this.bb_pos, 10);
   return offset ? (obj || new Transform()).__init(this.bb!.__indirect(this.bb_pos + offset), this.bb!) : null;
 }
 
 alignToDirection():boolean {
-  const offset = this.bb!.__offset(this.bb_pos, 10);
+  const offset = this.bb!.__offset(this.bb_pos, 12);
   return offset ? !!this.bb!.readInt8(this.bb_pos + offset) : false;
 }
 
 randomDirection():number {
-  const offset = this.bb!.__offset(this.bb_pos, 12);
-  return offset ? this.bb!.readFloat32(this.bb_pos + offset) : 0.0;
-}
-
-sphericalDirection():number {
   const offset = this.bb!.__offset(this.bb_pos, 14);
   return offset ? this.bb!.readFloat32(this.bb_pos + offset) : 0.0;
 }
 
-randomPosition():number {
+sphericalDirection():number {
   const offset = this.bb!.__offset(this.bb_pos, 16);
   return offset ? this.bb!.readFloat32(this.bb_pos + offset) : 0.0;
 }
 
+randomPosition():number {
+  const offset = this.bb!.__offset(this.bb_pos, 18);
+  return offset ? this.bb!.readFloat32(this.bb_pos + offset) : 0.0;
+}
+
 static startShapeModule(builder:flatbuffers.Builder) {
-  builder.startObject(7);
+  builder.startObject(8);
+}
+
+static addTexture(builder:flatbuffers.Builder, textureOffset:flatbuffers.Offset) {
+  builder.addFieldOffset(0, textureOffset, 0);
 }
 
 static addGeometryType(builder:flatbuffers.Builder, geometryType:ShapeGeometry) {
-  builder.addFieldInt8(0, geometryType, ShapeGeometry.NONE);
+  builder.addFieldInt8(1, geometryType, ShapeGeometry.NONE);
 }
 
 static addGeometry(builder:flatbuffers.Builder, geometryOffset:flatbuffers.Offset) {
-  builder.addFieldOffset(1, geometryOffset, 0);
+  builder.addFieldOffset(2, geometryOffset, 0);
 }
 
 static addTransform(builder:flatbuffers.Builder, transformOffset:flatbuffers.Offset) {
-  builder.addFieldOffset(2, transformOffset, 0);
+  builder.addFieldOffset(3, transformOffset, 0);
 }
 
 static addAlignToDirection(builder:flatbuffers.Builder, alignToDirection:boolean) {
-  builder.addFieldInt8(3, +alignToDirection, +false);
+  builder.addFieldInt8(4, +alignToDirection, +false);
 }
 
 static addRandomDirection(builder:flatbuffers.Builder, randomDirection:number) {
-  builder.addFieldFloat32(4, randomDirection, 0.0);
+  builder.addFieldFloat32(5, randomDirection, 0.0);
 }
 
 static addSphericalDirection(builder:flatbuffers.Builder, sphericalDirection:number) {
-  builder.addFieldFloat32(5, sphericalDirection, 0.0);
+  builder.addFieldFloat32(6, sphericalDirection, 0.0);
 }
 
 static addRandomPosition(builder:flatbuffers.Builder, randomPosition:number) {
-  builder.addFieldFloat32(6, randomPosition, 0.0);
+  builder.addFieldFloat32(7, randomPosition, 0.0);
 }
 
 static endShapeModule(builder:flatbuffers.Builder):flatbuffers.Offset {
   const offset = builder.endObject();
-  builder.requiredField(offset, 8) // transform
+  builder.requiredField(offset, 10) // transform
   return offset;
 }
 
 
 unpack(): ShapeModuleT {
   return new ShapeModuleT(
+    (this.texture() !== null ? this.texture()!.unpack() : null),
     this.geometryType(),
     (() => {
       const temp = unionToShapeGeometry(this.geometryType(), this.geometry.bind(this));
@@ -125,6 +138,7 @@ unpack(): ShapeModuleT {
 
 
 unpackTo(_o: ShapeModuleT): void {
+  _o.texture = (this.texture() !== null ? this.texture()!.unpack() : null);
   _o.geometryType = this.geometryType();
   _o.geometry = (() => {
       const temp = unionToShapeGeometry(this.geometryType(), this.geometry.bind(this));
@@ -141,8 +155,9 @@ unpackTo(_o: ShapeModuleT): void {
 
 export class ShapeModuleT implements flatbuffers.IGeneratedObject {
 constructor(
+  public texture: ShapeTextureT|null = null,
   public geometryType: ShapeGeometry = ShapeGeometry.NONE,
-  public geometry: BoxShapeT|CircleShapeT|ConeShapeT|DonutShapeT|EdgeShapeT|SphereShapeT|SpriteShapeT|null = null,
+  public geometry: BoxShapeT|CircleShapeT|ConeShapeT|DonutShapeT|EdgeShapeT|MeshShapeT|RectangleShapeT|SphereShapeT|SpriteShapeT|null = null,
   public transform: TransformT|null = null,
   public alignToDirection: boolean = false,
   public randomDirection: number = 0.0,
@@ -152,10 +167,12 @@ constructor(
 
 
 pack(builder:flatbuffers.Builder): flatbuffers.Offset {
+  const texture = (this.texture !== null ? this.texture!.pack(builder) : 0);
   const geometry = builder.createObjectOffset(this.geometry);
   const transform = (this.transform !== null ? this.transform!.pack(builder) : 0);
 
   ShapeModule.startShapeModule(builder);
+  ShapeModule.addTexture(builder, texture);
   ShapeModule.addGeometryType(builder, this.geometryType);
   ShapeModule.addGeometry(builder, geometry);
   ShapeModule.addTransform(builder, transform);

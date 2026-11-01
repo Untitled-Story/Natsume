@@ -92,7 +92,10 @@ describe.skipIf(!existsSync(sample))('kirakira playback', () => {
     expect(s.particleCount).toBe(100);
     s.applyAnimatorState(44, 'kirakira_01');
     expect(s.particleCount).toBe(100);
-    const rate = [...s.emitters.values()].reduce((n, e) => n + scalar(e.emission?.rateOverTime), 0);
+    const rate = [...s.emitters.values()].reduce(
+      (n, e) => n + (e.emission?.enabled ? scalar(e.emission.rateOverTime) : 0),
+      0,
+    );
     expect(rate).toBe(45);
     expect(s.state).toBe('playing');
   });

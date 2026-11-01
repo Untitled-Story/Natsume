@@ -68,7 +68,7 @@ function fixture() {
       {
         format: 'noa-package',
         version: 1,
-        noir_version: [3, 0],
+        noir_version: [1, 0],
         document: 'scene.noir',
         files: [
           {

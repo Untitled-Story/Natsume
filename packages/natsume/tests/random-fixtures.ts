@@ -47,6 +47,7 @@ export function randomSource(seed: number, thickness: number, arc: number) {
     new ParticleModuleT(
       M.ShapeModule,
       new ShapeModuleT(
+        null,
         ShapeGeometry.CircleShape,
         new CircleShapeT(constant(2), arc, thickness),
         new TransformT(new Vec3T(), new QuaternionT(0, 0, 0, 1), new Vec3T(1, 1, 1)),

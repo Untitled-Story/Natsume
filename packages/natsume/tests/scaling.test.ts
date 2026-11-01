@@ -55,7 +55,7 @@ for (const c of native.cases.filter((c) => c.label.startsWith('scaling-birth-'))
     s.modules.push(
       new ParticleModuleT(
         M.ShapeModule,
-        new ShapeModuleT(ShapeGeometry.EdgeShape, new EdgeShapeT(constant(0)), transform),
+        new ShapeModuleT(null, ShapeGeometry.EdgeShape, new EdgeShapeT(constant(0)), transform),
       ),
     );
     s.modules.push(

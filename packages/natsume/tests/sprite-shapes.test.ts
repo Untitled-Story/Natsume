@@ -95,7 +95,7 @@ it.skipIf(!native.length)('matches native sprite placement and nonrandom spawn m
   doc.assets = [new AssetT(42, 4, new SpriteAssetT(43, 44))];
   const pack = new EffectPack(
     doc,
-    { format: 'noa-package', version: 1, noir_version: [3, 0], document: 'scene.noir', files: [] },
+    { format: 'noa-package', version: 1, noir_version: [1, 0], document: 'scene.noir', files: [] },
     new Map(),
     new Map([[43, mesh]]),
   );
@@ -104,6 +104,7 @@ it.skipIf(!native.length)('matches native sprite placement and nonrandom spawn m
     const speed = new ScalarParameterT();
     speed.constantMax = c.speed ?? 1;
     const d = new SpriteShapeT(
+      0,
       c.label === 'sprite-empty' ? 0 : 42,
       c.placement,
       c.normalOffset,
@@ -112,7 +113,7 @@ it.skipIf(!native.length)('matches native sprite placement and nonrandom spawn m
       speed,
       c.spread ?? 0,
     );
-    const shape = new ShapeModuleT(ShapeGeometry.SpriteShape, d);
+    const shape = new ShapeModuleT(null, ShapeGeometry.SpriteShape, d);
     const sampler = new SpriteShapeSampler(pack, d),
       sum = new Float64Array(6),
       reference = new Float64Array(6);

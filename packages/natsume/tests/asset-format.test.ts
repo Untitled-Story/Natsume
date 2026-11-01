@@ -31,7 +31,8 @@ import { UIMaskT } from '../src/format/generated/noa/ir/uimask.js';
 
 function triangle() {
   const m = new MeshT();
-  m.formatMajor = 2;
+  m.contractId = 'noa.mesh/1.0';
+  m.formatMajor = 1;
   m.positions = [new V3(-1, 0, 0), new V3(1, 0, 0), new V3(0, 1, 0)];
   m.indices = [2, 0, 1];
   m.submeshes = [new SubmeshT(0, 3)];
@@ -53,7 +54,7 @@ function spriteDocument() {
   s.border = new Vec4T();
   s.sampler = new SamplerT();
   d.assets = [new AssetT(703, A.Sprite, s), new AssetT(91, A.Image), new AssetT(42, A.Mesh)];
-  d.features = [new Feature('asset.sprite'), new Feature('mesh.noms', 2)];
+  d.features = [new Feature('asset.sprite'), new Feature('mesh.noms', 1)];
   return d;
 }
 async function packBytes(d: DocumentT, assets: Record<string, Uint8Array>) {
@@ -78,7 +79,7 @@ async function packBytes(d: DocumentT, assets: Record<string, Uint8Array>) {
         JSON.stringify({
           format: 'noa-package',
           version: 1,
-          noir_version: [3, 0],
+          noir_version: [1, 0],
           document: 'scene.noir',
           files: entries,
         }),
@@ -97,13 +98,13 @@ function pngHeader() {
 }
 
 it('rejects omitted, old and unknown major versions before interpreting changed layouts', async () => {
-  for (const version of [0, 1, 2, 4]) {
+  for (const version of [0, 2, 3, 4]) {
     const d = minimalDocument();
     d.formatMajor = version;
     expect(() => verifyBuffer(encode(d), 'noir')).toThrow(/version/);
     expect(() => validateDocument(d)).toThrow(/version/);
     const m = triangle();
-    m.formatMajor = version === 2 ? 3 : version;
+    m.formatMajor = version;
     expect(() => verifyBuffer(encodeMesh(m), 'mesh')).toThrow(/version/);
     expect(() => validateMesh(m)).toThrow(/version/);
     expect(() =>
@@ -287,8 +288,8 @@ it('requires explicit mesh revision and keeps legitimate empty geometry distinct
   (d.components[0]!.data as MeshFilterT).meshAssetId = 42;
   expect(() => validateDocument(d)).toThrow(/asset kind/);
   const s = spriteDocument();
-  s.features[1]!.revision = 1;
-  expect(() => validateDocument(s)).toThrow(/mesh.noms@1/);
+  s.features[1]!.revision = 2;
+  expect(() => validateDocument(s)).toThrow(/mesh.noms/);
 });
 
 it('keeps an empty UI mask valid and rejects unrelated Graphic component IDs', () => {

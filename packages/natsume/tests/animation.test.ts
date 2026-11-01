@@ -33,7 +33,7 @@ function document() {
   d.animations = [
     new AnimationT(6, 'active', 1, false, [
       new TrackT(
-        new BindingT(3, AnimationProperty.NodeActive),
+        new BindingT(null, 3, AnimationProperty.NodeActive),
         TrackData.BoolTrack,
         new BoolTrackT([
           new BoolKeyT(0, true),
@@ -193,7 +193,7 @@ it('rejects negative bool times and normalized animation curves', () => {
   c.keys = [new FloatKeyT()];
   d.animations[0]!.tracks = [
     new TrackT(
-      new BindingT(3, AnimationProperty.NodePosition),
+      new BindingT(null, 3, AnimationProperty.NodePosition),
       TrackData.FloatTrack,
       new FloatTrackT(c),
     ),

@@ -4,5 +4,6 @@
 
 export enum CameraPolicy {
   HostRequired = 0,
-  Embedded = 1
+  Embedded = 1,
+  SourcePreserved = 2
 }

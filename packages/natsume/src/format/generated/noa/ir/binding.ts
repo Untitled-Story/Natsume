@@ -6,6 +6,7 @@ import * as flatbuffers from 'flatbuffers';
 
 import { AnimationProperty } from '../../noa/ir/animation-property.js';
 import { ParticleParameter } from '../../noa/ir/particle-parameter.js';
+import { UnityAnimationBinding, UnityAnimationBindingT } from '../../noa/ir/unity-animation-binding.js';
 
 
 export class Binding implements flatbuffers.IUnpackableObject<BindingT> {
@@ -26,55 +27,64 @@ static getSizePrefixedRootAsBinding(bb:flatbuffers.ByteBuffer, obj?:Binding):Bin
   return (obj || new Binding()).__init(bb.readInt32(bb.position()) + bb.position(), bb);
 }
 
-targetId():number {
+source(obj?:UnityAnimationBinding):UnityAnimationBinding|null {
   const offset = this.bb!.__offset(this.bb_pos, 4);
+  return offset ? (obj || new UnityAnimationBinding()).__init(this.bb!.__indirect(this.bb_pos + offset), this.bb!) : null;
+}
+
+targetId():number {
+  const offset = this.bb!.__offset(this.bb_pos, 6);
   return offset ? this.bb!.readUint32(this.bb_pos + offset) : 0;
 }
 
 property():AnimationProperty {
-  const offset = this.bb!.__offset(this.bb_pos, 6);
+  const offset = this.bb!.__offset(this.bb_pos, 8);
   return offset ? this.bb!.readUint16(this.bb_pos + offset) : AnimationProperty.Unknown;
 }
 
 parameter():ParticleParameter {
-  const offset = this.bb!.__offset(this.bb_pos, 8);
+  const offset = this.bb!.__offset(this.bb_pos, 10);
   return offset ? this.bb!.readUint16(this.bb_pos + offset) : ParticleParameter.Unknown;
 }
 
 propertyName():string|null
 propertyName(optionalEncoding:flatbuffers.Encoding):string|Uint8Array|null
 propertyName(optionalEncoding?:any):string|Uint8Array|null {
-  const offset = this.bb!.__offset(this.bb_pos, 10);
+  const offset = this.bb!.__offset(this.bb_pos, 12);
   return offset ? this.bb!.__string(this.bb_pos + offset, optionalEncoding) : null;
 }
 
 slotIndex():number {
-  const offset = this.bb!.__offset(this.bb_pos, 12);
+  const offset = this.bb!.__offset(this.bb_pos, 14);
   return offset ? this.bb!.readUint32(this.bb_pos + offset) : 0;
 }
 
 static startBinding(builder:flatbuffers.Builder) {
-  builder.startObject(5);
+  builder.startObject(6);
+}
+
+static addSource(builder:flatbuffers.Builder, sourceOffset:flatbuffers.Offset) {
+  builder.addFieldOffset(0, sourceOffset, 0);
 }
 
 static addTargetId(builder:flatbuffers.Builder, targetId:number) {
-  builder.addFieldInt32(0, targetId, 0);
+  builder.addFieldInt32(1, targetId, 0);
 }
 
 static addProperty(builder:flatbuffers.Builder, property:AnimationProperty) {
-  builder.addFieldInt16(1, property, AnimationProperty.Unknown);
+  builder.addFieldInt16(2, property, AnimationProperty.Unknown);
 }
 
 static addParameter(builder:flatbuffers.Builder, parameter:ParticleParameter) {
-  builder.addFieldInt16(2, parameter, ParticleParameter.Unknown);
+  builder.addFieldInt16(3, parameter, ParticleParameter.Unknown);
 }
 
 static addPropertyName(builder:flatbuffers.Builder, propertyNameOffset:flatbuffers.Offset) {
-  builder.addFieldOffset(3, propertyNameOffset, 0);
+  builder.addFieldOffset(4, propertyNameOffset, 0);
 }
 
 static addSlotIndex(builder:flatbuffers.Builder, slotIndex:number) {
-  builder.addFieldInt32(4, slotIndex, 0);
+  builder.addFieldInt32(5, slotIndex, 0);
 }
 
 static endBinding(builder:flatbuffers.Builder):flatbuffers.Offset {
@@ -82,8 +92,9 @@ static endBinding(builder:flatbuffers.Builder):flatbuffers.Offset {
   return offset;
 }
 
-static createBinding(builder:flatbuffers.Builder, targetId:number, property:AnimationProperty, parameter:ParticleParameter, propertyNameOffset:flatbuffers.Offset, slotIndex:number):flatbuffers.Offset {
+static createBinding(builder:flatbuffers.Builder, sourceOffset:flatbuffers.Offset, targetId:number, property:AnimationProperty, parameter:ParticleParameter, propertyNameOffset:flatbuffers.Offset, slotIndex:number):flatbuffers.Offset {
   Binding.startBinding(builder);
+  Binding.addSource(builder, sourceOffset);
   Binding.addTargetId(builder, targetId);
   Binding.addProperty(builder, property);
   Binding.addParameter(builder, parameter);
@@ -94,6 +105,7 @@ static createBinding(builder:flatbuffers.Builder, targetId:number, property:Anim
 
 unpack(): BindingT {
   return new BindingT(
+    (this.source() !== null ? this.source()!.unpack() : null),
     this.targetId(),
     this.property(),
     this.parameter(),
@@ -104,6 +116,7 @@ unpack(): BindingT {
 
 
 unpackTo(_o: BindingT): void {
+  _o.source = (this.source() !== null ? this.source()!.unpack() : null);
   _o.targetId = this.targetId();
   _o.property = this.property();
   _o.parameter = this.parameter();
@@ -114,6 +127,7 @@ unpackTo(_o: BindingT): void {
 
 export class BindingT implements flatbuffers.IGeneratedObject {
 constructor(
+  public source: UnityAnimationBindingT|null = null,
   public targetId: number = 0,
   public property: AnimationProperty = AnimationProperty.Unknown,
   public parameter: ParticleParameter = ParticleParameter.Unknown,
@@ -123,9 +137,11 @@ constructor(
 
 
 pack(builder:flatbuffers.Builder): flatbuffers.Offset {
+  const source = (this.source !== null ? this.source!.pack(builder) : 0);
   const propertyName = (this.propertyName !== null ? builder.createString(this.propertyName!) : 0);
 
   return Binding.createBinding(builder,
+    source,
     this.targetId,
     this.property,
     this.parameter,

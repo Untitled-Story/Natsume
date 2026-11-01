@@ -8,6 +8,7 @@ import { Color, ColorT } from '../../noa/ir/color.js';
 import { FloatProperty, FloatPropertyT } from '../../noa/ir/float-property.js';
 import { MaterialModel } from '../../noa/ir/material-model.js';
 import { RenderState, RenderStateT } from '../../noa/ir/render-state.js';
+import { SerializedValue, SerializedValueT } from '../../noa/ir/serialized-value.js';
 import { TextureBinding, TextureBindingT } from '../../noa/ir/texture-binding.js';
 import { VectorProperty, VectorPropertyT } from '../../noa/ir/vector-property.js';
 
@@ -104,8 +105,13 @@ shaderDataAssetId():number {
   return offset ? this.bb!.readUint32(this.bb_pos + offset) : 0;
 }
 
+sourceData(obj?:SerializedValue):SerializedValue|null {
+  const offset = this.bb!.__offset(this.bb_pos, 26);
+  return offset ? (obj || new SerializedValue()).__init(this.bb!.__indirect(this.bb_pos + offset), this.bb!) : null;
+}
+
 static startMaterial(builder:flatbuffers.Builder) {
-  builder.startObject(11);
+  builder.startObject(12);
 }
 
 static addId(builder:flatbuffers.Builder, id:number) {
@@ -188,6 +194,10 @@ static addShaderDataAssetId(builder:flatbuffers.Builder, shaderDataAssetId:numbe
   builder.addFieldInt32(10, shaderDataAssetId, 0);
 }
 
+static addSourceData(builder:flatbuffers.Builder, sourceDataOffset:flatbuffers.Offset) {
+  builder.addFieldOffset(11, sourceDataOffset, 0);
+}
+
 static endMaterial(builder:flatbuffers.Builder):flatbuffers.Offset {
   const offset = builder.endObject();
   builder.requiredField(offset, 18) // render_state
@@ -207,7 +217,8 @@ unpack(): MaterialT {
     (this.renderState() !== null ? this.renderState()!.unpack() : null),
     this.renderQueue(),
     this.sourceShader(),
-    this.shaderDataAssetId()
+    this.shaderDataAssetId(),
+    (this.sourceData() !== null ? this.sourceData()!.unpack() : null)
   );
 }
 
@@ -224,6 +235,7 @@ unpackTo(_o: MaterialT): void {
   _o.renderQueue = this.renderQueue();
   _o.sourceShader = this.sourceShader();
   _o.shaderDataAssetId = this.shaderDataAssetId();
+  _o.sourceData = (this.sourceData() !== null ? this.sourceData()!.unpack() : null);
 }
 }
 
@@ -239,7 +251,8 @@ constructor(
   public renderState: RenderStateT|null = null,
   public renderQueue: number = 3000,
   public sourceShader: string|Uint8Array|null = null,
-  public shaderDataAssetId: number = 0
+  public shaderDataAssetId: number = 0,
+  public sourceData: SerializedValueT|null = null
 ){}
 
 
@@ -250,6 +263,7 @@ pack(builder:flatbuffers.Builder): flatbuffers.Offset {
   const vectors = Material.createVectorsVector(builder, builder.createObjectOffsetList(this.vectors));
   const renderState = (this.renderState !== null ? this.renderState!.pack(builder) : 0);
   const sourceShader = (this.sourceShader !== null ? builder.createString(this.sourceShader!) : 0);
+  const sourceData = (this.sourceData !== null ? this.sourceData!.pack(builder) : 0);
 
   Material.startMaterial(builder);
   Material.addId(builder, this.id);
@@ -263,6 +277,7 @@ pack(builder:flatbuffers.Builder): flatbuffers.Offset {
   Material.addRenderQueue(builder, this.renderQueue);
   Material.addSourceShader(builder, sourceShader);
   Material.addShaderDataAssetId(builder, this.shaderDataAssetId);
+  Material.addSourceData(builder, sourceData);
 
   return Material.endMaterial(builder);
 }

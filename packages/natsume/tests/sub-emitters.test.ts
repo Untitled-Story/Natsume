@@ -77,6 +77,7 @@ function fixture(
     new ParticleModuleT(
       M.ShapeModule,
       new ShapeModuleT(
+        null,
         ShapeGeometry.BoxShape,
         new BoxShapeT(new Vec3T()),
         new TransformT(new Vec3T(0.2, 0.3, 0.4), new QuaternionT(0, 0, 0, 1), new Vec3T(0, 0, 0)),

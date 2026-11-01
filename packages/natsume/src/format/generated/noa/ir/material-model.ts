@@ -11,5 +11,6 @@ export enum MaterialModel {
   LegacyParticleAlphaBlend = 5,
   SpriteDefault = 6,
   UIDefault = 7,
-  TextureVertexColor = 8
+  TextureVertexColor = 8,
+  UnityShader = 9
 }

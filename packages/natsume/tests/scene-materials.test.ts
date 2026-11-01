@@ -56,7 +56,7 @@ function fixture() {
       {
         format: 'noa-package',
         version: 1,
-        noir_version: [3, 0],
+        noir_version: [1, 0],
         document: 'scene.noir',
         files: [],
       },
@@ -109,7 +109,7 @@ it('requires the host mip bias only for the recipe that reads it', () => {
       {
         format: 'noa-package',
         version: 1,
-        noir_version: [3, 0],
+        noir_version: [1, 0],
         document: 'scene.noir',
         files: [
           {
@@ -139,7 +139,7 @@ it('requires the host mip bias only for the recipe that reads it', () => {
 
 it('isolates ordinary renderer material tracks per instance and restores their baseline', () => {
   const f = fixture();
-  const binding = new BindingT(4, P.RendererMaterialTint);
+  const binding = new BindingT(null, 4, P.RendererMaterialTint);
   binding.propertyName = '_Color';
   const curve = new ScalarCurveT();
   curve.keys = [new FloatKeyT(0, 0.2), new FloatKeyT(1, 0.8)];

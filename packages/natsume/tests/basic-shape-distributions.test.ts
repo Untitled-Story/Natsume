@@ -109,7 +109,7 @@ for (const c of native.cases.filter((c) => !c.align))
   });
 
 it('keeps degenerate cones and aligned sweeps finite', () => {
-  const s = new ShapeModuleT(G.ConeShape, new ConeShapeT(constant(0), Math.PI / 2, 0));
+  const s = new ShapeModuleT(null, G.ConeShape, new ConeShapeT(constant(0), Math.PI / 2, 0));
   const out = new Float64Array(6);
   sampleShape(s, 1, 0, 0, 0, 1, out);
   expect([...out].every(Number.isFinite)).toBe(true);

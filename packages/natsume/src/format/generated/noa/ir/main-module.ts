@@ -5,10 +5,17 @@
 import * as flatbuffers from 'flatbuffers';
 
 import { ColorParameter, ColorParameterT } from '../../noa/ir/color-parameter.js';
+import { EmitterVelocityMode } from '../../noa/ir/emitter-velocity-mode.js';
+import { GravitySource } from '../../noa/ir/gravity-source.js';
+import { ParticleClock } from '../../noa/ir/particle-clock.js';
+import { ParticleCulling } from '../../noa/ir/particle-culling.js';
+import { RingBufferMode } from '../../noa/ir/ring-buffer-mode.js';
 import { ScalarParameter, ScalarParameterT } from '../../noa/ir/scalar-parameter.js';
 import { ScalingMode } from '../../noa/ir/scaling-mode.js';
 import { SeedMode } from '../../noa/ir/seed-mode.js';
 import { Space } from '../../noa/ir/space.js';
+import { StopAction } from '../../noa/ir/stop-action.js';
+import { Vec2, Vec2T } from '../../noa/ir/vec2.js';
 import { Vec3, Vec3T } from '../../noa/ir/vec3.js';
 import { VectorParameter, VectorParameterT } from '../../noa/ir/vector-parameter.js';
 
@@ -31,232 +38,324 @@ static getSizePrefixedRootAsMainModule(bb:flatbuffers.ByteBuffer, obj?:MainModul
   return (obj || new MainModule()).__init(bb.readInt32(bb.position()) + bb.position(), bb);
 }
 
-durationSeconds():number {
+clock():ParticleClock {
   const offset = this.bb!.__offset(this.bb_pos, 4);
+  return offset ? this.bb!.readUint8(this.bb_pos + offset) : ParticleClock.Scaled;
+}
+
+stopAction():StopAction {
+  const offset = this.bb!.__offset(this.bb_pos, 6);
+  return offset ? this.bb!.readUint8(this.bb_pos + offset) : StopAction.None;
+}
+
+ringBuffer():RingBufferMode {
+  const offset = this.bb!.__offset(this.bb_pos, 8);
+  return offset ? this.bb!.readUint8(this.bb_pos + offset) : RingBufferMode.Disabled;
+}
+
+ringBufferLoopRange(obj?:Vec2):Vec2|null {
+  const offset = this.bb!.__offset(this.bb_pos, 10);
+  return offset ? (obj || new Vec2()).__init(this.bb_pos + offset, this.bb!) : null;
+}
+
+culling():ParticleCulling {
+  const offset = this.bb!.__offset(this.bb_pos, 12);
+  return offset ? this.bb!.readUint8(this.bb_pos + offset) : ParticleCulling.Automatic;
+}
+
+emitterVelocityMode():EmitterVelocityMode {
+  const offset = this.bb!.__offset(this.bb_pos, 14);
+  return offset ? this.bb!.readUint8(this.bb_pos + offset) : EmitterVelocityMode.Transform;
+}
+
+customEmitterVelocity(obj?:Vec3):Vec3|null {
+  const offset = this.bb!.__offset(this.bb_pos, 16);
+  return offset ? (obj || new Vec3()).__init(this.bb_pos + offset, this.bb!) : null;
+}
+
+gravitySource():GravitySource {
+  const offset = this.bb!.__offset(this.bb_pos, 18);
+  return offset ? this.bb!.readUint8(this.bb_pos + offset) : GravitySource.Physics3D;
+}
+
+hostRigidbodyVelocitySlot():string|null
+hostRigidbodyVelocitySlot(optionalEncoding:flatbuffers.Encoding):string|Uint8Array|null
+hostRigidbodyVelocitySlot(optionalEncoding?:any):string|Uint8Array|null {
+  const offset = this.bb!.__offset(this.bb_pos, 20);
+  return offset ? this.bb!.__string(this.bb_pos + offset, optionalEncoding) : null;
+}
+
+durationSeconds():number {
+  const offset = this.bb!.__offset(this.bb_pos, 22);
   return offset ? this.bb!.readFloat32(this.bb_pos + offset) : 5.0;
 }
 
 loop():boolean {
-  const offset = this.bb!.__offset(this.bb_pos, 6);
-  return offset ? !!this.bb!.readInt8(this.bb_pos + offset) : false;
-}
-
-prewarm():boolean {
-  const offset = this.bb!.__offset(this.bb_pos, 8);
-  return offset ? !!this.bb!.readInt8(this.bb_pos + offset) : false;
-}
-
-playOnEnable():boolean {
-  const offset = this.bb!.__offset(this.bb_pos, 10);
-  return offset ? !!this.bb!.readInt8(this.bb_pos + offset) : true;
-}
-
-startDelay(obj?:ScalarParameter):ScalarParameter|null {
-  const offset = this.bb!.__offset(this.bb_pos, 12);
-  return offset ? (obj || new ScalarParameter()).__init(this.bb!.__indirect(this.bb_pos + offset), this.bb!) : null;
-}
-
-lifetime(obj?:ScalarParameter):ScalarParameter|null {
-  const offset = this.bb!.__offset(this.bb_pos, 14);
-  return offset ? (obj || new ScalarParameter()).__init(this.bb!.__indirect(this.bb_pos + offset), this.bb!) : null;
-}
-
-speed(obj?:ScalarParameter):ScalarParameter|null {
-  const offset = this.bb!.__offset(this.bb_pos, 16);
-  return offset ? (obj || new ScalarParameter()).__init(this.bb!.__indirect(this.bb_pos + offset), this.bb!) : null;
-}
-
-color(obj?:ColorParameter):ColorParameter|null {
-  const offset = this.bb!.__offset(this.bb_pos, 18);
-  return offset ? (obj || new ColorParameter()).__init(this.bb!.__indirect(this.bb_pos + offset), this.bb!) : null;
-}
-
-size(obj?:VectorParameter):VectorParameter|null {
-  const offset = this.bb!.__offset(this.bb_pos, 20);
-  return offset ? (obj || new VectorParameter()).__init(this.bb!.__indirect(this.bb_pos + offset), this.bb!) : null;
-}
-
-rotation(obj?:VectorParameter):VectorParameter|null {
-  const offset = this.bb!.__offset(this.bb_pos, 22);
-  return offset ? (obj || new VectorParameter()).__init(this.bb!.__indirect(this.bb_pos + offset), this.bb!) : null;
-}
-
-size3d():boolean {
   const offset = this.bb!.__offset(this.bb_pos, 24);
   return offset ? !!this.bb!.readInt8(this.bb_pos + offset) : false;
 }
 
-rotation3d():boolean {
+prewarm():boolean {
   const offset = this.bb!.__offset(this.bb_pos, 26);
   return offset ? !!this.bb!.readInt8(this.bb_pos + offset) : false;
 }
 
-flipRotationProbability():number {
+playOnEnable():boolean {
   const offset = this.bb!.__offset(this.bb_pos, 28);
-  return offset ? this.bb!.readFloat32(this.bb_pos + offset) : 0.0;
+  return offset ? !!this.bb!.readInt8(this.bb_pos + offset) : true;
 }
 
-gravityMultiplier(obj?:ScalarParameter):ScalarParameter|null {
+startDelay(obj?:ScalarParameter):ScalarParameter|null {
   const offset = this.bb!.__offset(this.bb_pos, 30);
   return offset ? (obj || new ScalarParameter()).__init(this.bb!.__indirect(this.bb_pos + offset), this.bb!) : null;
 }
 
-space():Space {
+lifetime(obj?:ScalarParameter):ScalarParameter|null {
   const offset = this.bb!.__offset(this.bb_pos, 32);
+  return offset ? (obj || new ScalarParameter()).__init(this.bb!.__indirect(this.bb_pos + offset), this.bb!) : null;
+}
+
+speed(obj?:ScalarParameter):ScalarParameter|null {
+  const offset = this.bb!.__offset(this.bb_pos, 34);
+  return offset ? (obj || new ScalarParameter()).__init(this.bb!.__indirect(this.bb_pos + offset), this.bb!) : null;
+}
+
+color(obj?:ColorParameter):ColorParameter|null {
+  const offset = this.bb!.__offset(this.bb_pos, 36);
+  return offset ? (obj || new ColorParameter()).__init(this.bb!.__indirect(this.bb_pos + offset), this.bb!) : null;
+}
+
+size(obj?:VectorParameter):VectorParameter|null {
+  const offset = this.bb!.__offset(this.bb_pos, 38);
+  return offset ? (obj || new VectorParameter()).__init(this.bb!.__indirect(this.bb_pos + offset), this.bb!) : null;
+}
+
+rotation(obj?:VectorParameter):VectorParameter|null {
+  const offset = this.bb!.__offset(this.bb_pos, 40);
+  return offset ? (obj || new VectorParameter()).__init(this.bb!.__indirect(this.bb_pos + offset), this.bb!) : null;
+}
+
+size3d():boolean {
+  const offset = this.bb!.__offset(this.bb_pos, 42);
+  return offset ? !!this.bb!.readInt8(this.bb_pos + offset) : false;
+}
+
+rotation3d():boolean {
+  const offset = this.bb!.__offset(this.bb_pos, 44);
+  return offset ? !!this.bb!.readInt8(this.bb_pos + offset) : false;
+}
+
+flipRotationProbability():number {
+  const offset = this.bb!.__offset(this.bb_pos, 46);
+  return offset ? this.bb!.readFloat32(this.bb_pos + offset) : 0.0;
+}
+
+gravityMultiplier(obj?:ScalarParameter):ScalarParameter|null {
+  const offset = this.bb!.__offset(this.bb_pos, 48);
+  return offset ? (obj || new ScalarParameter()).__init(this.bb!.__indirect(this.bb_pos + offset), this.bb!) : null;
+}
+
+space():Space {
+  const offset = this.bb!.__offset(this.bb_pos, 50);
   return offset ? this.bb!.readUint8(this.bb_pos + offset) : Space.Local;
 }
 
 customSpaceNodeId():number {
-  const offset = this.bb!.__offset(this.bb_pos, 34);
+  const offset = this.bb!.__offset(this.bb_pos, 52);
   return offset ? this.bb!.readUint32(this.bb_pos + offset) : 0;
 }
 
 scaling():ScalingMode {
-  const offset = this.bb!.__offset(this.bb_pos, 36);
+  const offset = this.bb!.__offset(this.bb_pos, 54);
   return offset ? this.bb!.readUint8(this.bb_pos + offset) : ScalingMode.Hierarchy;
 }
 
 simulationSpeed():number {
-  const offset = this.bb!.__offset(this.bb_pos, 38);
+  const offset = this.bb!.__offset(this.bb_pos, 56);
   return offset ? this.bb!.readFloat32(this.bb_pos + offset) : 1.0;
 }
 
 seedMode():SeedMode {
-  const offset = this.bb!.__offset(this.bb_pos, 40);
+  const offset = this.bb!.__offset(this.bb_pos, 58);
   return offset ? this.bb!.readUint8(this.bb_pos + offset) : SeedMode.Fixed;
 }
 
 seed():number {
-  const offset = this.bb!.__offset(this.bb_pos, 42);
+  const offset = this.bb!.__offset(this.bb_pos, 60);
   return offset ? this.bb!.readUint32(this.bb_pos + offset) : 0;
 }
 
 maxParticles():number {
-  const offset = this.bb!.__offset(this.bb_pos, 44);
+  const offset = this.bb!.__offset(this.bb_pos, 62);
   return offset ? this.bb!.readUint32(this.bb_pos + offset) : 1000;
 }
 
 gravity(obj?:Vec3):Vec3|null {
-  const offset = this.bb!.__offset(this.bb_pos, 46);
+  const offset = this.bb!.__offset(this.bb_pos, 64);
   return offset ? (obj || new Vec3()).__init(this.bb_pos + offset, this.bb!) : null;
 }
 
 hostGravitySlot():string|null
 hostGravitySlot(optionalEncoding:flatbuffers.Encoding):string|Uint8Array|null
 hostGravitySlot(optionalEncoding?:any):string|Uint8Array|null {
-  const offset = this.bb!.__offset(this.bb_pos, 48);
+  const offset = this.bb!.__offset(this.bb_pos, 66);
   return offset ? this.bb!.__string(this.bb_pos + offset, optionalEncoding) : null;
 }
 
 static startMainModule(builder:flatbuffers.Builder) {
-  builder.startObject(23);
+  builder.startObject(32);
+}
+
+static addClock(builder:flatbuffers.Builder, clock:ParticleClock) {
+  builder.addFieldInt8(0, clock, ParticleClock.Scaled);
+}
+
+static addStopAction(builder:flatbuffers.Builder, stopAction:StopAction) {
+  builder.addFieldInt8(1, stopAction, StopAction.None);
+}
+
+static addRingBuffer(builder:flatbuffers.Builder, ringBuffer:RingBufferMode) {
+  builder.addFieldInt8(2, ringBuffer, RingBufferMode.Disabled);
+}
+
+static addRingBufferLoopRange(builder:flatbuffers.Builder, ringBufferLoopRangeOffset:flatbuffers.Offset) {
+  builder.addFieldStruct(3, ringBufferLoopRangeOffset, 0);
+}
+
+static addCulling(builder:flatbuffers.Builder, culling:ParticleCulling) {
+  builder.addFieldInt8(4, culling, ParticleCulling.Automatic);
+}
+
+static addEmitterVelocityMode(builder:flatbuffers.Builder, emitterVelocityMode:EmitterVelocityMode) {
+  builder.addFieldInt8(5, emitterVelocityMode, EmitterVelocityMode.Transform);
+}
+
+static addCustomEmitterVelocity(builder:flatbuffers.Builder, customEmitterVelocityOffset:flatbuffers.Offset) {
+  builder.addFieldStruct(6, customEmitterVelocityOffset, 0);
+}
+
+static addGravitySource(builder:flatbuffers.Builder, gravitySource:GravitySource) {
+  builder.addFieldInt8(7, gravitySource, GravitySource.Physics3D);
+}
+
+static addHostRigidbodyVelocitySlot(builder:flatbuffers.Builder, hostRigidbodyVelocitySlotOffset:flatbuffers.Offset) {
+  builder.addFieldOffset(8, hostRigidbodyVelocitySlotOffset, 0);
 }
 
 static addDurationSeconds(builder:flatbuffers.Builder, durationSeconds:number) {
-  builder.addFieldFloat32(0, durationSeconds, 5.0);
+  builder.addFieldFloat32(9, durationSeconds, 5.0);
 }
 
 static addLoop(builder:flatbuffers.Builder, loop:boolean) {
-  builder.addFieldInt8(1, +loop, +false);
+  builder.addFieldInt8(10, +loop, +false);
 }
 
 static addPrewarm(builder:flatbuffers.Builder, prewarm:boolean) {
-  builder.addFieldInt8(2, +prewarm, +false);
+  builder.addFieldInt8(11, +prewarm, +false);
 }
 
 static addPlayOnEnable(builder:flatbuffers.Builder, playOnEnable:boolean) {
-  builder.addFieldInt8(3, +playOnEnable, +true);
+  builder.addFieldInt8(12, +playOnEnable, +true);
 }
 
 static addStartDelay(builder:flatbuffers.Builder, startDelayOffset:flatbuffers.Offset) {
-  builder.addFieldOffset(4, startDelayOffset, 0);
+  builder.addFieldOffset(13, startDelayOffset, 0);
 }
 
 static addLifetime(builder:flatbuffers.Builder, lifetimeOffset:flatbuffers.Offset) {
-  builder.addFieldOffset(5, lifetimeOffset, 0);
+  builder.addFieldOffset(14, lifetimeOffset, 0);
 }
 
 static addSpeed(builder:flatbuffers.Builder, speedOffset:flatbuffers.Offset) {
-  builder.addFieldOffset(6, speedOffset, 0);
+  builder.addFieldOffset(15, speedOffset, 0);
 }
 
 static addColor(builder:flatbuffers.Builder, colorOffset:flatbuffers.Offset) {
-  builder.addFieldOffset(7, colorOffset, 0);
+  builder.addFieldOffset(16, colorOffset, 0);
 }
 
 static addSize(builder:flatbuffers.Builder, sizeOffset:flatbuffers.Offset) {
-  builder.addFieldOffset(8, sizeOffset, 0);
+  builder.addFieldOffset(17, sizeOffset, 0);
 }
 
 static addRotation(builder:flatbuffers.Builder, rotationOffset:flatbuffers.Offset) {
-  builder.addFieldOffset(9, rotationOffset, 0);
+  builder.addFieldOffset(18, rotationOffset, 0);
 }
 
 static addSize3d(builder:flatbuffers.Builder, size3d:boolean) {
-  builder.addFieldInt8(10, +size3d, +false);
+  builder.addFieldInt8(19, +size3d, +false);
 }
 
 static addRotation3d(builder:flatbuffers.Builder, rotation3d:boolean) {
-  builder.addFieldInt8(11, +rotation3d, +false);
+  builder.addFieldInt8(20, +rotation3d, +false);
 }
 
 static addFlipRotationProbability(builder:flatbuffers.Builder, flipRotationProbability:number) {
-  builder.addFieldFloat32(12, flipRotationProbability, 0.0);
+  builder.addFieldFloat32(21, flipRotationProbability, 0.0);
 }
 
 static addGravityMultiplier(builder:flatbuffers.Builder, gravityMultiplierOffset:flatbuffers.Offset) {
-  builder.addFieldOffset(13, gravityMultiplierOffset, 0);
+  builder.addFieldOffset(22, gravityMultiplierOffset, 0);
 }
 
 static addSpace(builder:flatbuffers.Builder, space:Space) {
-  builder.addFieldInt8(14, space, Space.Local);
+  builder.addFieldInt8(23, space, Space.Local);
 }
 
 static addCustomSpaceNodeId(builder:flatbuffers.Builder, customSpaceNodeId:number) {
-  builder.addFieldInt32(15, customSpaceNodeId, 0);
+  builder.addFieldInt32(24, customSpaceNodeId, 0);
 }
 
 static addScaling(builder:flatbuffers.Builder, scaling:ScalingMode) {
-  builder.addFieldInt8(16, scaling, ScalingMode.Hierarchy);
+  builder.addFieldInt8(25, scaling, ScalingMode.Hierarchy);
 }
 
 static addSimulationSpeed(builder:flatbuffers.Builder, simulationSpeed:number) {
-  builder.addFieldFloat32(17, simulationSpeed, 1.0);
+  builder.addFieldFloat32(26, simulationSpeed, 1.0);
 }
 
 static addSeedMode(builder:flatbuffers.Builder, seedMode:SeedMode) {
-  builder.addFieldInt8(18, seedMode, SeedMode.Fixed);
+  builder.addFieldInt8(27, seedMode, SeedMode.Fixed);
 }
 
 static addSeed(builder:flatbuffers.Builder, seed:number) {
-  builder.addFieldInt32(19, seed, 0);
+  builder.addFieldInt32(28, seed, 0);
 }
 
 static addMaxParticles(builder:flatbuffers.Builder, maxParticles:number) {
-  builder.addFieldInt32(20, maxParticles, 1000);
+  builder.addFieldInt32(29, maxParticles, 1000);
 }
 
 static addGravity(builder:flatbuffers.Builder, gravityOffset:flatbuffers.Offset) {
-  builder.addFieldStruct(21, gravityOffset, 0);
+  builder.addFieldStruct(30, gravityOffset, 0);
 }
 
 static addHostGravitySlot(builder:flatbuffers.Builder, hostGravitySlotOffset:flatbuffers.Offset) {
-  builder.addFieldOffset(22, hostGravitySlotOffset, 0);
+  builder.addFieldOffset(31, hostGravitySlotOffset, 0);
 }
 
 static endMainModule(builder:flatbuffers.Builder):flatbuffers.Offset {
   const offset = builder.endObject();
-  builder.requiredField(offset, 14) // lifetime
-  builder.requiredField(offset, 16) // speed
-  builder.requiredField(offset, 18) // color
-  builder.requiredField(offset, 20) // size
-  builder.requiredField(offset, 22) // rotation
+  builder.requiredField(offset, 32) // lifetime
+  builder.requiredField(offset, 34) // speed
+  builder.requiredField(offset, 36) // color
+  builder.requiredField(offset, 38) // size
+  builder.requiredField(offset, 40) // rotation
   return offset;
 }
 
 
 unpack(): MainModuleT {
   return new MainModuleT(
+    this.clock(),
+    this.stopAction(),
+    this.ringBuffer(),
+    (this.ringBufferLoopRange() !== null ? this.ringBufferLoopRange()!.unpack() : null),
+    this.culling(),
+    this.emitterVelocityMode(),
+    (this.customEmitterVelocity() !== null ? this.customEmitterVelocity()!.unpack() : null),
+    this.gravitySource(),
+    this.hostRigidbodyVelocitySlot(),
     this.durationSeconds(),
     this.loop(),
     this.prewarm(),
@@ -285,6 +384,15 @@ unpack(): MainModuleT {
 
 
 unpackTo(_o: MainModuleT): void {
+  _o.clock = this.clock();
+  _o.stopAction = this.stopAction();
+  _o.ringBuffer = this.ringBuffer();
+  _o.ringBufferLoopRange = (this.ringBufferLoopRange() !== null ? this.ringBufferLoopRange()!.unpack() : null);
+  _o.culling = this.culling();
+  _o.emitterVelocityMode = this.emitterVelocityMode();
+  _o.customEmitterVelocity = (this.customEmitterVelocity() !== null ? this.customEmitterVelocity()!.unpack() : null);
+  _o.gravitySource = this.gravitySource();
+  _o.hostRigidbodyVelocitySlot = this.hostRigidbodyVelocitySlot();
   _o.durationSeconds = this.durationSeconds();
   _o.loop = this.loop();
   _o.prewarm = this.prewarm();
@@ -313,6 +421,15 @@ unpackTo(_o: MainModuleT): void {
 
 export class MainModuleT implements flatbuffers.IGeneratedObject {
 constructor(
+  public clock: ParticleClock = ParticleClock.Scaled,
+  public stopAction: StopAction = StopAction.None,
+  public ringBuffer: RingBufferMode = RingBufferMode.Disabled,
+  public ringBufferLoopRange: Vec2T|null = null,
+  public culling: ParticleCulling = ParticleCulling.Automatic,
+  public emitterVelocityMode: EmitterVelocityMode = EmitterVelocityMode.Transform,
+  public customEmitterVelocity: Vec3T|null = null,
+  public gravitySource: GravitySource = GravitySource.Physics3D,
+  public hostRigidbodyVelocitySlot: string|Uint8Array|null = null,
   public durationSeconds: number = 5.0,
   public loop: boolean = false,
   public prewarm: boolean = false,
@@ -340,6 +457,7 @@ constructor(
 
 
 pack(builder:flatbuffers.Builder): flatbuffers.Offset {
+  const hostRigidbodyVelocitySlot = (this.hostRigidbodyVelocitySlot !== null ? builder.createString(this.hostRigidbodyVelocitySlot!) : 0);
   const startDelay = (this.startDelay !== null ? this.startDelay!.pack(builder) : 0);
   const lifetime = (this.lifetime !== null ? this.lifetime!.pack(builder) : 0);
   const speed = (this.speed !== null ? this.speed!.pack(builder) : 0);
@@ -350,6 +468,15 @@ pack(builder:flatbuffers.Builder): flatbuffers.Offset {
   const hostGravitySlot = (this.hostGravitySlot !== null ? builder.createString(this.hostGravitySlot!) : 0);
 
   MainModule.startMainModule(builder);
+  MainModule.addClock(builder, this.clock);
+  MainModule.addStopAction(builder, this.stopAction);
+  MainModule.addRingBuffer(builder, this.ringBuffer);
+  MainModule.addRingBufferLoopRange(builder, (this.ringBufferLoopRange !== null ? this.ringBufferLoopRange!.pack(builder) : 0));
+  MainModule.addCulling(builder, this.culling);
+  MainModule.addEmitterVelocityMode(builder, this.emitterVelocityMode);
+  MainModule.addCustomEmitterVelocity(builder, (this.customEmitterVelocity !== null ? this.customEmitterVelocity!.pack(builder) : 0));
+  MainModule.addGravitySource(builder, this.gravitySource);
+  MainModule.addHostRigidbodyVelocitySlot(builder, hostRigidbodyVelocitySlot);
   MainModule.addDurationSeconds(builder, this.durationSeconds);
   MainModule.addLoop(builder, this.loop);
   MainModule.addPrewarm(builder, this.prewarm);

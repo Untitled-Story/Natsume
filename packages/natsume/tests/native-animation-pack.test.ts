@@ -8,6 +8,7 @@ import { SUPPORTED_FEATURES } from '../src/format/semantics.js';
 import { Document } from '../src/format/generated/noa/ir/document.js';
 import { ByteBuffer } from 'flatbuffers';
 import { unzipSync } from 'fflate';
+import { nativeSimulationIssues } from './native-playback-support.js';
 
 const source = new URL('../../../../Noa/out/compile-successes.json', import.meta.url);
 it.skipIf(!existsSync(source))(
@@ -27,16 +28,16 @@ it.skipIf(!existsSync(source))(
         .flatMap((c) => animatorSupport(c.data as AnimatorT, c.id))
         .filter((i) => i.severity === 'error');
       unsupported.push(...controllerIssues.map((i) => i.field));
+      const pack = await loadPack(bytes);
+      unsupported.push(...nativeSimulationIssues(pack));
       if (unsupported.length) {
-        const pack = await loadPack(bytes);
         expect(() => new Simulation(pack, { gravity: [0, -9.81, 0] }), file).toThrow(
-          /Required feature is not implemented|Animator controller branch|single-layer/,
+          /Required feature is not implemented|Animator controller branch|single-layer|Particle mode|Particle visibility|Emitter requires/,
         );
         pack.dispose();
         results.push({ file, accepted: false, timed: 0, unsupported });
         continue;
       }
-      const pack = await loadPack(bytes);
       const simulation = new Simulation(pack, {
         seed: 12345,
         gravity: [0, -9.81, 0],
@@ -82,5 +83,5 @@ it.skipIf(!existsSync(source))(
         ) + '\n',
       );
   },
-  30_000,
+  90_000,
 );

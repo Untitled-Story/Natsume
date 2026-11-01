@@ -2,7 +2,7 @@ import { check, NatsumeError } from '../errors.js';
 
 export interface ManifestFile {
   readonly path: string;
-  readonly kind: 'noir' | 'image' | 'mesh' | 'shader_data';
+  readonly kind: 'noir' | 'image' | 'mesh' | 'shader_data' | 'source_data';
   readonly asset_id?: number;
   readonly byte_length: number;
   readonly sha256: string;
@@ -10,7 +10,7 @@ export interface ManifestFile {
 export interface Manifest {
   readonly format: 'noa-package';
   readonly version: 1;
-  readonly noir_version: readonly [3, 0];
+  readonly noir_version: readonly [1, 0];
   readonly document: 'scene.noir';
   readonly files: readonly ManifestFile[];
 }
@@ -43,7 +43,7 @@ export function parseManifest(bytes: Uint8Array): Manifest {
       value.document === 'scene.noir' &&
       Array.isArray(value.noir_version) &&
       value.noir_version.length === 2 &&
-      value.noir_version[0] === 3 &&
+      value.noir_version[0] === 1 &&
       value.noir_version[1] === 0,
     'VERSION',
     'Unsupported manifest version',
@@ -86,9 +86,12 @@ export function parseManifest(bytes: Uint8Array): Manifest {
         'Invalid or duplicate asset ID',
       );
       ids.add(id);
-      const extension = { image: 'png', mesh: 'noms', shader_data: 'shader.json' }[
-        String(file.kind)
-      ];
+      const extension = {
+        image: 'png',
+        mesh: 'noms',
+        shader_data: 'shader.json',
+        source_data: 'bin',
+      }[String(file.kind)];
       check(
         extension && file.path === `assets/${id}.${extension}`,
         'MANIFEST',

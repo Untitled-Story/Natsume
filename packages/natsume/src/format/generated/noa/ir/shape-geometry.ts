@@ -7,6 +7,8 @@ import { CircleShape, CircleShapeT } from '../../noa/ir/circle-shape.js';
 import { ConeShape, ConeShapeT } from '../../noa/ir/cone-shape.js';
 import { DonutShape, DonutShapeT } from '../../noa/ir/donut-shape.js';
 import { EdgeShape, EdgeShapeT } from '../../noa/ir/edge-shape.js';
+import { MeshShape, MeshShapeT } from '../../noa/ir/mesh-shape.js';
+import { RectangleShape, RectangleShapeT } from '../../noa/ir/rectangle-shape.js';
 import { SphereShape, SphereShapeT } from '../../noa/ir/sphere-shape.js';
 import { SpriteShape, SpriteShapeT } from '../../noa/ir/sprite-shape.js';
 
@@ -19,13 +21,15 @@ export enum ShapeGeometry {
   ConeShape = 4,
   EdgeShape = 5,
   DonutShape = 6,
-  SpriteShape = 7
+  SpriteShape = 7,
+  RectangleShape = 8,
+  MeshShape = 9
 }
 
 export function unionToShapeGeometry(
   type: ShapeGeometry,
-  accessor: (obj:BoxShape|CircleShape|ConeShape|DonutShape|EdgeShape|SphereShape|SpriteShape) => BoxShape|CircleShape|ConeShape|DonutShape|EdgeShape|SphereShape|SpriteShape|null
-): BoxShape|CircleShape|ConeShape|DonutShape|EdgeShape|SphereShape|SpriteShape|null {
+  accessor: (obj:BoxShape|CircleShape|ConeShape|DonutShape|EdgeShape|MeshShape|RectangleShape|SphereShape|SpriteShape) => BoxShape|CircleShape|ConeShape|DonutShape|EdgeShape|MeshShape|RectangleShape|SphereShape|SpriteShape|null
+): BoxShape|CircleShape|ConeShape|DonutShape|EdgeShape|MeshShape|RectangleShape|SphereShape|SpriteShape|null {
   switch(ShapeGeometry[type]) {
     case 'NONE': return null;
     case 'CircleShape': return accessor(new CircleShape())! as CircleShape;
@@ -35,15 +39,17 @@ export function unionToShapeGeometry(
     case 'EdgeShape': return accessor(new EdgeShape())! as EdgeShape;
     case 'DonutShape': return accessor(new DonutShape())! as DonutShape;
     case 'SpriteShape': return accessor(new SpriteShape())! as SpriteShape;
+    case 'RectangleShape': return accessor(new RectangleShape())! as RectangleShape;
+    case 'MeshShape': return accessor(new MeshShape())! as MeshShape;
     default: return null;
   }
 }
 
 export function unionListToShapeGeometry(
   type: ShapeGeometry,
-  accessor: (index: number, obj:BoxShape|CircleShape|ConeShape|DonutShape|EdgeShape|SphereShape|SpriteShape) => BoxShape|CircleShape|ConeShape|DonutShape|EdgeShape|SphereShape|SpriteShape|null,
+  accessor: (index: number, obj:BoxShape|CircleShape|ConeShape|DonutShape|EdgeShape|MeshShape|RectangleShape|SphereShape|SpriteShape) => BoxShape|CircleShape|ConeShape|DonutShape|EdgeShape|MeshShape|RectangleShape|SphereShape|SpriteShape|null,
   index: number
-): BoxShape|CircleShape|ConeShape|DonutShape|EdgeShape|SphereShape|SpriteShape|null {
+): BoxShape|CircleShape|ConeShape|DonutShape|EdgeShape|MeshShape|RectangleShape|SphereShape|SpriteShape|null {
   switch(ShapeGeometry[type]) {
     case 'NONE': return null;
     case 'CircleShape': return accessor(index, new CircleShape())! as CircleShape;
@@ -53,6 +59,8 @@ export function unionListToShapeGeometry(
     case 'EdgeShape': return accessor(index, new EdgeShape())! as EdgeShape;
     case 'DonutShape': return accessor(index, new DonutShape())! as DonutShape;
     case 'SpriteShape': return accessor(index, new SpriteShape())! as SpriteShape;
+    case 'RectangleShape': return accessor(index, new RectangleShape())! as RectangleShape;
+    case 'MeshShape': return accessor(index, new MeshShape())! as MeshShape;
     default: return null;
   }
 }

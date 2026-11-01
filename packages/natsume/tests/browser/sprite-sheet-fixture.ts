@@ -78,7 +78,7 @@ export async function measureSpriteSheets(ages: number[]) {
   }
   const pack = new EffectPack(
     doc,
-    { format: 'noa-package', version: 1, noir_version: [3, 0], document: 'scene.noir', files: [] },
+    { format: 'noa-package', version: 1, noir_version: [1, 0], document: 'scene.noir', files: [] },
     new Map(),
     meshes,
   );

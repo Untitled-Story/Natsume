@@ -1,4 +1,4 @@
-// NOMS 2.0 (beta). Unity local coordinates, original triangle winding.
+// NOMS 1.0 (beta). Unity local coordinates, original triangle winding.
 namespace Noa.Mesh;
 struct Vec3 { x:float; y:float; z:float; }
 struct Vec4 { x:float; y:float; z:float; w:float; }
@@ -9,6 +9,7 @@ table TexCoord {
 }
 table Submesh { first_index:uint; index_count:uint; }
 table Mesh {
+  contract_id:string (required);
   format_major:ushort; format_minor:ushort;
   name:string;
   positions:[Vec3] (required);

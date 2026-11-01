@@ -4,6 +4,7 @@ import { expect, it } from 'vitest';
 import { loadPack } from '../src/loader/load.js';
 import { ComponentData as C } from '../src/format/generated/noa/ir/component-data.js';
 import { Simulation } from '../src/runtime/simulation.js';
+import { nativeSimulationIssues } from './native-playback-support.js';
 
 const directory = resolve(import.meta.dirname, '../../../data/unity-baselines/timeline');
 interface Sample {
@@ -28,16 +29,24 @@ interface Case {
   stoppedPosition: { x: number; y: number; z: number };
 }
 it.skipIf(!existsSync(directory + '/packages/case23.noap'))(
-  'replays native Timeline packages at source sample times',
+  'replays supported native Timeline packages and reports required host inputs',
   async () => {
     const native = JSON.parse(readFileSync(directory + '/unity-2022.3.21f1.json', 'utf8')) as {
       cases: Case[];
     };
     const results = [];
+    const blocked = [];
     for (const [index, row] of native.cases.entries()) {
       const pack = await loadPack(
         new Uint8Array(readFileSync(directory + `/packages/case${index}.noap`)),
       );
+      const unsupported = nativeSimulationIssues(pack);
+      if (unsupported.length) {
+        expect(() => new Simulation(pack, { seed: 42 })).toThrow();
+        blocked.push({ label: row.label, issues: unsupported });
+        pack.dispose();
+        continue;
+      }
       const simulation = new Simulation(pack, { seed: 42 });
       const scene = simulation.scene;
       const component = pack.components.find(
@@ -156,7 +165,12 @@ it.skipIf(!existsSync(directory + '/packages/case23.noap'))(
       });
       pack.dispose();
     }
-    writeFileSync(directory + '/comparison.json', JSON.stringify(results, null, 2));
+    writeFileSync(
+      directory + '/comparison-current.json',
+      JSON.stringify({ results, blocked }, null, 2),
+    );
+    expect(results.length + blocked.length).toBe(native.cases.length);
+    expect(results.length).toBeGreaterThan(0);
     expect(results.filter((r) => r.activeDifferences)).toEqual([]);
     expect(results.filter((r) => r.maxPosition > 1e-4)).toEqual([]);
     expect(results.filter((r) => r.durationError > 1e-11)).toEqual([]);
@@ -171,6 +185,13 @@ it.skipIf(!existsSync(directory + '/packages/case54.noap'))(
   'resynchronizes an independently reactivated child particle clock',
   async () => {
     const pack = await loadPack(new Uint8Array(readFileSync(directory + '/packages/case54.noap')));
+    if (nativeSimulationIssues(pack).length) {
+      expect(() => new Simulation(pack, { seed: 42 })).toThrow(
+        /Required feature|Particle mode|Emitter requires/,
+      );
+      pack.dispose();
+      return;
+    }
     const simulation = new Simulation(pack, { seed: 42 });
     try {
       const director = [...simulation.directors.values()][0]!;

@@ -60,7 +60,7 @@ function fixture(configure: (a: AnimatorT, clips: AnimationT[]) => void = () => 
     (start, i) =>
       new AnimationT(10 + i, String.fromCharCode(65 + i), 1, true, [
         new TrackT(
-          new BindingT(2, P.NodePosition),
+          new BindingT(null, 2, P.NodePosition),
           TD.Vector3Track,
           new Vector3TrackT(curve(start, start + 4), curve(0, 0), curve(0, 0)),
         ),
@@ -87,7 +87,7 @@ function fixture(configure: (a: AnimatorT, clips: AnimationT[]) => void = () => 
   d.components.push(new ComponentT(3, 1, true, C.Animator, a));
   const pack = new EffectPack(
     d,
-    { format: 'noa-package', version: 1, noir_version: [3, 0], document: 'scene.noir', files: [] },
+    { format: 'noa-package', version: 1, noir_version: [1, 0], document: 'scene.noir', files: [] },
     new Map(),
     new Map(),
   );

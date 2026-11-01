@@ -22,5 +22,18 @@ export enum VertexSemantic {
   NextTrailCenter = 16,
   PreviousTrailCenter = 17,
   PercentageAlongTrail = 18,
-  TrailWidth = 19
+  TrailWidth = 19,
+  AnimBlend = 20,
+  AnimFrame = 21,
+  RotationSpeed = 22,
+  Speed = 23,
+  InverseStartLifetime = 24,
+  StableRandom = 25,
+  VaryingRandom = 26,
+  NoiseSum = 27,
+  NoiseImpulse = 28,
+  MeshIndex = 29,
+  ParticleIndex = 30,
+  ColorPacked = 31,
+  MeshAxisOfRotation = 32
 }

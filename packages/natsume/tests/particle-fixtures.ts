@@ -1,3 +1,5 @@
+import { Vec2T } from '../src/format/generated/noa/ir/vec2.js';
+import { Vec3T } from '../src/format/generated/noa/ir/vec3.js';
 import { MainModuleT } from '../src/format/generated/noa/ir/main-module.js';
 import { ParticleSystemT } from '../src/format/generated/noa/ir/particle-system.js';
 import { ParticleModuleT } from '../src/format/generated/noa/ir/particle-module.js';
@@ -42,6 +44,8 @@ export function linear(from: number, to: number) {
 }
 export function particleSource(label = '') {
   const main = new MainModuleT();
+  main.ringBufferLoopRange = new Vec2T(0, 1);
+  main.customEmitterVelocity = new Vec3T();
   main.scaling = ScalingMode.Local;
   main.lifetime = constant(2);
   main.speed = constant(0);

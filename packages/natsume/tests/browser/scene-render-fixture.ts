@@ -309,7 +309,7 @@ export async function exerciseSceneAnimation(bytes: number[]) {
   curve.keys = [new FloatKeyT(0, 0.2, 0, 0, 0, 0, 1), new FloatKeyT(1, 0.8, 0, 0, 0, 0, 1)];
   const color = new ColorTrackT();
   color.r = curve;
-  const binding = new BindingT(renderer.id, 22);
+  const binding = new BindingT(null, renderer.id, 22);
   binding.propertyName = '_Color';
   const clip = new AnimationT();
   clip.id = 1000000;
@@ -317,7 +317,7 @@ export async function exerciseSceneAnimation(bytes: number[]) {
   clip.tracks = [
     new TrackT(binding, 4, color),
     new TrackT(
-      new BindingT(renderer.id, 13),
+      new BindingT(null, renderer.id, 13),
       5,
       new BoolTrackT([new BoolKeyT(0, true), new BoolKeyT(0.5, false), new BoolKeyT(0.75, true)]),
     ),

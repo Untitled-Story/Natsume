@@ -8,11 +8,14 @@ import { Animation, AnimationT } from '../../noa/ir/animation.js';
 import { Asset, AssetT } from '../../noa/ir/asset.js';
 import { ColorContext, ColorContextT } from '../../noa/ir/color-context.js';
 import { Component, ComponentT } from '../../noa/ir/component.js';
+import { DependencyStatus } from '../../noa/ir/dependency-status.js';
 import { EntryPoint, EntryPointT } from '../../noa/ir/entry-point.js';
 import { FeatureRequirement, FeatureRequirementT } from '../../noa/ir/feature-requirement.js';
 import { Material, MaterialT } from '../../noa/ir/material.js';
 import { Metadata, MetadataT } from '../../noa/ir/metadata.js';
 import { Node, NodeT } from '../../noa/ir/node.js';
+import { NormalizationStatus } from '../../noa/ir/normalization-status.js';
+import { SourceExport, SourceExportT } from '../../noa/ir/source-export.js';
 import { SourceRecord, SourceRecordT } from '../../noa/ir/source-record.js';
 
 
@@ -38,139 +41,177 @@ static bufferHasIdentifier(bb:flatbuffers.ByteBuffer):boolean {
   return bb.__has_identifier('NOIR');
 }
 
-formatMajor():number {
+normalization():NormalizationStatus {
   const offset = this.bb!.__offset(this.bb_pos, 4);
+  return offset ? this.bb!.readUint8(this.bb_pos + offset) : NormalizationStatus.Complete;
+}
+
+dependencies():DependencyStatus {
+  const offset = this.bb!.__offset(this.bb_pos, 6);
+  return offset ? this.bb!.readUint8(this.bb_pos + offset) : DependencyStatus.Complete;
+}
+
+sourceExport(obj?:SourceExport):SourceExport|null {
+  const offset = this.bb!.__offset(this.bb_pos, 8);
+  return offset ? (obj || new SourceExport()).__init(this.bb!.__indirect(this.bb_pos + offset), this.bb!) : null;
+}
+
+contractId():string|null
+contractId(optionalEncoding:flatbuffers.Encoding):string|Uint8Array|null
+contractId(optionalEncoding?:any):string|Uint8Array|null {
+  const offset = this.bb!.__offset(this.bb_pos, 10);
+  return offset ? this.bb!.__string(this.bb_pos + offset, optionalEncoding) : null;
+}
+
+formatMajor():number {
+  const offset = this.bb!.__offset(this.bb_pos, 12);
   return offset ? this.bb!.readUint16(this.bb_pos + offset) : 0;
 }
 
 formatMinor():number {
-  const offset = this.bb!.__offset(this.bb_pos, 6);
+  const offset = this.bb!.__offset(this.bb_pos, 14);
   return offset ? this.bb!.readUint16(this.bb_pos + offset) : 0;
 }
 
 semanticsRevision():number {
-  const offset = this.bb!.__offset(this.bb_pos, 8);
+  const offset = this.bb!.__offset(this.bb_pos, 16);
   return offset ? this.bb!.readUint32(this.bb_pos + offset) : 1;
 }
 
 features(index: number, obj?:FeatureRequirement):FeatureRequirement|null {
-  const offset = this.bb!.__offset(this.bb_pos, 10);
+  const offset = this.bb!.__offset(this.bb_pos, 18);
   return offset ? (obj || new FeatureRequirement()).__init(this.bb!.__indirect(this.bb!.__vector(this.bb_pos + offset) + index * 4), this.bb!) : null;
 }
 
 featuresLength():number {
-  const offset = this.bb!.__offset(this.bb_pos, 10);
+  const offset = this.bb!.__offset(this.bb_pos, 18);
   return offset ? this.bb!.__vector_len(this.bb_pos + offset) : 0;
 }
 
 assets(index: number, obj?:Asset):Asset|null {
-  const offset = this.bb!.__offset(this.bb_pos, 12);
+  const offset = this.bb!.__offset(this.bb_pos, 20);
   return offset ? (obj || new Asset()).__init(this.bb!.__indirect(this.bb!.__vector(this.bb_pos + offset) + index * 4), this.bb!) : null;
 }
 
 assetsLength():number {
-  const offset = this.bb!.__offset(this.bb_pos, 12);
+  const offset = this.bb!.__offset(this.bb_pos, 20);
   return offset ? this.bb!.__vector_len(this.bb_pos + offset) : 0;
 }
 
 materials(index: number, obj?:Material):Material|null {
-  const offset = this.bb!.__offset(this.bb_pos, 14);
+  const offset = this.bb!.__offset(this.bb_pos, 22);
   return offset ? (obj || new Material()).__init(this.bb!.__indirect(this.bb!.__vector(this.bb_pos + offset) + index * 4), this.bb!) : null;
 }
 
 materialsLength():number {
-  const offset = this.bb!.__offset(this.bb_pos, 14);
+  const offset = this.bb!.__offset(this.bb_pos, 22);
   return offset ? this.bb!.__vector_len(this.bb_pos + offset) : 0;
 }
 
 nodes(index: number, obj?:Node):Node|null {
-  const offset = this.bb!.__offset(this.bb_pos, 16);
+  const offset = this.bb!.__offset(this.bb_pos, 24);
   return offset ? (obj || new Node()).__init(this.bb!.__indirect(this.bb!.__vector(this.bb_pos + offset) + index * 4), this.bb!) : null;
 }
 
 nodesLength():number {
-  const offset = this.bb!.__offset(this.bb_pos, 16);
+  const offset = this.bb!.__offset(this.bb_pos, 24);
   return offset ? this.bb!.__vector_len(this.bb_pos + offset) : 0;
 }
 
 components(index: number, obj?:Component):Component|null {
-  const offset = this.bb!.__offset(this.bb_pos, 18);
+  const offset = this.bb!.__offset(this.bb_pos, 26);
   return offset ? (obj || new Component()).__init(this.bb!.__indirect(this.bb!.__vector(this.bb_pos + offset) + index * 4), this.bb!) : null;
 }
 
 componentsLength():number {
-  const offset = this.bb!.__offset(this.bb_pos, 18);
+  const offset = this.bb!.__offset(this.bb_pos, 26);
   return offset ? this.bb!.__vector_len(this.bb_pos + offset) : 0;
 }
 
 animations(index: number, obj?:Animation):Animation|null {
-  const offset = this.bb!.__offset(this.bb_pos, 20);
+  const offset = this.bb!.__offset(this.bb_pos, 28);
   return offset ? (obj || new Animation()).__init(this.bb!.__indirect(this.bb!.__vector(this.bb_pos + offset) + index * 4), this.bb!) : null;
 }
 
 animationsLength():number {
-  const offset = this.bb!.__offset(this.bb_pos, 20);
+  const offset = this.bb!.__offset(this.bb_pos, 28);
   return offset ? this.bb!.__vector_len(this.bb_pos + offset) : 0;
 }
 
 entries(index: number, obj?:EntryPoint):EntryPoint|null {
-  const offset = this.bb!.__offset(this.bb_pos, 22);
+  const offset = this.bb!.__offset(this.bb_pos, 30);
   return offset ? (obj || new EntryPoint()).__init(this.bb!.__indirect(this.bb!.__vector(this.bb_pos + offset) + index * 4), this.bb!) : null;
 }
 
 entriesLength():number {
-  const offset = this.bb!.__offset(this.bb_pos, 22);
+  const offset = this.bb!.__offset(this.bb_pos, 30);
   return offset ? this.bb!.__vector_len(this.bb_pos + offset) : 0;
 }
 
 defaultEntryId():number {
-  const offset = this.bb!.__offset(this.bb_pos, 24);
+  const offset = this.bb!.__offset(this.bb_pos, 32);
   return offset ? this.bb!.readUint32(this.bb_pos + offset) : 0;
 }
 
 sources(index: number, obj?:SourceRecord):SourceRecord|null {
-  const offset = this.bb!.__offset(this.bb_pos, 26);
+  const offset = this.bb!.__offset(this.bb_pos, 34);
   return offset ? (obj || new SourceRecord()).__init(this.bb!.__indirect(this.bb!.__vector(this.bb_pos + offset) + index * 4), this.bb!) : null;
 }
 
 sourcesLength():number {
-  const offset = this.bb!.__offset(this.bb_pos, 26);
+  const offset = this.bb!.__offset(this.bb_pos, 34);
   return offset ? this.bb!.__vector_len(this.bb_pos + offset) : 0;
 }
 
 metadata(index: number, obj?:Metadata):Metadata|null {
-  const offset = this.bb!.__offset(this.bb_pos, 28);
+  const offset = this.bb!.__offset(this.bb_pos, 36);
   return offset ? (obj || new Metadata()).__init(this.bb!.__indirect(this.bb!.__vector(this.bb_pos + offset) + index * 4), this.bb!) : null;
 }
 
 metadataLength():number {
-  const offset = this.bb!.__offset(this.bb_pos, 28);
+  const offset = this.bb!.__offset(this.bb_pos, 36);
   return offset ? this.bb!.__vector_len(this.bb_pos + offset) : 0;
 }
 
 colorContext(obj?:ColorContext):ColorContext|null {
-  const offset = this.bb!.__offset(this.bb_pos, 30);
+  const offset = this.bb!.__offset(this.bb_pos, 38);
   return offset ? (obj || new ColorContext()).__init(this.bb!.__indirect(this.bb_pos + offset), this.bb!) : null;
 }
 
 static startDocument(builder:flatbuffers.Builder) {
-  builder.startObject(14);
+  builder.startObject(18);
+}
+
+static addNormalization(builder:flatbuffers.Builder, normalization:NormalizationStatus) {
+  builder.addFieldInt8(0, normalization, NormalizationStatus.Complete);
+}
+
+static addDependencies(builder:flatbuffers.Builder, dependencies:DependencyStatus) {
+  builder.addFieldInt8(1, dependencies, DependencyStatus.Complete);
+}
+
+static addSourceExport(builder:flatbuffers.Builder, sourceExportOffset:flatbuffers.Offset) {
+  builder.addFieldOffset(2, sourceExportOffset, 0);
+}
+
+static addContractId(builder:flatbuffers.Builder, contractIdOffset:flatbuffers.Offset) {
+  builder.addFieldOffset(3, contractIdOffset, 0);
 }
 
 static addFormatMajor(builder:flatbuffers.Builder, formatMajor:number) {
-  builder.addFieldInt16(0, formatMajor, 0);
+  builder.addFieldInt16(4, formatMajor, 0);
 }
 
 static addFormatMinor(builder:flatbuffers.Builder, formatMinor:number) {
-  builder.addFieldInt16(1, formatMinor, 0);
+  builder.addFieldInt16(5, formatMinor, 0);
 }
 
 static addSemanticsRevision(builder:flatbuffers.Builder, semanticsRevision:number) {
-  builder.addFieldInt32(2, semanticsRevision, 1);
+  builder.addFieldInt32(6, semanticsRevision, 1);
 }
 
 static addFeatures(builder:flatbuffers.Builder, featuresOffset:flatbuffers.Offset) {
-  builder.addFieldOffset(3, featuresOffset, 0);
+  builder.addFieldOffset(7, featuresOffset, 0);
 }
 
 static createFeaturesVector(builder:flatbuffers.Builder, data:flatbuffers.Offset[]):flatbuffers.Offset {
@@ -186,7 +227,7 @@ static startFeaturesVector(builder:flatbuffers.Builder, numElems:number) {
 }
 
 static addAssets(builder:flatbuffers.Builder, assetsOffset:flatbuffers.Offset) {
-  builder.addFieldOffset(4, assetsOffset, 0);
+  builder.addFieldOffset(8, assetsOffset, 0);
 }
 
 static createAssetsVector(builder:flatbuffers.Builder, data:flatbuffers.Offset[]):flatbuffers.Offset {
@@ -202,7 +243,7 @@ static startAssetsVector(builder:flatbuffers.Builder, numElems:number) {
 }
 
 static addMaterials(builder:flatbuffers.Builder, materialsOffset:flatbuffers.Offset) {
-  builder.addFieldOffset(5, materialsOffset, 0);
+  builder.addFieldOffset(9, materialsOffset, 0);
 }
 
 static createMaterialsVector(builder:flatbuffers.Builder, data:flatbuffers.Offset[]):flatbuffers.Offset {
@@ -218,7 +259,7 @@ static startMaterialsVector(builder:flatbuffers.Builder, numElems:number) {
 }
 
 static addNodes(builder:flatbuffers.Builder, nodesOffset:flatbuffers.Offset) {
-  builder.addFieldOffset(6, nodesOffset, 0);
+  builder.addFieldOffset(10, nodesOffset, 0);
 }
 
 static createNodesVector(builder:flatbuffers.Builder, data:flatbuffers.Offset[]):flatbuffers.Offset {
@@ -234,7 +275,7 @@ static startNodesVector(builder:flatbuffers.Builder, numElems:number) {
 }
 
 static addComponents(builder:flatbuffers.Builder, componentsOffset:flatbuffers.Offset) {
-  builder.addFieldOffset(7, componentsOffset, 0);
+  builder.addFieldOffset(11, componentsOffset, 0);
 }
 
 static createComponentsVector(builder:flatbuffers.Builder, data:flatbuffers.Offset[]):flatbuffers.Offset {
@@ -250,7 +291,7 @@ static startComponentsVector(builder:flatbuffers.Builder, numElems:number) {
 }
 
 static addAnimations(builder:flatbuffers.Builder, animationsOffset:flatbuffers.Offset) {
-  builder.addFieldOffset(8, animationsOffset, 0);
+  builder.addFieldOffset(12, animationsOffset, 0);
 }
 
 static createAnimationsVector(builder:flatbuffers.Builder, data:flatbuffers.Offset[]):flatbuffers.Offset {
@@ -266,7 +307,7 @@ static startAnimationsVector(builder:flatbuffers.Builder, numElems:number) {
 }
 
 static addEntries(builder:flatbuffers.Builder, entriesOffset:flatbuffers.Offset) {
-  builder.addFieldOffset(9, entriesOffset, 0);
+  builder.addFieldOffset(13, entriesOffset, 0);
 }
 
 static createEntriesVector(builder:flatbuffers.Builder, data:flatbuffers.Offset[]):flatbuffers.Offset {
@@ -282,11 +323,11 @@ static startEntriesVector(builder:flatbuffers.Builder, numElems:number) {
 }
 
 static addDefaultEntryId(builder:flatbuffers.Builder, defaultEntryId:number) {
-  builder.addFieldInt32(10, defaultEntryId, 0);
+  builder.addFieldInt32(14, defaultEntryId, 0);
 }
 
 static addSources(builder:flatbuffers.Builder, sourcesOffset:flatbuffers.Offset) {
-  builder.addFieldOffset(11, sourcesOffset, 0);
+  builder.addFieldOffset(15, sourcesOffset, 0);
 }
 
 static createSourcesVector(builder:flatbuffers.Builder, data:flatbuffers.Offset[]):flatbuffers.Offset {
@@ -302,7 +343,7 @@ static startSourcesVector(builder:flatbuffers.Builder, numElems:number) {
 }
 
 static addMetadata(builder:flatbuffers.Builder, metadataOffset:flatbuffers.Offset) {
-  builder.addFieldOffset(12, metadataOffset, 0);
+  builder.addFieldOffset(16, metadataOffset, 0);
 }
 
 static createMetadataVector(builder:flatbuffers.Builder, data:flatbuffers.Offset[]):flatbuffers.Offset {
@@ -318,13 +359,14 @@ static startMetadataVector(builder:flatbuffers.Builder, numElems:number) {
 }
 
 static addColorContext(builder:flatbuffers.Builder, colorContextOffset:flatbuffers.Offset) {
-  builder.addFieldOffset(13, colorContextOffset, 0);
+  builder.addFieldOffset(17, colorContextOffset, 0);
 }
 
 static endDocument(builder:flatbuffers.Builder):flatbuffers.Offset {
   const offset = builder.endObject();
-  builder.requiredField(offset, 16) // nodes
-  builder.requiredField(offset, 22) // entries
+  builder.requiredField(offset, 10) // contract_id
+  builder.requiredField(offset, 24) // nodes
+  builder.requiredField(offset, 30) // entries
   return offset;
 }
 
@@ -339,6 +381,10 @@ static finishSizePrefixedDocumentBuffer(builder:flatbuffers.Builder, offset:flat
 
 unpack(): DocumentT {
   return new DocumentT(
+    this.normalization(),
+    this.dependencies(),
+    (this.sourceExport() !== null ? this.sourceExport()!.unpack() : null),
+    this.contractId(),
     this.formatMajor(),
     this.formatMinor(),
     this.semanticsRevision(),
@@ -358,6 +404,10 @@ unpack(): DocumentT {
 
 
 unpackTo(_o: DocumentT): void {
+  _o.normalization = this.normalization();
+  _o.dependencies = this.dependencies();
+  _o.sourceExport = (this.sourceExport() !== null ? this.sourceExport()!.unpack() : null);
+  _o.contractId = this.contractId();
   _o.formatMajor = this.formatMajor();
   _o.formatMinor = this.formatMinor();
   _o.semanticsRevision = this.semanticsRevision();
@@ -377,6 +427,10 @@ unpackTo(_o: DocumentT): void {
 
 export class DocumentT implements flatbuffers.IGeneratedObject {
 constructor(
+  public normalization: NormalizationStatus = NormalizationStatus.Complete,
+  public dependencies: DependencyStatus = DependencyStatus.Complete,
+  public sourceExport: SourceExportT|null = null,
+  public contractId: string|Uint8Array|null = null,
   public formatMajor: number = 0,
   public formatMinor: number = 0,
   public semanticsRevision: number = 1,
@@ -395,6 +449,8 @@ constructor(
 
 
 pack(builder:flatbuffers.Builder): flatbuffers.Offset {
+  const sourceExport = (this.sourceExport !== null ? this.sourceExport!.pack(builder) : 0);
+  const contractId = (this.contractId !== null ? builder.createString(this.contractId!) : 0);
   const features = Document.createFeaturesVector(builder, builder.createObjectOffsetList(this.features));
   const assets = Document.createAssetsVector(builder, builder.createObjectOffsetList(this.assets));
   const materials = Document.createMaterialsVector(builder, builder.createObjectOffsetList(this.materials));
@@ -407,6 +463,10 @@ pack(builder:flatbuffers.Builder): flatbuffers.Offset {
   const colorContext = (this.colorContext !== null ? this.colorContext!.pack(builder) : 0);
 
   Document.startDocument(builder);
+  Document.addNormalization(builder, this.normalization);
+  Document.addDependencies(builder, this.dependencies);
+  Document.addSourceExport(builder, sourceExport);
+  Document.addContractId(builder, contractId);
   Document.addFormatMajor(builder, this.formatMajor);
   Document.addFormatMinor(builder, this.formatMinor);
   Document.addSemanticsRevision(builder, this.semanticsRevision);

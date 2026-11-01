@@ -66,7 +66,7 @@ it.skipIf(!existsSync(directory + '/unity-2022.3.21f1.json'))(
             false,
             [
               new TrackT(
-                new BindingT(4, AnimationProperty.NodePosition),
+                new BindingT(null, 4, AnimationProperty.NodePosition),
                 2,
                 new Vector3TrackT(curve),
               ),

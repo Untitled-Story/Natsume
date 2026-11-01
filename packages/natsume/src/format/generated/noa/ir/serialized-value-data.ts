@@ -9,6 +9,7 @@ import { NullValue, NullValueT } from '../../noa/ir/null-value.js';
 import { ObjectValue, ObjectValueT } from '../../noa/ir/object-value.js';
 import { ReferenceValue, ReferenceValueT } from '../../noa/ir/reference-value.js';
 import { SignedValue, SignedValueT } from '../../noa/ir/signed-value.js';
+import { SpecialFloatValue, SpecialFloatValueT } from '../../noa/ir/special-float-value.js';
 import { StringValue, StringValueT } from '../../noa/ir/string-value.js';
 import { UnsignedValue, UnsignedValueT } from '../../noa/ir/unsigned-value.js';
 
@@ -23,13 +24,14 @@ export enum SerializedValueData {
   StringValue = 6,
   ArrayValue = 7,
   ObjectValue = 8,
-  ReferenceValue = 9
+  ReferenceValue = 9,
+  SpecialFloatValue = 10
 }
 
 export function unionToSerializedValueData(
   type: SerializedValueData,
-  accessor: (obj:ArrayValue|BooleanValue|DoubleValue|NullValue|ObjectValue|ReferenceValue|SignedValue|StringValue|UnsignedValue) => ArrayValue|BooleanValue|DoubleValue|NullValue|ObjectValue|ReferenceValue|SignedValue|StringValue|UnsignedValue|null
-): ArrayValue|BooleanValue|DoubleValue|NullValue|ObjectValue|ReferenceValue|SignedValue|StringValue|UnsignedValue|null {
+  accessor: (obj:ArrayValue|BooleanValue|DoubleValue|NullValue|ObjectValue|ReferenceValue|SignedValue|SpecialFloatValue|StringValue|UnsignedValue) => ArrayValue|BooleanValue|DoubleValue|NullValue|ObjectValue|ReferenceValue|SignedValue|SpecialFloatValue|StringValue|UnsignedValue|null
+): ArrayValue|BooleanValue|DoubleValue|NullValue|ObjectValue|ReferenceValue|SignedValue|SpecialFloatValue|StringValue|UnsignedValue|null {
   switch(SerializedValueData[type]) {
     case 'NONE': return null;
     case 'NullValue': return accessor(new NullValue())! as NullValue;
@@ -41,15 +43,16 @@ export function unionToSerializedValueData(
     case 'ArrayValue': return accessor(new ArrayValue())! as ArrayValue;
     case 'ObjectValue': return accessor(new ObjectValue())! as ObjectValue;
     case 'ReferenceValue': return accessor(new ReferenceValue())! as ReferenceValue;
+    case 'SpecialFloatValue': return accessor(new SpecialFloatValue())! as SpecialFloatValue;
     default: return null;
   }
 }
 
 export function unionListToSerializedValueData(
   type: SerializedValueData,
-  accessor: (index: number, obj:ArrayValue|BooleanValue|DoubleValue|NullValue|ObjectValue|ReferenceValue|SignedValue|StringValue|UnsignedValue) => ArrayValue|BooleanValue|DoubleValue|NullValue|ObjectValue|ReferenceValue|SignedValue|StringValue|UnsignedValue|null,
+  accessor: (index: number, obj:ArrayValue|BooleanValue|DoubleValue|NullValue|ObjectValue|ReferenceValue|SignedValue|SpecialFloatValue|StringValue|UnsignedValue) => ArrayValue|BooleanValue|DoubleValue|NullValue|ObjectValue|ReferenceValue|SignedValue|SpecialFloatValue|StringValue|UnsignedValue|null,
   index: number
-): ArrayValue|BooleanValue|DoubleValue|NullValue|ObjectValue|ReferenceValue|SignedValue|StringValue|UnsignedValue|null {
+): ArrayValue|BooleanValue|DoubleValue|NullValue|ObjectValue|ReferenceValue|SignedValue|SpecialFloatValue|StringValue|UnsignedValue|null {
   switch(SerializedValueData[type]) {
     case 'NONE': return null;
     case 'NullValue': return accessor(index, new NullValue())! as NullValue;
@@ -61,6 +64,7 @@ export function unionListToSerializedValueData(
     case 'ArrayValue': return accessor(index, new ArrayValue())! as ArrayValue;
     case 'ObjectValue': return accessor(index, new ObjectValue())! as ObjectValue;
     case 'ReferenceValue': return accessor(index, new ReferenceValue())! as ReferenceValue;
+    case 'SpecialFloatValue': return accessor(index, new SpecialFloatValue())! as SpecialFloatValue;
     default: return null;
   }
 }

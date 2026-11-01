@@ -84,7 +84,7 @@ export async function measureCanvas(native: { cases: CanvasSample[] }) {
       {
         format: 'noa-package',
         version: 1,
-        noir_version: [3, 0],
+        noir_version: [1, 0],
         document: 'scene.noir',
         files: [],
       },
@@ -165,7 +165,7 @@ export async function measureCanvas(native: { cases: CanvasSample[] }) {
   ];
   const pack = new EffectPack(
     doc,
-    { format: 'noa-package', version: 1, noir_version: [3, 0], document: 'scene.noir', files: [] },
+    { format: 'noa-package', version: 1, noir_version: [1, 0], document: 'scene.noir', files: [] },
     new Map(),
     new Map(),
   );
@@ -256,7 +256,7 @@ export async function measureSortingLayers() {
     );
   const pack = new EffectPack(
     doc,
-    { format: 'noa-package', version: 1, noir_version: [3, 0], document: 'scene.noir', files: [] },
+    { format: 'noa-package', version: 1, noir_version: [1, 0], document: 'scene.noir', files: [] },
     new Map(),
     new Map(),
   );

@@ -132,7 +132,7 @@ function setup(c: Case) {
       } as Record<string, P>
     )[c.property]!;
     track = new TrackT(
-      new BindingT(3, property),
+      new BindingT(null, 3, property),
       property === P.NodeRotation ? D.RotationTrack : D.Vector3Track,
       property === P.NodeRotation
         ? new RotationTrackT(
@@ -178,7 +178,7 @@ function setup(c: Case) {
       } as Record<string, P>
     )[c.property]!;
     track = new TrackT(
-      new BindingT(6, property),
+      new BindingT(null, 6, property),
       D.Vector3Track,
       new Vector3TrackT(fields.x, fields.y, c.property === 'm_AnchoredPosition' ? null : fields.z),
     );
@@ -231,12 +231,13 @@ function setup(c: Case) {
       'VelocityModule.z': PP.VelocityZ,
     };
     if (c.property === 'looping')
-      track = new TrackT(new BindingT(5, P.ParticleLoop), D.BoolTrack, bool);
+      track = new TrackT(new BindingT(null, 5, P.ParticleLoop), D.BoolTrack, bool);
     else if (parts.length === 4) {
       const data = new ColorTrackT();
       Object.assign(data, { [parts[3]!]: fields[''] });
       track = new TrackT(
         new BindingT(
+          null,
           5,
           source.startsWith('Initial') ? P.ParticleColor : P.ParticleCustomColor,
           0,
@@ -248,7 +249,7 @@ function setup(c: Case) {
       );
     } else
       track = new TrackT(
-        new BindingT(5, P.ParticleParameter, parameters[source], parts[2]),
+        new BindingT(null, 5, P.ParticleParameter, parameters[source], parts[2]),
         D.FloatTrack,
         new FloatTrackT(fields['']),
       );
@@ -262,32 +263,32 @@ function setup(c: Case) {
     d.materials = [m];
     track =
       c.kind === 'renderer'
-        ? new TrackT(new BindingT(5, P.RendererEnabled), D.BoolTrack, bool)
+        ? new TrackT(new BindingT(null, 5, P.RendererEnabled), D.BoolTrack, bool)
         : c.property === '_TintColor'
           ? new TrackT(
-              new BindingT(5, P.RendererMaterialTint, 0, '_TintColor'),
+              new BindingT(null, 5, P.RendererMaterialTint, 0, '_TintColor'),
               D.ColorTrack,
               new ColorTrackT(fields.r, fields.g, fields.b, fields.a),
             )
           : c.property === '_MainTex_ST'
             ? new TrackT(
-                new BindingT(5, P.RendererTextureST, 0, '_MainTex'),
+                new BindingT(null, 5, P.RendererTextureST, 0, '_MainTex'),
                 D.Vector4Track,
                 new Vector4TrackT(fields.x, fields.y, fields.z, fields.w),
               )
             : new TrackT(
-                new BindingT(5, P.RendererMaterialFloat, 0, '_InvFade'),
+                new BindingT(null, 5, P.RendererMaterialFloat, 0, '_InvFade'),
                 D.FloatTrack,
                 new FloatTrackT(fields['']),
               );
-  } else track = new TrackT(new BindingT(3, P.NodeActive), D.BoolTrack, bool);
+  } else track = new TrackT(new BindingT(null, 3, P.NodeActive), D.BoolTrack, bool);
   d.animations = [new AnimationT(10, 'clip', 1, false, [track])];
   const pack = new EffectPack(
       d,
       {
         format: 'noa-package',
         version: 1,
-        noir_version: [3, 0],
+        noir_version: [1, 0],
         document: 'scene.noir',
         files: [],
       },
@@ -378,7 +379,7 @@ it.skipIf(!hasNativeFixture('unity-animation-bindings.json'))(
       d.animations = [
         new AnimationT(10, 'A', 1, false, [
           new TrackT(
-            new BindingT(3, P.NodePosition),
+            new BindingT(null, 3, P.NodePosition),
             D.Vector3Track,
             new Vector3TrackT(curve(9, 9)),
           ),
@@ -406,7 +407,7 @@ it.skipIf(!hasNativeFixture('unity-animation-bindings.json'))(
         {
           format: 'noa-package',
           version: 1,
-          noir_version: [3, 0],
+          noir_version: [1, 0],
           document: 'scene.noir',
           files: [],
         },
@@ -453,13 +454,17 @@ it.skipIf(!hasNativeFixture('unity-animation-bindings.json'))(
       d.animations = [
         new AnimationT(10, 'A', 1, false, [
           new TrackT(
-            new BindingT(3, P.NodePosition),
+            new BindingT(null, 3, P.NodePosition),
             D.Vector3Track,
             new Vector3TrackT(curve(9, 9)),
           ),
         ]),
         new AnimationT(12, 'B', 1, false, [
-          new TrackT(new BindingT(3, P.NodeScale), D.Vector3Track, new Vector3TrackT(curve(8, 8))),
+          new TrackT(
+            new BindingT(null, 3, P.NodeScale),
+            D.Vector3Track,
+            new Vector3TrackT(curve(8, 8)),
+          ),
         ]),
       ];
       d.components = [
@@ -489,7 +494,7 @@ it.skipIf(!hasNativeFixture('unity-animation-bindings.json'))(
           {
             format: 'noa-package',
             version: 1,
-            noir_version: [3, 0],
+            noir_version: [1, 0],
             document: 'scene.noir',
             files: [],
           },
@@ -523,14 +528,14 @@ it.skipIf(!hasNativeFixture('unity-animation-bindings.json'))(
       d.animations = [
         new AnimationT(10, 'parent', 1, false, [
           new TrackT(
-            new BindingT(5, P.NodePosition),
+            new BindingT(null, 5, P.NodePosition),
             D.Vector3Track,
             new Vector3TrackT(curve(9, 9)),
           ),
         ]),
         new AnimationT(12, 'child', 1, false, [
           new TrackT(
-            new BindingT(5, P.NodePosition),
+            new BindingT(null, 5, P.NodePosition),
             D.Vector3Track,
             new Vector3TrackT(curve(8, 8)),
           ),
@@ -572,7 +577,7 @@ it.skipIf(!hasNativeFixture('unity-animation-bindings.json'))(
           {
             format: 'noa-package',
             version: 1,
-            noir_version: [3, 0],
+            noir_version: [1, 0],
             document: 'scene.noir',
             files: [],
           },

@@ -32,5 +32,6 @@ export enum AnimationProperty {
   ParticleColor = 26,
   ParticleCustomColor = 27,
   ParticleLoop = 28,
-  SpriteColor = 29
+  SpriteColor = 29,
+  SourceBinding = 30
 }

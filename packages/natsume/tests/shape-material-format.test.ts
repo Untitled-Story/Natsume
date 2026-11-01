@@ -21,7 +21,7 @@ it('requires actual shape capabilities and valid region thickness', () => {
   doc.colorContext = new ColorContextT(0);
   const p = particleSource();
   const box = new BoxShapeT(new Vec3T(0, 0, 0));
-  p.modules = [new ParticleModuleT(2, new ShapeModuleT(2, box, doc.nodes[0]!.transform))];
+  p.modules = [new ParticleModuleT(2, new ShapeModuleT(null, 2, box, doc.nodes[0]!.transform))];
   doc.components = [new ComponentT(3, 1, true, 3, p)];
   doc.features = [new FeatureRequirementT('color.authored', 1, true)];
   expect(() => validateDocument(doc)).toThrow('particle.shape.box');
@@ -87,7 +87,7 @@ async function makePack(r: Record<string, unknown>, model = 4) {
   const manifest = {
     format: 'noa-package',
     version: 1,
-    noir_version: [3, 0],
+    noir_version: [1, 0],
     document: 'scene.noir',
     files: [
       { path: 'scene.noir', kind: 'noir', byte_length: scene.length, sha256: await hash(scene) },

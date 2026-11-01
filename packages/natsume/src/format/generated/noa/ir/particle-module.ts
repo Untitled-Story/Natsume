@@ -4,9 +4,16 @@
 
 import * as flatbuffers from 'flatbuffers';
 
+import { CollisionModule, CollisionModuleT } from '../../noa/ir/collision-module.js';
+import { ColorBySpeedModule, ColorBySpeedModuleT } from '../../noa/ir/color-by-speed-module.js';
 import { ColorModule, ColorModuleT } from '../../noa/ir/color-module.js';
 import { CustomDataModule, CustomDataModuleT } from '../../noa/ir/custom-data-module.js';
 import { EmissionModule, EmissionModuleT } from '../../noa/ir/emission-module.js';
+import { ExternalForcesModule, ExternalForcesModuleT } from '../../noa/ir/external-forces-module.js';
+import { ForceModule, ForceModuleT } from '../../noa/ir/force-module.js';
+import { InheritVelocityModule, InheritVelocityModuleT } from '../../noa/ir/inherit-velocity-module.js';
+import { LifetimeByEmitterSpeedModule, LifetimeByEmitterSpeedModuleT } from '../../noa/ir/lifetime-by-emitter-speed-module.js';
+import { LightsModule, LightsModuleT } from '../../noa/ir/lights-module.js';
 import { LimitVelocityModule, LimitVelocityModuleT } from '../../noa/ir/limit-velocity-module.js';
 import { NoiseModule, NoiseModuleT } from '../../noa/ir/noise-module.js';
 import { ParticleModuleData, unionToParticleModuleData, unionListToParticleModuleData } from '../../noa/ir/particle-module-data.js';
@@ -18,6 +25,7 @@ import { SizeModule, SizeModuleT } from '../../noa/ir/size-module.js';
 import { SubEmittersModule, SubEmittersModuleT } from '../../noa/ir/sub-emitters-module.js';
 import { TextureSheetModule, TextureSheetModuleT } from '../../noa/ir/texture-sheet-module.js';
 import { TrailsModule, TrailsModuleT } from '../../noa/ir/trails-module.js';
+import { TriggerModule, TriggerModuleT } from '../../noa/ir/trigger-module.js';
 import { VelocityModule, VelocityModuleT } from '../../noa/ir/velocity-module.js';
 
 
@@ -98,7 +106,7 @@ unpackTo(_o: ParticleModuleT): void {
 export class ParticleModuleT implements flatbuffers.IGeneratedObject {
 constructor(
   public dataType: ParticleModuleData = ParticleModuleData.NONE,
-  public data: ColorModuleT|CustomDataModuleT|EmissionModuleT|LimitVelocityModuleT|NoiseModuleT|RotationBySpeedModuleT|RotationModuleT|ShapeModuleT|SizeBySpeedModuleT|SizeModuleT|SubEmittersModuleT|TextureSheetModuleT|TrailsModuleT|VelocityModuleT|null = null
+  public data: CollisionModuleT|ColorBySpeedModuleT|ColorModuleT|CustomDataModuleT|EmissionModuleT|ExternalForcesModuleT|ForceModuleT|InheritVelocityModuleT|LifetimeByEmitterSpeedModuleT|LightsModuleT|LimitVelocityModuleT|NoiseModuleT|RotationBySpeedModuleT|RotationModuleT|ShapeModuleT|SizeBySpeedModuleT|SizeModuleT|SubEmittersModuleT|TextureSheetModuleT|TrailsModuleT|TriggerModuleT|VelocityModuleT|null = null
 ){}
 
 
