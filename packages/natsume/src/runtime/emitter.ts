@@ -16,6 +16,12 @@ import type { RotationModuleT } from '../format/generated/noa/ir/rotation-module
 import type { ColorModuleT } from '../format/generated/noa/ir/color-module.js';
 import type { ColorBySpeedModuleT } from '../format/generated/noa/ir/color-by-speed-module.js';
 import type { ForceModuleT } from '../format/generated/noa/ir/force-module.js';
+import type { ExternalForcesModuleT } from '../format/generated/noa/ir/external-forces-module.js';
+import {
+  selectForceFields,
+  type ParticleForceQuery,
+  type ParticleForceField,
+} from './particle-force-fields.js';
 import type { InheritVelocityModuleT } from '../format/generated/noa/ir/inherit-velocity-module.js';
 import type { LifetimeByEmitterSpeedModuleT } from '../format/generated/noa/ir/lifetime-by-emitter-speed-module.js';
 import type { ParticleEnvironment } from '../rendering/particle-environment.js';
@@ -59,6 +65,26 @@ export class Emitter {
   readonly colorModule: R<ColorModuleT> | undefined;
   readonly colorBySpeed: R<ColorBySpeedModuleT> | undefined;
   readonly forceModule: R<ForceModuleT> | undefined;
+  readonly externalForces: R<ExternalForcesModuleT> | undefined;
+  private externalFields: readonly ParticleForceField[] = [];
+  private readonly forcePosition = new Float64Array(3);
+  private readonly forceVelocity = new Float64Array(3);
+  private readonly forceOutput = new Float64Array(3);
+  private readonly forceQuery: ParticleForceQuery & {
+    deltaSeconds: number;
+    timeSeconds: number;
+    normalizedAge: number;
+    particleId: number;
+    systemId: number;
+  } = {
+    position: this.forcePosition,
+    velocity: this.forceVelocity,
+    deltaSeconds: 0,
+    timeSeconds: 0,
+    normalizedAge: 0,
+    systemId: 0,
+    particleId: 0,
+  };
   readonly inheritVelocity: R<InheritVelocityModuleT> | undefined;
   readonly lifetimeByEmitterSpeed: R<LifetimeByEmitterSpeedModuleT> | undefined;
   readonly emitterVelocity = new Float64Array(3);
@@ -213,6 +239,9 @@ export class Emitter {
           break;
         case M.ForceModule:
           this.forceModule = m.data as R<ForceModuleT>;
+          break;
+        case M.ExternalForcesModule:
+          this.externalForces = m.data as R<ExternalForcesModuleT>;
           break;
         case M.InheritVelocityModule:
           this.inheritVelocity = m.data as R<InheritVelocityModuleT>;
@@ -370,6 +399,7 @@ export class Emitter {
       'HOST',
       `System ${this.id}: missing Rigidbody velocity slot ${this.main.hostRigidbodyVelocitySlot}`,
     );
+    if (this.externalForces) selectForceFields(this.externalForces, value?.forceFields);
     return this.resolveGravity(
       this.main.gravitySource === 1
         ? value?.gravity2D && [value.gravity2D[0], value.gravity2D[1], 0]
@@ -1159,6 +1189,8 @@ export class Emitter {
 
   private advance(dt: number): void {
     this.forceStep++;
+    if (this.externalForces)
+      this.externalFields = selectForceFields(this.externalForces, this.environment?.forceFields);
     this.noiseEvaluator?.advance(
       dt,
       (this.time % this.main.durationSeconds) / this.main.durationSeconds,
@@ -1264,6 +1296,43 @@ export class Emitter {
         vx += acceleration[0]! * dt;
         vy += acceleration[1]! * dt;
         vz += acceleration[2]! * dt;
+      }
+      if (this.externalForces) {
+        const query = this.forceQuery;
+        vec3.set(this.forcePosition, x, y, z);
+        vec3.transformMat4(this.forcePosition, this.forcePosition, this.simulationMatrix);
+        const m = this.simulationMatrix;
+        vec3.set(
+          this.forceVelocity,
+          m[0]! * vx + m[4]! * vy + m[8]! * vz,
+          m[1]! * vx + m[5]! * vy + m[9]! * vz,
+          m[2]! * vx + m[6]! * vy + m[10]! * vz,
+        );
+        query.deltaSeconds = dt;
+        query.systemId = this.id;
+        query.timeSeconds = this.time;
+        query.normalizedAge = this.ages[i]! / this.lifetimes[i]!;
+        query.particleId = this.serials[i]!;
+        const factor = scalar(this.externalForces.multiplier, query.normalizedAge, rnd(83), 1);
+        for (const field of this.externalFields) {
+          if (field.enabled === false) continue;
+          this.forceOutput.fill(0);
+          field.sample(query, this.forceOutput);
+          check(
+            this.forceOutput.every(Number.isFinite),
+            'HOST',
+            'Force field returned non-finite acceleration',
+          );
+          const acceleration = this.vector(
+            this.forceOutput[0]!,
+            this.forceOutput[1]!,
+            this.forceOutput[2]!,
+            false,
+          );
+          vx += acceleration[0]! * factor * dt;
+          vy += acceleration[1]! * factor * dt;
+          vz += acceleration[2]! * factor * dt;
+        }
       }
       this.velocities[o] = vx;
       this.velocities[o + 1] = vy;

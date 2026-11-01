@@ -1,5 +1,6 @@
 import { Texture } from 'pixi.js';
 import { check } from '../errors.js';
+import { copyForceFields, type ParticleForceFields } from '../runtime/particle-force-fields.js';
 
 export type ParticleFog =
   | { readonly mode: 'none' }
@@ -22,6 +23,8 @@ export interface ParticleEnvironment {
   readonly gravity?: readonly [number, number, number] | undefined;
   /** Physics2D acceleration in Unity world units per second squared. */
   readonly gravity2D?: readonly [number, number] | undefined;
+  /** Borrowed force-field services, indexed by source reference or world-search slot. */
+  readonly forceFields?: ParticleForceFields | undefined;
   /** World-space velocities indexed by the package's host Rigidbody slot. */
   readonly rigidbodyVelocities?:
     | Readonly<Record<string, readonly [number, number, number]>>
@@ -136,6 +139,7 @@ export function copyEnvironment(
     fog: f.mode === 'none' ? { mode: 'none' } : { ...f, color: [...f.color] },
     gravity: g ? [g[0], g[1], g[2]] : undefined,
     gravity2D: g2 ? [g2[0], g2[1]] : undefined,
+    forceFields: copyForceFields(value.forceFields),
     rigidbodyVelocities: value.rigidbodyVelocities ? velocities : undefined,
     viewVelocity: velocity ? [velocity[0], velocity[1], velocity[2]] : undefined,
     viewPosition: position ? [position[0], position[1], position[2]] : undefined,

@@ -19,6 +19,11 @@ export { type PlaybackState, type AnimationTarget } from './runtime/simulation.j
 export { type Diagnostic } from './runtime/emitter.js';
 export { NatsumePlugin } from './application-plugin.js';
 export { type ParticleEnvironment, type ParticleFog } from './rendering/particle-environment.js';
+export type {
+  ParticleForceField,
+  ParticleForceFields,
+  ParticleForceQuery,
+} from './runtime/particle-force-fields.js';
 export {
   NatsumeCompatibilityError,
   type CompatibilityIssue,

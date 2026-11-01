@@ -359,6 +359,7 @@ runtime.registerScript(
 | Lifetime by Emitter Speed | 出生时按发射器世界速度采样寿命乘数，含零宽区间                                                                                    |
 | Force over Lifetime       | Local / World、四种标量参数、稳定或逐帧随机、旋转与非均匀缩放                                                                     |
 | Color by Speed            | 速度区间、四种颜色参数、HDR 输入及粒子颜色量化                                                                                    |
+| External Forces           | LayerMask / List / LayerMaskAndList；宿主世界空间力场采样、身份去重、动态启用与年龄乘数                                           |
 
 速度取样包含重力、Velocity 和 Limit，不包含 Speed Multiplier 与 Noise 位移。零宽区间按 Unity 的端点规则处理。
 
@@ -396,14 +397,13 @@ Unity 临时材质对象 ID 不在 NOAP 中；同队列不透明材质分组使�
 
 ### Unsupported
 
-| 模块            | 未实现行为                                                                                                                      |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| External Forces | 外部力场                                                                                                                        |
-| Collision       | 平面及场景碰撞                                                                                                                  |
-| Triggers        | 碰撞区域检测与事件                                                                                                              |
-| Lights          | 粒子灯光                                                                                                                        |
-| Timeline 扩展   | Audio、Signal / Marker、自定义轨道 / Playable、Infinite Clip、AvatarMask、prefab 实例化、自定义属性动画与非默认 clip-end action |
-| Animator 扩展   | Avatar / Root Motion、IK / Mirror、AvatarMask、同步层、BlendTree、OverrideController、嵌套状态机、StateMachineBehaviour         |
+| 模块          | 未实现行为                                                                                                                      |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Collision     | 平面及场景碰撞                                                                                                                  |
+| Triggers      | 碰撞区域检测与事件                                                                                                              |
+| Lights        | 粒子灯光                                                                                                                        |
+| Timeline 扩展 | Audio、Signal / Marker、自定义轨道 / Playable、Infinite Clip、AvatarMask、prefab 实例化、自定义属性动画与非默认 clip-end action |
+| Animator 扩展 | Avatar / Root Motion、IK / Mirror、AvatarMask、同步层、BlendTree、OverrideController、嵌套状态机、StateMachineBehaviour         |
 
 ## 开发与预览
 

@@ -11,6 +11,8 @@ import { constantZero, parameterSupport } from './parameters.js';
 import { prewarmDuration } from './prewarm.js';
 import type { ParticleEnvironment } from '../rendering/particle-environment.js';
 import { SupportChecks, type SupportIssue } from './support-checks.js';
+import type { ExternalForcesModuleT } from '../format/generated/noa/ir/external-forces-module.js';
+import { selectForceFields } from './particle-force-fields.js';
 
 export function emitterSupport(
   source: R<ParticleSystemT>,
@@ -107,6 +109,7 @@ export function emitterSupport(
         module.dataType === M.SubEmittersModule ||
         module.dataType === M.TrailsModule ||
         module.dataType === M.ForceModule ||
+        module.dataType === M.ExternalForcesModule ||
         module.dataType === M.ColorBySpeedModule ||
         module.dataType === M.InheritVelocityModule ||
         module.dataType === M.LifetimeByEmitterSpeedModule,
@@ -115,6 +118,19 @@ export function emitterSupport(
       module.dataType,
       'Unsupported particle module',
     );
+    if (module.dataType === M.ExternalForcesModule) {
+      try {
+        selectForceFields(module.data as R<ExternalForcesModuleT>, environment?.forceFields);
+      } catch (error) {
+        rules.require(
+          false,
+          'HOST',
+          `${path}.influences`,
+          module.data,
+          error instanceof Error ? error.message : 'Missing host force fields',
+        );
+      }
+    }
     if (module.dataType === M.EmissionModule) {
       const emission = module.data as R<EmissionModuleT>;
       const count = emission.bursts.reduce(

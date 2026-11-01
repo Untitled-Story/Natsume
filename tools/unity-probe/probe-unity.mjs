@@ -82,7 +82,12 @@ const spriteShapes = process.argv.includes('--sprite-shapes');
 const sceneMaterials = process.argv.includes('--scene-materials');
 const events = process.argv.includes('--events');
 const particleModules = process.argv.includes('--particle-modules');
-const bySpeed = process.argv.includes('--by-speed') || particleModules;
+const externalForces = process.argv.includes('--external-forces');
+const bySpeed = process.argv.includes('--by-speed') || particleModules || externalForces;
+assert(
+  !(externalForces && (particleModules || process.argv.includes('--by-speed'))),
+  'Choose one probe mode',
+);
 assert(!particleModules || !process.argv.includes('--by-speed'), 'Choose one probe mode');
 const bindings = process.argv.includes('--animation-bindings');
 const animation = process.argv.includes('--animation');
@@ -188,7 +193,9 @@ const output = resolve(
                             : bySpeed
                               ? particleModules
                                 ? 'particle-modules'
-                                : 'by-speed'
+                                : externalForces
+                                  ? 'external-forces'
+                                  : 'by-speed'
                               : bindings
                                 ? 'animation-bindings'
                                 : animation
@@ -315,7 +322,8 @@ const child = runEditor(
     noiseOptions ||
     stretch ||
     noiseStatistics ||
-    particleModules
+    particleModules ||
+    externalForces
       ? []
       : ['-nographics']),
     '-projectPath',
@@ -356,7 +364,9 @@ const child = runEditor(
                               : bySpeed
                                 ? particleModules
                                   ? 'NatsumeParticleModulesProbe.Run'
-                                  : 'NatsumeBySpeedProbe.Run'
+                                  : externalForces
+                                    ? 'NatsumeExternalForcesProbe.Run'
+                                    : 'NatsumeBySpeedProbe.Run'
                                 : bindings
                                   ? 'NatsumeBindingProbe.Run'
                                   : animation
@@ -425,6 +435,16 @@ await new Promise((accept, reject) => {
 });
 const current = JSON.parse(await readFile(baseline, 'utf8'));
 assert.equal(current.unityVersion, version);
+if (externalForces) {
+  assert.equal(current.cases.length, 384);
+  if (process.argv.includes('--update-fixtures'))
+    await saveJson(
+      resolve(root, 'data/unity-baselines/fixtures/unity-external-forces.json'),
+      JSON.stringify(current, null, 2) + '\n',
+    );
+  console.log(`External force observations: ${current.cases.length}`);
+  process.exit(0);
+}
 if (particleModules) {
   assert.equal(current.cases.length, 328);
   assert.equal(current.random.length, 8);
