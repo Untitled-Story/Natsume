@@ -89,6 +89,16 @@ export class SubEmitterGraph {
               properties: edge.inheritProperties,
             });
       };
+      source.onTrigger = (index) => {
+        for (const [slot, edge] of (this.slots.get(source.id) ?? []).entries())
+          if (edge.event === Event.Trigger && this.accept(source, index, edge, slot))
+            this.enqueue(this.after, {
+              target: this.emitters.get(edge.systemComponentId)!,
+              parentSystem: source.id,
+              parent: particleSnapshot(source, index),
+              properties: edge.inheritProperties,
+            });
+      };
       source.onClear = () => this.clearSource(source.id);
       source.onDisable = () => this.clearSource(source.id, false);
       const module = source.source.modules.find((m) => m.dataType === M.SubEmittersModule);

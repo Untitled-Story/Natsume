@@ -24,3 +24,27 @@ test('isolates collision callbacks, rejects recursion and cancels stale contacts
   });
   expect(result.diagnostics).toContain('PARTICLE_COLLISION_EVENT_ERROR');
 });
+
+test('preserves Trigger query slots and cancels queued events when a callback pauses', async ({
+  page,
+}) => {
+  await page.goto('/');
+  const result = await page.evaluate(
+    async (path) => (await import('/@fs' + path)).checkTriggerEvents(),
+    new URL('./particle-physics-fixture.ts', import.meta.url).pathname,
+  );
+  expect(result).toMatchObject({
+    recursive: true,
+    paused: true,
+    unsubscribed: true,
+    disposed: true,
+  });
+  expect(result.events.map((event: { kind: string }) => event.kind)).toEqual(['inside', 'inside']);
+  expect(result.events[0].colliders).toEqual([
+    { slot: 1, colliderId: 'sphere' },
+    { slot: 3, colliderId: 'sphere' },
+  ]);
+  expect(result.pausedAt).toBeCloseTo(1 / 60);
+  expect(result.resumedAt).toBeCloseTo(2 / 60);
+  expect(result.diagnostics).toContain('PARTICLE_TRIGGER_EVENT_ERROR');
+});

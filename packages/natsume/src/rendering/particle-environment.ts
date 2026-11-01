@@ -116,6 +116,7 @@ export function copyEnvironment(
         collider.layer >= 0 &&
         collider.layer < 32 &&
         typeof collider.overlapSphere === 'function' &&
+        (collider.sweepSphere === undefined || typeof collider.sweepSphere === 'function') &&
         (collider.applyForce === undefined || typeof collider.applyForce === 'function'),
       'HOST',
       'Invalid particle collider',

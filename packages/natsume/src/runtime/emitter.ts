@@ -53,6 +53,9 @@ import type { ParticleSnapshot } from './particle-snapshot.js';
 import { ParticleCollisions } from './particle-collisions.js';
 import type { CollisionModuleT } from '../format/generated/noa/ir/collision-module.js';
 import type { ParticleCollisionEvent } from './particle-physics.js';
+import type { ParticleTriggerEvent } from './particle-physics.js';
+import { ParticleTriggers } from './particle-triggers.js';
+import type { TriggerModuleT } from '../format/generated/noa/ir/trigger-module.js';
 
 export interface Diagnostic {
   readonly code: string;
@@ -69,6 +72,7 @@ export class Emitter {
   readonly colorBySpeed: R<ColorBySpeedModuleT> | undefined;
   readonly forceModule: R<ForceModuleT> | undefined;
   readonly collision: ParticleCollisions | undefined;
+  readonly trigger: ParticleTriggers | undefined;
   readonly externalForces: R<ExternalForcesModuleT> | undefined;
   private externalFields: readonly ParticleForceField[] = [];
   private readonly forcePosition = new Float64Array(3);
@@ -160,6 +164,8 @@ export class Emitter {
   onDeath: ((index: number) => void) | undefined;
   onCollision: ((index: number) => void) | undefined;
   onCollisionMessage: ((event: ParticleCollisionEvent) => void) | undefined;
+  onTrigger: ((index: number) => void) | undefined;
+  onTriggerMessage: ((event: ParticleTriggerEvent) => void) | undefined;
   onClear: (() => void) | undefined;
   onDisable: (() => void) | undefined;
   /** @internal Birth-driven systems emit through parent channels, even after Play(). */
@@ -260,6 +266,9 @@ export class Emitter {
           break;
         case M.CollisionModule:
           this.collision = new ParticleCollisions(m.data as R<CollisionModuleT>, sceneNodes);
+          break;
+        case M.TriggerModule:
+          this.trigger = new ParticleTriggers(m.data as R<TriggerModuleT>);
           break;
         case M.InheritVelocityModule:
           this.inheritVelocity = m.data as R<InheritVelocityModuleT>;
@@ -419,6 +428,13 @@ export class Emitter {
     );
     if (this.externalForces) selectForceFields(this.externalForces, value?.forceFields);
     const collision = this.collision?.definition;
+    if (this.trigger)
+      for (const reference of this.trigger.definition.colliders)
+        check(
+          !reference.hostSlot || value?.colliders?.[String(reference.hostSlot)]?.sweepSphere,
+          'HOST',
+          `Missing particle collider ${reference.hostSlot}`,
+        );
     check(
       !collision ||
         collision.type === 0 ||
@@ -552,6 +568,7 @@ export class Emitter {
     return out;
   }
   reset(): void {
+    this.trigger?.clear();
     this.onClear?.();
     this.count = 0;
     this.noiseEvaluator?.reset();
@@ -581,6 +598,7 @@ export class Emitter {
     this.emitting = true;
   }
   clear(): void {
+    this.trigger?.clear();
     this.onClear?.();
     this.count = 0;
   }
@@ -603,6 +621,7 @@ export class Emitter {
       this.lastVelocityPosition[axis] = this.node.worldMatrix[12 + axis]!;
     this.updateEmitterVelocity(0);
     if (!active) {
+      this.trigger?.clear();
       this.onDisable?.();
       this.count = 0;
       this.noiseEvaluator?.reset();
@@ -1582,10 +1601,17 @@ export class Emitter {
       this.positions[o + 1] = y + vy * dt;
       this.positions[o + 2] = z + vz * dt;
       let collisionAge = 0;
-      if (this.collision) {
+      const integratedAge = age;
+      if (!dead && this.collision) {
         const previous = age;
         age = this.collision.resolve(this, i, dt, age, x, y, z);
         collisionAge = age - previous;
+        if (collisionAge && this.lifetimeProgress)
+          this.lifetimeProgress[i] = (age / this.lifetimes[i]!) * 100;
+      }
+      if (!dead && this.trigger) {
+        age = this.trigger.resolve(this, i, age, x, y, z);
+        collisionAge = age - integratedAge;
         if (collisionAge && this.lifetimeProgress)
           this.lifetimeProgress[i] = (age / this.lifetimes[i]!) * 100;
       }
@@ -1723,6 +1749,7 @@ export class Emitter {
     ]);
   }
   private remove(i: number): void {
+    this.trigger?.forget(this.serials[i]!);
     const last = --this.count;
     if (i === last) return;
     for (const a of [this.ages, this.lifetimes, this.serials]) a[i] = a[last]!;

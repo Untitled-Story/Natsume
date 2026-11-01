@@ -158,6 +158,9 @@ export class EffectInstance {
   private readonly collisionHandlers = new Set<
     (event: import('./particle-physics.js').ParticleCollisionEvent) => void
   >();
+  private readonly triggerHandlers = new Set<
+    (event: import('./particle-physics.js').ParticleTriggerEvent) => void
+  >();
   private readonly missingReceivers = new Set<string>();
   private updating = false;
   private eventRevision = 0;
@@ -175,28 +178,20 @@ export class EffectInstance {
     options: InstanceOptions,
   ) {
     simulation.onAnimationEvent = (event) => this.dispatchAnimationEvent(event);
-    simulation.onParticleCollision = (event) => {
-      if (this.disposed || this.dispatchingEvent) return;
-      this.dispatchingEvent = true;
-      const revision = this.eventRevision;
-      try {
-        for (const handler of [...this.collisionHandlers]) {
-          if (this.disposed || revision !== this.eventRevision) break;
-          if (!this.collisionHandlers.has(handler)) continue;
-          try {
-            handler(event);
-          } catch (error) {
-            this.simulation.diagnostics.push({
-              code: 'PARTICLE_COLLISION_EVENT_ERROR',
-              componentId: event.systemId,
-              message: error instanceof Error ? error.message : String(error),
-            });
-          }
-        }
-      } finally {
-        this.dispatchingEvent = false;
-      }
-    };
+    simulation.onParticleCollision = (event) =>
+      this.dispatchParticleEvent(
+        event,
+        this.collisionHandlers,
+        event.systemId,
+        'PARTICLE_COLLISION_EVENT_ERROR',
+      );
+    simulation.onParticleTrigger = (event) =>
+      this.dispatchParticleEvent(
+        event,
+        this.triggerHandlers,
+        event.systemId,
+        'PARTICLE_TRIGGER_EVENT_ERROR',
+      );
     simulation.onControlTime = (nodeId, phase, seconds, isCurrent) => {
       for (const b of this.behaviors) {
         if (phase !== 'stop' && !isCurrent()) return;
@@ -485,6 +480,44 @@ export class EffectInstance {
       this.collisionHandlers.delete(handler);
     };
   }
+  /** Subscribes to Trigger Callback actions; collider results follow the source query mode. */
+  onParticleTrigger(
+    handler: (event: import('./particle-physics.js').ParticleTriggerEvent) => void,
+  ): () => void {
+    this.assertAlive();
+    check(typeof handler === 'function', 'HOST', 'Particle trigger handler must be a function');
+    this.triggerHandlers.add(handler);
+    return () => {
+      this.triggerHandlers.delete(handler);
+    };
+  }
+  private dispatchParticleEvent<T>(
+    event: T,
+    handlers: ReadonlySet<(event: T) => void>,
+    systemId: number,
+    code: string,
+  ): void {
+    if (this.disposed || this.dispatchingEvent) return;
+    this.dispatchingEvent = true;
+    const revision = this.eventRevision;
+    try {
+      for (const handler of [...handlers]) {
+        if (this.disposed || revision !== this.eventRevision) break;
+        if (!handlers.has(handler)) continue;
+        try {
+          handler(event);
+        } catch (error) {
+          this.simulation.diagnostics.push({
+            code,
+            componentId: systemId,
+            message: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+    } finally {
+      this.dispatchingEvent = false;
+    }
+  }
   private dispatchAnimationEvent(event: NatsumeAnimationEvent): void {
     if (this.disposed || this.dispatchingEvent) return;
     this.dispatchingEvent = true;
@@ -766,6 +799,8 @@ export class EffectInstance {
     this.nodeViews.clear();
     this.eventHandlers.clear();
     this.collisionHandlers.clear();
+    this.triggerHandlers.clear();
+    this.simulation.onParticleTrigger = undefined;
     this.simulation.onParticleCollision = undefined;
     this.simulation.onAnimationEvent = undefined;
     this.behaviors.length = 0;

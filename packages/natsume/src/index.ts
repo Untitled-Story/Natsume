@@ -21,11 +21,13 @@ export { NatsumePlugin } from './application-plugin.js';
 export { type ParticleEnvironment, type ParticleFog } from './rendering/particle-environment.js';
 export type {
   ParticleSphereQuery,
+  ParticleColliderSweepQuery,
   ParticleSweepQuery,
   ParticleSweepHit,
   ParticleCollider,
   ParticlePhysicsWorld,
   ParticleCollisionEvent,
+  ParticleTriggerEvent,
 } from './runtime/particle-physics.js';
 export type {
   ParticleForceField,

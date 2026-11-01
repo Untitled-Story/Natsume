@@ -5,6 +5,11 @@ export interface ParticleSphereQuery {
   readonly dimension: '3d' | '2d';
 }
 
+/** Swept sphere volume, including overlap at either endpoint. */
+export interface ParticleColliderSweepQuery extends ParticleSphereQuery {
+  readonly displacement: Float64Array;
+}
+
 /** Host-owned collider identity and optional particle force receiver. */
 export interface ParticleCollider {
   readonly id: string;
@@ -12,6 +17,8 @@ export interface ParticleCollider {
   readonly dynamic?: boolean;
   /** Returns whether the world-space sphere intersects this collider. */
   overlapSphere(query: ParticleSphereQuery): boolean;
+  /** Required for Trigger references; tests the full swept volume against this collider. */
+  sweepSphere?(query: ParticleColliderSweepQuery): boolean;
   /** Apply a world-space force at a world-space contact point. Arrays are borrowed. */
   applyForce?(force: Float64Array, point: Float64Array): void;
 }
@@ -51,4 +58,14 @@ export interface ParticleCollisionEvent {
   readonly position: readonly [number, number, number];
   readonly normal: readonly [number, number, number];
   readonly velocity: readonly [number, number, number];
+}
+
+/** Copied Trigger notification. Exit and Outside have no collider query results. */
+export interface ParticleTriggerEvent {
+  readonly systemId: number;
+  readonly nodeId: number;
+  readonly particleId: number;
+  readonly kind: 'inside' | 'outside' | 'enter' | 'exit';
+  readonly position: readonly [number, number, number];
+  readonly colliders: readonly { readonly slot: number; readonly colliderId: string }[];
 }

@@ -14,6 +14,7 @@ import { SupportChecks, type SupportIssue } from './support-checks.js';
 import type { ExternalForcesModuleT } from '../format/generated/noa/ir/external-forces-module.js';
 import { selectForceFields } from './particle-force-fields.js';
 import type { CollisionModuleT } from '../format/generated/noa/ir/collision-module.js';
+import type { TriggerModuleT } from '../format/generated/noa/ir/trigger-module.js';
 
 export function emitterSupport(
   source: R<ParticleSystemT>,
@@ -113,6 +114,7 @@ export function emitterSupport(
         module.dataType === M.ForceModule ||
         module.dataType === M.ExternalForcesModule ||
         module.dataType === M.CollisionModule ||
+        module.dataType === M.TriggerModule ||
         module.dataType === M.ColorBySpeedModule ||
         module.dataType === M.InheritVelocityModule ||
         module.dataType === M.LifetimeByEmitterSpeedModule,
@@ -160,6 +162,15 @@ export function emitterSupport(
         'Missing host particle physics world',
       );
     }
+    if (module.dataType === M.TriggerModule)
+      for (const [slot, reference] of (module.data as R<TriggerModuleT>).colliders.entries())
+        rules.require(
+          !reference.hostSlot || environment?.colliders?.[String(reference.hostSlot)]?.sweepSphere,
+          'HOST',
+          `${path}.colliders.${slot}.hostSlot`,
+          reference.hostSlot,
+          'Missing host particle collider',
+        );
     if (module.dataType === M.EmissionModule) {
       const emission = module.data as R<EmissionModuleT>;
       const count = emission.bursts.reduce(

@@ -84,6 +84,10 @@ export interface AnimationUpdateOptions {
 }
 
 export class Simulation {
+  onParticleTrigger:
+    | ((event: import('./particle-physics.js').ParticleTriggerEvent) => void)
+    | undefined;
+  private readonly triggerEvents: import('./particle-physics.js').ParticleTriggerEvent[] = [];
   onParticleCollision:
     | ((event: import('./particle-physics.js').ParticleCollisionEvent) => void)
     | undefined;
@@ -210,6 +214,8 @@ export class Simulation {
       );
     for (const emitter of this.emitters.values())
       emitter.onCollisionMessage = (event) => this.collisionEvents.push(event);
+    for (const emitter of this.emitters.values())
+      emitter.onTriggerMessage = (event) => this.triggerEvents.push(event);
     this.subEmitters = new SubEmitterGraph(this.emitters);
     this.subEmitters.setUpdateOrder(options.subEmitterUpdateOrder);
     this.diagnostics.push(
@@ -499,6 +505,7 @@ export class Simulation {
   stop(mode: 'drain' | 'clear' = 'drain'): void {
     this.revision++;
     this.collisionEvents.length = 0;
+    this.triggerEvents.length = 0;
     if (mode === 'clear') for (const director of this.directors.values()) director.stop();
     for (const e of this.emitters.values()) {
       e.emitting = false;
@@ -514,6 +521,7 @@ export class Simulation {
   restart(): void {
     this.revision++;
     this.collisionEvents.length = 0;
+    this.triggerEvents.length = 0;
     for (const director of this.directors.values()) director.reset();
     this.flushDirectors();
     this.enabledDirectors.clear();
@@ -914,6 +922,14 @@ export class Simulation {
           const events = this.collisionEvents.splice(0);
           for (const event of events) {
             this.onParticleCollision?.(event);
+            if (revision !== this.revision) return;
+          }
+        }
+        if (this.triggerEvents.length) {
+          const revision = this.revision;
+          const events = this.triggerEvents.splice(0);
+          for (const event of events) {
+            this.onParticleTrigger?.(event);
             if (revision !== this.revision) return;
           }
         }
