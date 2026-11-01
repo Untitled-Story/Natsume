@@ -17,7 +17,7 @@ const root = fileURLToPath(new URL('../../', import.meta.url));
 const server = await createServer({
   root: resolve(root, 'packages/natsume'),
   configFile: false,
-  server: { middlewareMode: true },
+  server: { middlewareMode: true, hmr: false, ws: false },
 });
 const results = [];
 const features = {},

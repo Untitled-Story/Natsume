@@ -171,6 +171,14 @@ node tools/unity-probe/audit-packages.mjs path/to/compile-successes.json path/to
 
 校验结构、资源文件与引用，记录组件、材质配方、环境、动画、形状、Sprite 和网格属性，并运行兼容性预检。该检查不创建图形设备；读取或预检通过不代表实际绘制通过。
 
+当前 NOIR/NOMS 1.0 源数据契约使用固定编译清单审计：
+
+```sh
+node tools/unity-probe/audit-source-packages.mjs path/to/compiler-baseline.json path/to/Noa data/source-package-audit.json
+```
+
+校对清单中的包哈希，严格读取所有入口，归类源 Shader 程序、动画绑定完整身份和组件类型，逐包记录宿主输入、未解析引用及兼容性阻塞。源图保留成功不代表其中的组件、动画或 Shader 已可执行。原始审计结果保存在本地，不提交 Git。
+
 ```sh
 node tools/unity-probe/verify-pack-lifecycle.mjs path/to/packages
 # 可选第二参数：宿主 Sorting Layer ID → rank 的 JSON 文件
