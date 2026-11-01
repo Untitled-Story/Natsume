@@ -183,6 +183,8 @@ node tools/unity-probe/audit-source-packages.mjs path/to/compiler-baseline.json 
 node tools/unity-probe/verify-pack-lifecycle.mjs path/to/packages
 # 可选第二参数：宿主 Sorting Layer ID → rank 的 JSON 文件
 node tools/unity-probe/verify-pack-lifecycle.mjs path/to/packages path/to/sorting-layers.json
+# 可选第三参数：独立报告路径，便于分批运行
+node tools/unity-probe/verify-pack-lifecycle.mjs path/to/packages path/to/sorting-layers.json data/lifecycle.json
 ```
 
 读取目录中的 `.noap`，逐入口检查至少一个非循环发射周期，或两个循环周期，再加寿命窗口；固定步长 1/60 s，每 10 步提交一次 WebGL 绘制。覆盖暂停、停止发射后排空、清空、同种子重播、粒子有限值与容量、WebGL 错误及销毁后的纹理引用释放。单入口检查时长上限 1,000 秒，超出时报错。

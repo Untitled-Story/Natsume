@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { chromium } from '@playwright/test';
 import { createServer } from 'vite';
 import { readdir, readFile, mkdir, writeFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 
@@ -12,13 +12,16 @@ const directory = resolve(process.argv[2]);
 const sortingLayers = process.argv[3]
   ? JSON.parse(await readFile(resolve(process.argv[3]), 'utf8'))
   : undefined;
+const reportPath = resolve(
+  process.argv[4] ?? resolve(root, 'data/unity-baselines/package-lifecycle.json'),
+);
 const files = (await readdir(directory, { recursive: true }))
   .filter((file) => file.endsWith('.noap'))
   .sort();
 assert(files.length > 0, 'No .noap files found');
 const server = await createServer({
   root: resolve(root, 'packages/playground'),
-  server: { host: '127.0.0.1', port: 0 },
+  server: { host: '127.0.0.1', port: 0, hmr: false, ws: false },
 });
 let browser;
 const results = [];
@@ -262,10 +265,11 @@ try {
     errors,
     results,
   };
-  await mkdir(resolve(root, 'data/unity-baselines'), { recursive: true });
+  await mkdir(dirname(reportPath), { recursive: true });
   await writeFile(
-    resolve(root, 'data/unity-baselines/package-lifecycle.json'),
-    JSON.stringify(report, null, 2) + '\n',
+    reportPath,
+    JSON.stringify(report, (_, value) => (typeof value === 'bigint' ? String(value) : value), 2) +
+      '\n',
   );
   console.log(
     `Lifecycle: ${report.passed} passed, ${report.blocked} blocked, ${report.total - report.passed - report.blocked} failed / ${report.total}; browser errors: ${errors.length}`,
