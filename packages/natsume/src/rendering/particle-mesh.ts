@@ -34,7 +34,7 @@ import { ParticleSort } from '../format/generated/noa/ir/particle-sort.js';
 import { ColorSpace } from '../format/generated/noa/ir/color-space.js';
 import { VertexSemantic } from '../format/generated/noa/ir/vertex-semantic.js';
 import { mat4, vec3 } from 'gl-matrix';
-import { color, random, scalar, sheetFrame } from '../runtime/parameters.js';
+import { random, scalar, sheetFrame } from '../runtime/parameters.js';
 import type { Emitter } from '../runtime/emitter.js';
 import type { ParticleEnvironment } from './particle-environment.js';
 
@@ -772,7 +772,7 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
         sny = Math.sin(e.rotations[o + 1]!) * tiltSign,
         cz = Math.cos(e.rotations[o + 2]! + roll),
         snz = Math.sin(e.rotations[o + 2]! + roll) * rotationSign;
-      color(e.colorModule?.color ?? null, t, rnd(53), this.scratchColor);
+      e.sampleColor(i, this.scratchColor);
       const sheet =
           e.sheet?.mode === 0 && e.sheet.uvChannelMask & (1 << (this.binding?.uvSet ?? 0))
             ? e.sheet
@@ -921,26 +921,10 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
           1 -
           (((sampledV + (rows - 1 - row)) / rows) * (this.binding?.scale?.y ?? 1) +
             (this.binding?.offset?.y ?? 0));
-        v[k + 5] =
-          e.startColors[i * 4]! *
-          this.scratchColor[0]! *
-          (tint?.r ?? 1) *
-          (choice?.colors[j]?.x ?? 1);
-        v[k + 6] =
-          e.startColors[i * 4 + 1]! *
-          this.scratchColor[1]! *
-          (tint?.g ?? 1) *
-          (choice?.colors[j]?.y ?? 1);
-        v[k + 7] =
-          e.startColors[i * 4 + 2]! *
-          this.scratchColor[2]! *
-          (tint?.b ?? 1) *
-          (choice?.colors[j]?.z ?? 1);
-        v[k + 8] =
-          e.startColors[i * 4 + 3]! *
-          this.scratchColor[3]! *
-          (tint?.a ?? 1) *
-          (choice?.colors[j]?.w ?? 1);
+        v[k + 5] = this.scratchColor[0]! * (tint?.r ?? 1) * (choice?.colors[j]?.x ?? 1);
+        v[k + 6] = this.scratchColor[1]! * (tint?.g ?? 1) * (choice?.colors[j]?.y ?? 1);
+        v[k + 7] = this.scratchColor[2]! * (tint?.b ?? 1) * (choice?.colors[j]?.z ?? 1);
+        v[k + 8] = this.scratchColor[3]! * (tint?.a ?? 1) * (choice?.colors[j]?.w ?? 1);
         const depth = this.environment?.depth;
         v[k + 9] =
           this.straightAlpha && Array.isArray(depth)

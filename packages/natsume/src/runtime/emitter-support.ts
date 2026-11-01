@@ -9,23 +9,19 @@ import { Space } from '../format/generated/noa/ir/space.js';
 import { ShapeGeometry } from '../format/generated/noa/ir/shape-geometry.js';
 import { constantZero, parameterSupport } from './parameters.js';
 import { prewarmDuration } from './prewarm.js';
+import type { ParticleEnvironment } from '../rendering/particle-environment.js';
 import { SupportChecks, type SupportIssue } from './support-checks.js';
 
 export function emitterSupport(
   source: R<ParticleSystemT>,
   gravity: readonly [number, number, number] | undefined,
   customSpaceAvailable: boolean,
+  environment?: ParticleEnvironment,
 ): readonly SupportIssue[] {
   const rules = new SupportChecks();
   rules.issues.push(...parameterSupport(source));
   const main = source.main!;
-  for (const field of [
-    'clock',
-    'stopAction',
-    'ringBuffer',
-    'emitterVelocityMode',
-    'gravitySource',
-  ] as const)
+  for (const field of ['clock', 'stopAction', 'ringBuffer'] as const)
     rules.require(
       main[field] === 0,
       'CAPABILITY',
@@ -41,14 +37,19 @@ export function emitterSupport(
     'Particle visibility culling is not implemented',
   );
   rules.require(
-    !main.hostRigidbodyVelocitySlot,
+    main.emitterVelocityMode !== 1 ||
+      environment?.rigidbodyVelocities?.[String(main.hostRigidbodyVelocitySlot)] !== undefined,
     'HOST',
     'main.hostRigidbodyVelocitySlot',
     main.hostRigidbodyVelocitySlot,
-    'Emitter requires host Rigidbody velocity; this input is not implemented',
+    'Emitter requires a bound host Rigidbody velocity',
   );
   rules.require(
-    constantZero(main.gravityMultiplier) || gravity !== undefined || main.gravity,
+    constantZero(main.gravityMultiplier) ||
+      (main.gravitySource === 1
+        ? environment?.gravity2D !== undefined
+        : gravity !== undefined || environment?.gravity !== undefined) ||
+      main.gravity,
     'HOST',
     'main.gravityMultiplier',
     main.gravityMultiplier,
@@ -91,7 +92,7 @@ export function emitterSupport(
       true,
       'Natsume continues playback after delayed graph prewarm; Unity 2022.3 can stall in multi-level configurations.',
     );
-  const steps = Math.ceil(prewarmDuration(main) * 60);
+  const steps = Math.ceil(prewarmDuration(main, source.modules) * 60);
   rules.require(
     steps <= 36_000 && main.maxParticles * steps <= 10_000_000,
     'LIMIT',
@@ -104,7 +105,11 @@ export function emitterSupport(
     rules.require(
       (module.dataType >= M.EmissionModule && module.dataType <= M.RotationBySpeedModule) ||
         module.dataType === M.SubEmittersModule ||
-        module.dataType === M.TrailsModule,
+        module.dataType === M.TrailsModule ||
+        module.dataType === M.ForceModule ||
+        module.dataType === M.ColorBySpeedModule ||
+        module.dataType === M.InheritVelocityModule ||
+        module.dataType === M.LifetimeByEmitterSpeedModule,
       'CAPABILITY',
       `${path}.dataType`,
       module.dataType,

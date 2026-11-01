@@ -47,6 +47,7 @@ export interface SimulationOptions {
   /** Required only when the entry's root uses stretched external anchors. */
   readonly parentLayout?: LayoutSize;
   readonly gravity?: readonly [number, number, number];
+  readonly particleEnvironment?: import('../rendering/particle-environment.js').ParticleEnvironment;
 }
 export type PlaybackState = 'idle' | 'playing' | 'paused' | 'draining' | 'stopped';
 
@@ -199,6 +200,7 @@ export class Simulation {
           options.gravity,
           this.scene.nodes.get((c.data as R<ParticleSystemT>).main!.customSpaceNodeId),
           pack,
+          options.particleEnvironment,
         ),
       );
     this.subEmitters = new SubEmitterGraph(this.emitters);
@@ -228,7 +230,10 @@ export class Simulation {
           const emitter = this.emitters.get(b.targetId);
           if (emitter) {
             emitter.requiresAnimatedGravity = true;
-            emitter.setGravity(options.gravity);
+            emitter.gravity = emitter.resolveEnvironment(
+              options.particleEnvironment,
+              options.gravity,
+            );
           }
         }
       }

@@ -31,7 +31,14 @@ it.skipIf(!existsSync(source))(
       const pack = await loadPack(bytes);
       unsupported.push(...nativeSimulationIssues(pack));
       if (unsupported.length) {
-        expect(() => new Simulation(pack, { gravity: [0, -9.81, 0] }), file).toThrow(
+        expect(
+          () =>
+            new Simulation(pack, {
+              gravity: [0, -9.81, 0],
+              parentLayout: { width: 640, height: 360 },
+            }),
+          file,
+        ).toThrow(
           /Required feature is not implemented|Animator controller branch|single-layer|Particle mode|Particle visibility|Emitter requires/,
         );
         pack.dispose();

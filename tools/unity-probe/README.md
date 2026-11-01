@@ -28,6 +28,7 @@ pnpm probe:unity --trails       # 拖尾几何、纹理模式、宽度颜色与�
 pnpm probe:unity --animator-controller # 参数、状态选路、过渡 / 中断与多层混合
 pnpm probe:unity --animator-playback # 实际 Play 时钟、可见性、裁剪与事件
 pnpm probe:unity --animation    # 动画时钟、循环与多关键帧曲线
+pnpm probe:unity --particle-modules # 力、速度颜色、速度继承、发射器速度寿命与随机统计
 pnpm probe:unity --events       # 类型化事件、循环端点与启停顺序
 pnpm probe:unity --boundaries   # 发射、运动、外观与 BakeMesh 边界
 pnpm probe:unity --random       # 随机分布与参数相关性

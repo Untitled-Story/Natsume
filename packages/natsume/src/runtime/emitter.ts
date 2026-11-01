@@ -14,6 +14,12 @@ import type { EmissionModuleT } from '../format/generated/noa/ir/emission-module
 import type { ShapeModuleT } from '../format/generated/noa/ir/shape-module.js';
 import type { RotationModuleT } from '../format/generated/noa/ir/rotation-module.js';
 import type { ColorModuleT } from '../format/generated/noa/ir/color-module.js';
+import type { ColorBySpeedModuleT } from '../format/generated/noa/ir/color-by-speed-module.js';
+import type { ForceModuleT } from '../format/generated/noa/ir/force-module.js';
+import type { InheritVelocityModuleT } from '../format/generated/noa/ir/inherit-velocity-module.js';
+import type { LifetimeByEmitterSpeedModuleT } from '../format/generated/noa/ir/lifetime-by-emitter-speed-module.js';
+import type { ParticleEnvironment } from '../rendering/particle-environment.js';
+import { EmitterVelocityMode } from '../format/generated/noa/ir/emitter-velocity-mode.js';
 import type { SizeBySpeedModuleT } from '../format/generated/noa/ir/size-by-speed-module.js';
 import type { RotationBySpeedModuleT } from '../format/generated/noa/ir/rotation-by-speed-module.js';
 import { speedPhase, speedSize } from './speed-modules.js';
@@ -51,6 +57,12 @@ export class Emitter {
   readonly emission: R<EmissionModuleT> | undefined;
   readonly shape: R<ShapeModuleT> | undefined;
   readonly colorModule: R<ColorModuleT> | undefined;
+  readonly colorBySpeed: R<ColorBySpeedModuleT> | undefined;
+  readonly forceModule: R<ForceModuleT> | undefined;
+  readonly inheritVelocity: R<InheritVelocityModuleT> | undefined;
+  readonly lifetimeByEmitterSpeed: R<LifetimeByEmitterSpeedModuleT> | undefined;
+  readonly emitterVelocity = new Float64Array(3);
+  private readonly lastVelocityPosition = new Float64Array(3);
   readonly sizeBySpeed: R<SizeBySpeedModuleT> | undefined;
   readonly rotationBySpeed: R<RotationBySpeedModuleT> | undefined;
   readonly sizeModule: R<SizeModuleT> | undefined;
@@ -106,6 +118,10 @@ export class Emitter {
   private readonly inverseLimitRotation = quat.create();
   gravity: readonly [number, number, number] = [0, 0, 0];
   private readonly scratch = new Float64Array(3);
+  private readonly colorScratch = new Float32Array(4);
+  private forceStep = 0;
+  private readonly initialInheritedVelocities: Float32Array | undefined;
+  private readonly bakeInitialInheritance: boolean;
   private readonly direction = vec3.create();
   private readonly birth = new Float64Array(10);
   private readonly spriteShape: SpriteShapeSampler | undefined;
@@ -157,11 +173,12 @@ export class Emitter {
     gravity?: readonly [number, number, number],
     readonly customSpaceNode?: SceneNode,
     pack?: EffectPack,
+    public environment?: ParticleEnvironment,
   ) {
     const main = source.main!;
     this.main = main;
-    assertSupport(emitterSupport(source, gravity, !!customSpaceNode));
-    this.setGravity(gravity);
+    assertSupport(emitterSupport(source, gravity, !!customSpaceNode, environment));
+    this.setGravity(this.resolveEnvironment(environment, gravity));
     check(
       main.space !== Space.Custom || customSpaceNode,
       'HOST',
@@ -173,11 +190,13 @@ export class Emitter {
       this.node.worldMatrix[13]!,
       this.node.worldMatrix[14]!,
     ]);
+    this.lastVelocityPosition.set(this.lastEmissionPosition);
+    this.updateEmitterVelocity(0);
     this.delaySeconds = Math.max(0, scalar(main.startDelay, 0, random(instanceSeed, id, 70)));
     this.delayRemaining = this.delaySeconds;
     this.distanceStarted = this.delaySeconds > 0;
-    this.prewarmSeconds = prewarmDuration(main);
-    this.maximumBirthLifetime = maximumLifetime(main);
+    this.prewarmSeconds = prewarmDuration(main, source.modules);
+    this.maximumBirthLifetime = maximumLifetime(main, source.modules);
     for (const m of source.modules) {
       switch (m.dataType) {
         case M.EmissionModule:
@@ -188,6 +207,18 @@ export class Emitter {
           break;
         case M.ColorModule:
           this.colorModule = m.data as R<ColorModuleT>;
+          break;
+        case M.ColorBySpeedModule:
+          this.colorBySpeed = m.data as R<ColorBySpeedModuleT>;
+          break;
+        case M.ForceModule:
+          this.forceModule = m.data as R<ForceModuleT>;
+          break;
+        case M.InheritVelocityModule:
+          this.inheritVelocity = m.data as R<InheritVelocityModuleT>;
+          break;
+        case M.LifetimeByEmitterSpeedModule:
+          this.lifetimeByEmitterSpeed = m.data as R<LifetimeByEmitterSpeedModuleT>;
           break;
         case M.SizeBySpeedModule:
           this.sizeBySpeed = m.data as R<SizeBySpeedModuleT>;
@@ -257,14 +288,19 @@ export class Emitter {
       });
     }
     const cap = main.maxParticles;
+    this.bakeInitialInheritance =
+      this.inheritVelocity?.mode === 0 && [0, 2].includes(this.inheritVelocity.multiplier!.mode);
+    if (this.inheritVelocity?.mode === 0 && !this.bakeInitialInheritance)
+      this.initialInheritedVelocities = new Float32Array(cap * 3);
     this.positions = new Float32Array(cap * 3);
     this.velocities = new Float32Array(cap * 3);
-    if (this.sizeBySpeed || this.rotationBySpeed) this.moduleSpeeds = new Float32Array(cap);
+    if (this.sizeBySpeed || this.rotationBySpeed || this.colorBySpeed)
+      this.moduleSpeeds = new Float32Array(cap);
     if (this.shape?.geometryType === ShapeGeometry.SpriteShape) {
       check(pack, 'CAPABILITY', 'Sprite emission requires source assets');
       this.spriteShape = new SpriteShapeSampler(pack, this.shape.geometry as R<SpriteShapeT>);
     }
-    if (this.velocityModule || this.sheet?.timeMode === SheetTime.Speed)
+    if (this.velocityModule || this.sheet?.timeMode === SheetTime.Speed || this.inheritVelocity)
       this.renderVelocities = new Float32Array(cap * 3);
     this.startSizes = new Float32Array(cap * 3);
     this.rotations = new Float32Array(cap * 3);
@@ -316,11 +352,63 @@ export class Emitter {
     this.lifetimeMax = p.constantMax;
     this.lifetimeMultiplier = p.multiplier;
     this.lifetimeLoop = this.main.loop;
-    this.prewarmSeconds = prewarmDuration(this.main);
-    this.maximumBirthLifetime = maximumLifetime(this.main);
+    this.prewarmSeconds = prewarmDuration(this.main, this.source.modules);
+    this.maximumBirthLifetime = maximumLifetime(this.main, this.source.modules);
   }
   setGravity(value: readonly [number, number, number] | undefined): void {
     this.gravity = this.resolveGravity(value);
+  }
+  /** @internal Resolves host inputs before an environment replacement is committed. */
+  resolveEnvironment(
+    value: ParticleEnvironment | undefined,
+    fallbackGravity?: readonly [number, number, number],
+  ): readonly [number, number, number] {
+    const velocity = value?.rigidbodyVelocities?.[String(this.main.hostRigidbodyVelocitySlot)];
+    check(
+      this.main.emitterVelocityMode !== EmitterVelocityMode.Rigidbody ||
+        (velocity && velocity.length === 3 && velocity.every(Number.isFinite)),
+      'HOST',
+      `System ${this.id}: missing Rigidbody velocity slot ${this.main.hostRigidbodyVelocitySlot}`,
+    );
+    return this.resolveGravity(
+      this.main.gravitySource === 1
+        ? value?.gravity2D && [value.gravity2D[0], value.gravity2D[1], 0]
+        : (value?.gravity ?? fallbackGravity),
+    );
+  }
+  private inheritedVector(offset: number): Float64Array {
+    if (this.inheritVelocity!.mode !== 0)
+      return this.vector(
+        this.emitterVelocity[0]!,
+        this.emitterVelocity[1]!,
+        this.emitterVelocity[2]!,
+        false,
+      );
+    for (let axis = 0; axis < 3; axis++)
+      this.scratch[axis] = this.initialInheritedVelocities![offset + axis]!;
+    return this.scratch;
+  }
+  private updateEmitterVelocity(delta: number): void {
+    const m = this.node.worldMatrix;
+    const mode = this.main.emitterVelocityMode;
+    const velocity =
+      this.environment?.rigidbodyVelocities?.[String(this.main.hostRigidbodyVelocitySlot)];
+    const custom = this.main.customEmitterVelocity!;
+    for (let axis = 0; axis < 3; axis++) {
+      this.emitterVelocity[axis] =
+        mode === EmitterVelocityMode.Rigidbody
+          ? velocity![axis]!
+          : mode === EmitterVelocityMode.Custom
+            ? axis === 0
+              ? custom.x
+              : axis === 1
+                ? custom.y
+                : custom.z
+            : delta > 0
+              ? (m[12 + axis]! - this.lastVelocityPosition[axis]!) / delta
+              : 0;
+      this.lastVelocityPosition[axis] = m[12 + axis]!;
+    }
   }
   /** @internal Validates gravity before committing an environment replacement. */
   resolveGravity(
@@ -412,6 +500,7 @@ export class Emitter {
     this.count = 0;
     this.noiseEvaluator?.reset();
     this.nextSerial = 0;
+    this.forceStep = 0;
     this.time = 0;
     this.rateTime = 0;
     this.rateSpacing = 0;
@@ -427,6 +516,8 @@ export class Emitter {
       this.node.worldMatrix[13]!,
       this.node.worldMatrix[14]!,
     ]);
+    this.lastVelocityPosition.set(this.lastEmissionPosition);
+    this.updateEmitterVelocity(0);
     this.started = false;
     this.delayRemaining = this.delaySeconds;
     this.distanceStarted = this.delaySeconds > 0;
@@ -452,6 +543,9 @@ export class Emitter {
     const active = this.enabled && this.node.activeInHierarchy;
     if (active === this.enabledLast) return;
     this.enabledLast = active;
+    for (let axis = 0; axis < 3; axis++)
+      this.lastVelocityPosition[axis] = this.node.worldMatrix[12 + axis]!;
+    this.updateEmitterVelocity(0);
     if (!active) {
       this.onDisable?.();
       this.count = 0;
@@ -783,7 +877,22 @@ export class Emitter {
         t = phase;
       this.ages[i] = 0;
       this.noiseSizes?.fill(1, o, o + 3);
-      this.lifetimes[i] = Math.max(1e-6, scalar(this.main.lifetime, t, rnd(0)));
+      const lifetimeScale = this.lifetimeByEmitterSpeed
+        ? scalar(
+            this.lifetimeByEmitterSpeed.multiplier,
+            speedPhase(
+              Math.hypot(
+                this.emitterVelocity[0]!,
+                this.emitterVelocity[1]!,
+                this.emitterVelocity[2]!,
+              ),
+              this.lifetimeByEmitterSpeed.speedRange!,
+            ),
+            rnd(78),
+            1,
+          )
+        : 1;
+      this.lifetimes[i] = Math.max(1e-6, scalar(this.main.lifetime, t, rnd(0)) * lifetimeScale);
       let x = 0,
         y = 0,
         z = 0,
@@ -855,12 +964,37 @@ export class Emitter {
       this.velocities[o] = dx * speed;
       this.velocities[o + 1] = dy * speed;
       this.velocities[o + 2] = dz * speed;
-      if (this.renderVelocities) {
-        this.renderVelocities[o] = dx * speed;
-        this.renderVelocities[o + 1] = dy * speed;
-        this.renderVelocities[o + 2] = dz * speed;
+      if (this.inheritVelocity && this.main.space !== Space.Local) {
+        const inherited = this.vector(
+          this.emitterVelocity[0]!,
+          this.emitterVelocity[1]!,
+          this.emitterVelocity[2]!,
+          false,
+        );
+        const factor = scalar(this.inheritVelocity.multiplier, 0, rnd(77), 1);
+        this.initialInheritedVelocities?.set(inherited, o);
+        if (this.bakeInitialInheritance)
+          for (let axis = 0; axis < 3; axis++)
+            this.velocities[o + axis]! += inherited[axis]! * factor;
       }
-      if (this.moduleSpeeds) this.moduleSpeeds[i] = Math.hypot(dx * speed, dy * speed, dz * speed);
+      if (this.renderVelocities) {
+        for (let axis = 0; axis < 3; axis++)
+          this.renderVelocities[o + axis] = this.velocities[o + axis]!;
+        if (
+          this.inheritVelocity &&
+          !this.bakeInitialInheritance &&
+          this.main.space !== Space.Local
+        ) {
+          const inherited = this.inheritedVector(o);
+          const factor = scalar(this.inheritVelocity.multiplier, 0, rnd(77), 1);
+          for (let axis = 0; axis < 3; axis++)
+            this.renderVelocities[o + axis]! += inherited[axis]! * factor;
+        }
+      }
+      if (this.moduleSpeeds) {
+        const velocity = this.renderVelocities ?? this.velocities;
+        this.moduleSpeeds[i] = Math.hypot(velocity[o]!, velocity[o + 1]!, velocity[o + 2]!);
+      }
       const size = this.main.size!,
         rot = this.main.rotation!;
       const sx = scalar(size.x, t, rnd(5));
@@ -992,6 +1126,7 @@ export class Emitter {
   }
   step(delta: number): void {
     if (!this.enabledLast) return;
+    this.updateEmitterVelocity(delta);
     let dt = delta * this.main.simulationSpeed;
     if (dt <= 0) return;
     if (this.delayRemaining > 0) {
@@ -1023,6 +1158,7 @@ export class Emitter {
   }
 
   private advance(dt: number): void {
+    this.forceStep++;
     this.noiseEvaluator?.advance(
       dt,
       (this.time % this.main.durationSeconds) / this.main.durationSeconds,
@@ -1113,6 +1249,22 @@ export class Emitter {
       vx += gx;
       vy += gy;
       vz += gz;
+      const force = this.forceModule;
+      if (force) {
+        const phase = this.ages[i]! / this.lifetimes[i]!;
+        const channel = force.randomizePerFrame ? 80 + this.forceStep * 3 : 80;
+        // Unity scales world-force axes before converting into simulation space.
+        const world = force.space === Space.World;
+        const acceleration = this.vector(
+          scalar(force.force?.x, phase, rnd(channel)) * (world ? this.particleScale[0]! : 1),
+          scalar(force.force?.y, phase, rnd(channel + 1)) * (world ? this.particleScale[1]! : 1),
+          scalar(force.force?.z, phase, rnd(channel + 2)) * (world ? this.particleScale[2]! : 1),
+          !world,
+        );
+        vx += acceleration[0]! * dt;
+        vy += acceleration[1]! * dt;
+        vz += acceleration[2]! * dt;
+      }
       this.velocities[o] = vx;
       this.velocities[o + 1] = vy;
       this.velocities[o + 2] = vz;
@@ -1120,6 +1272,18 @@ export class Emitter {
         orbitalY = 0,
         orbitalZ = 0,
         multiplier = 1;
+      if (this.inheritVelocity && !this.bakeInitialInheritance && this.main.space !== Space.Local) {
+        const inherited = this.inheritedVector(o);
+        const factor = scalar(
+          this.inheritVelocity.multiplier,
+          this.ages[i]! / this.lifetimes[i]!,
+          rnd(77),
+          1,
+        );
+        vx += inherited[0]! * factor;
+        vy += inherited[1]! * factor;
+        vz += inherited[2]! * factor;
+      }
       const v = this.velocityModule;
       if (v) {
         const scale = this.node.localScale;
@@ -1334,6 +1498,32 @@ export class Emitter {
       i++;
     }
   }
+  /** Evaluates current particle color into caller-owned storage. */
+  sampleColor(index: number, out: Float32Array): void {
+    const id = this.serials[index]!;
+    color(
+      this.colorModule?.color ?? null,
+      this.ages[index]! / this.lifetimes[index]!,
+      random(this.seed, id, 53),
+      out,
+    );
+    if (this.colorBySpeed)
+      color(
+        this.colorBySpeed.color,
+        speedPhase(this.moduleSpeeds![index]!, this.colorBySpeed.speedRange!),
+        random(this.seed, id, 79),
+        this.colorScratch,
+      );
+    for (let channel = 0; channel < 4; channel++) {
+      const value =
+        out[channel]! *
+        this.startColors[index * 4 + channel]! *
+        (this.colorBySpeed ? this.colorScratch[channel]! : 1);
+      out[channel] = this.colorBySpeed
+        ? Math.round(Math.max(0, Math.min(1, value)) * 255) / 255
+        : value;
+    }
+  }
   private advanceEmission(dt: number): void {
     if (this.emitting && this.started) {
       const end = this.lifetimeProgress ? Math.fround(this.time + Math.fround(dt)) : this.time + dt;
@@ -1448,6 +1638,7 @@ export class Emitter {
     this.noiseSizes?.copyWithin(i * 3, last * 3, last * 3 + 3);
     this.moduleSpeeds?.copyWithin(i, last, last + 1);
     this.renderVelocities?.copyWithin(i * 3, last * 3, last * 3 + 3);
+    this.initialInheritedVelocities?.copyWithin(i * 3, last * 3, last * 3 + 3);
     this.customData?.copyWithin(i * 8, last * 8, last * 8 + 8);
     this.startColors.copyWithin(i * 4, last * 4, last * 4 + 4);
   }

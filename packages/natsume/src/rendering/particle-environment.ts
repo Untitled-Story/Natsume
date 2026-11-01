@@ -20,6 +20,12 @@ export interface ParticleEnvironment {
   readonly fog: ParticleFog;
   /** Acceleration in Unity world units per second squared. */
   readonly gravity?: readonly [number, number, number] | undefined;
+  /** Physics2D acceleration in Unity world units per second squared. */
+  readonly gravity2D?: readonly [number, number] | undefined;
+  /** World-space velocities indexed by the package's host Rigidbody slot. */
+  readonly rigidbodyVelocities?:
+    | Readonly<Record<string, readonly [number, number, number]>>
+    | undefined;
   /** View translation velocity in Unity world units per second. Omit for a stationary view. */
   readonly viewVelocity?: readonly [number, number, number] | undefined;
   /** View origin in Unity world coordinates. Required for Facing alignment and Freeform stretch. */
@@ -69,6 +75,22 @@ export function copyEnvironment(
     'HOST',
     'Invalid particle gravity',
   );
+  const g2 = value.gravity2D;
+  check(
+    g2 === undefined || (Array.isArray(g2) && g2.length === 2 && g2.every(Number.isFinite)),
+    'HOST',
+    'Invalid Physics2D gravity',
+  );
+  const velocities: Record<string, readonly [number, number, number]> = Object.create(null);
+  if (value.rigidbodyVelocities)
+    for (const [slot, v] of Object.entries(value.rigidbodyVelocities)) {
+      check(
+        slot.length > 0 && Array.isArray(v) && v.length === 3 && v.every(Number.isFinite),
+        'HOST',
+        'Rigidbody velocity requires three finite world-space components',
+      );
+      velocities[slot] = [v[0], v[1], v[2]];
+    }
   const d = value.depth;
   const velocity = value.viewVelocity;
   const position = value.viewPosition;
@@ -113,6 +135,8 @@ export function copyEnvironment(
   return {
     fog: f.mode === 'none' ? { mode: 'none' } : { ...f, color: [...f.color] },
     gravity: g ? [g[0], g[1], g[2]] : undefined,
+    gravity2D: g2 ? [g2[0], g2[1]] : undefined,
+    rigidbodyVelocities: value.rigidbodyVelocities ? velocities : undefined,
     viewVelocity: velocity ? [velocity[0], velocity[1], velocity[2]] : undefined,
     viewPosition: position ? [position[0], position[1], position[2]] : undefined,
     depth: typeof d === 'number' || d === undefined ? d : [...d],

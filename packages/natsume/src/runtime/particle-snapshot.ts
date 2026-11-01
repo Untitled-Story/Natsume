@@ -1,5 +1,5 @@
 import type { Emitter } from './emitter.js';
-import { color, scalar, random } from './parameters.js';
+import { scalar, random } from './parameters.js';
 import { speedSize } from './speed-modules.js';
 
 /** Copied particle state. Positions, velocities and sizes use Unity world units; rotations use radians. */
@@ -43,8 +43,7 @@ export function particleSnapshot(
   const phase = Math.max(0, Math.min(1, e.ages[index]! / e.lifetimes[index]!));
   const c = scratch,
     size: [number, number, number] = reuse?.size ?? [0, 0, 0];
-  color(e.colorModule?.color ?? null, phase, random(e.seed, id, 53), c);
-  for (let axis = 0; axis < 4; axis++) c[axis] = c[axis]! * e.startColors[index * 4 + axis]!;
+  e.sampleColor(index, c);
   for (let axis = 0; axis < 3; axis++) {
     const s = e.sizeModule,
       parameter = !s?.separateAxes || axis === 0 ? s?.size?.x : axis === 1 ? s.size?.y : s.size?.z;

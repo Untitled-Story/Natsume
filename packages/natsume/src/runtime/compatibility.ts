@@ -398,14 +398,16 @@ export function checkCompatibility(
         ),
       );
       rules.require(
-        !animatedGravity || !!gravity || !!source.main!.gravity,
+        !animatedGravity ||
+          (source.main!.gravitySource === 1 ? !!env?.gravity2D : !!gravity) ||
+          !!source.main!.gravity,
         'HOST',
         'main.gravityMultiplier',
         source.main!.gravityMultiplier,
         'Animated gravityMultiplier requires particleEnvironment.gravity',
       );
       rules.issues.push(
-        ...emitterSupport(source, gravity, nodeIds.has(source.main!.customSpaceNodeId)),
+        ...emitterSupport(source, gravity, nodeIds.has(source.main!.customSpaceNodeId), env),
       );
       for (const [index, module] of source.modules.entries()) {
         if (module.dataType !== ParticleModuleData.ShapeModule) continue;

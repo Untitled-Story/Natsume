@@ -255,7 +255,7 @@ export class EffectInstance {
     this.assertAlive();
     const next = copyEnvironment(value);
     const gravity = [...this.simulation.emitters.values()].map(
-      (emitter) => [emitter, emitter.resolveGravity(next?.gravity)] as const,
+      (emitter) => [emitter, emitter.resolveEnvironment(next)] as const,
     );
     for (const mesh of this.meshes) {
       if (!(mesh instanceof ParticleMesh)) continue;
@@ -272,7 +272,10 @@ export class EffectInstance {
       );
     }
     this.environment = next;
-    for (const [emitter, value] of gravity) emitter.gravity = value;
+    for (const [emitter, value] of gravity) {
+      emitter.gravity = value;
+      emitter.environment = next;
+    }
     for (const mesh of this.meshes) mesh.environment = next;
     this.render();
   }

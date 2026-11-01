@@ -57,6 +57,11 @@ export const SUPPORTED_FEATURES: Readonly<Record<string, number>> = Object.freez
   Object.fromEntries(
     [
       'unity.source-graph',
+      'host.particle-environment',
+      'particle.inherit-velocity',
+      'particle.lifetime-by-emitter-speed',
+      'particle.force',
+      'particle.color-by-speed',
       'ui.canvas',
       'material.unity-ui-default',
       'render.sprite-mask',

@@ -296,6 +296,19 @@ effect.setParticleEnvironment({
 
 软粒子需要宿主提供背景深度纹理：R 通道存线性观察距离，与粒子 `depth` 使用相同单位；未提供纹理则关闭软粒子。纹理按屏幕左上原点的归一化 UV 采样，可用 `uvTransform: [sx, sy, ox, oy]` 调整。Natsume 借用纹理，由宿主管理其更新和销毁；`zIndex` 仅是默认的逻辑深度，不会生成背景深度图。
 
+2D 重力与 Rigidbody 速度按源设置选择；速度值使用 Unity 世界单位／秒，通过包内宿主槽名绑定：
+
+```ts
+effect.setParticleEnvironment({
+  fog: { mode: 'none' },
+  gravity: [0, -9.81, 0],
+  gravity2D: [0, -9.81],
+  rigidbodyVelocities: { 'rigidbody-velocity:198043919389829319': [1, 0, 0] },
+});
+```
+
+槽名可从 `pack.describe().requiredHostInputs` 查询；缺少已声明的 Rigidbody 输入会明确报错。Transform 模式由节点世界位移计算速度；Custom 模式使用包内自定义速度。环境更新会复制向量，后续变化通过 setter 提交。
+
 ## Script Bridge
 
 在实例化前，用包内 MonoBehaviour 的真实身份注册行为。以下示例将该组件所在节点及其子树绘制到父节点原点，保留粒子模拟与深度：
@@ -333,15 +346,19 @@ runtime.registerScript(
 
 以下模块的主要行为已实现，仍受下方共享参数限制。
 
-| 模块                | 支持范围                                                                                                                          |
-| ------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| Color over Lifetime | 生命周期颜色；Blend / Fixed 渐变及双渐变随机插值                                                                                  |
-| Size over Lifetime  | 生命周期尺寸；统一或分轴缩放，三轴共用随机插值因子                                                                                |
-| Size by Speed       | 速度区间、统一 / 分轴尺寸乘数及四种参数模式                                                                                       |
-| Rotation by Speed   | 速度区间、Z / 分轴角速度积分及四种参数模式                                                                                        |
-| Animation           | 平面参数化状态机、过渡 / 中断、多层混合、三种时钟 / 裁剪、已支持绑定、类型化事件与 Bridge                                         |
-| Timeline            | PlayableDirector 四种时钟、三种 wrap；Group / Activation / Animation / Control、片段混合与外插、动态绑定、嵌套控制与 ITimeControl |
-| Trails              | PerParticle / Ribbon、五种纹理模式、颜色 / 宽度 / 寿命、World Space、死亡残留、多 Ribbon 与子发射器分组、独立材质与顶点流         |
+| 模块                      | 支持范围                                                                                                                          |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Color over Lifetime       | 生命周期颜色；Blend / Fixed 渐变及双渐变随机插值                                                                                  |
+| Size over Lifetime        | 生命周期尺寸；统一或分轴缩放，三轴共用随机插值因子                                                                                |
+| Size by Speed             | 速度区间、统一 / 分轴尺寸乘数及四种参数模式                                                                                       |
+| Rotation by Speed         | 速度区间、Z / 分轴角速度积分及四种参数模式                                                                                        |
+| Animation                 | 平面参数化状态机、过渡 / 中断、多层混合、三种时钟 / 裁剪、已支持绑定、类型化事件与 Bridge                                         |
+| Timeline                  | PlayableDirector 四种时钟、三种 wrap；Group / Activation / Animation / Control、片段混合与外插、动态绑定、嵌套控制与 ITimeControl |
+| Trails                    | PerParticle / Ribbon、五种纹理模式、颜色 / 宽度 / 寿命、World Space、死亡残留、多 Ribbon 与子发射器分组、独立材质与顶点流         |
+| Inherit Velocity          | Initial / Current；Transform / Rigidbody / Custom 发射器速度；Local 空间沿用 Unity 忽略继承的行为                                 |
+| Lifetime by Emitter Speed | 出生时按发射器世界速度采样寿命乘数，含零宽区间                                                                                    |
+| Force over Lifetime       | Local / World、四种标量参数、稳定或逐帧随机、旋转与非均匀缩放                                                                     |
+| Color by Speed            | 速度区间、四种颜色参数、HDR 输入及粒子颜色量化                                                                                    |
 
 速度取样包含重力、Velocity 和 Limit，不包含 Speed Multiplier 与 Noise 位移。零宽区间按 Unity 的端点规则处理。
 
@@ -350,7 +367,7 @@ runtime.registerScript(
 | 模块                         | 已支持                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | 未支持                                                                                                    |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
 | Sub Emitters                 | Birth / Death、宿主 Collision / Trigger / Manual；概率与五项继承、共享池、重复槽、多级 DAG、连续发射、组合预热                                                                                                                                                                                                                                                                                                                                                                                    | 共享池按串行根调度；Unity 并行与全局注册顺序存在差异，返回 `SHARED_SUB_EMITTER_ORDER`；延迟预热例外见下文 |
-| Main                         | 循环、初始寿命 / 速度 / 尺寸 / 旋转 / 颜色、旋转翻转、种子；环境重力、启动延迟、Simulation Speed；Local / World / Custom 模拟，Hierarchy / Local / Shape 缩放；有限预热                                                                                                                                                                                                                                                                                                                           | duration 需至少 1/60 s；容量与预热预算有限                                                                |
+| Main                         | 循环、初始寿命 / 速度 / 尺寸 / 旋转 / 颜色、旋转翻转、种子；2D / 3D 环境重力、三种发射器速度、启动延迟、Simulation Speed；Local / World / Custom 模拟，Hierarchy / Local / Shape 缩放；有限预热                                                                                                                                                                                                                                                                                                   | Unscaled、StopAction、RingBuffer、可见性裁剪；duration 至少 1/60 s，容量与预热预算有限                    |
 | Emission                     | Rate over Time / Distance、Burst，含正间隔与零间隔无限重复                                                                                                                                                                                                                                                                                                                                                                                                                                        | 短周期重复 Burst 保留已量化的末步计数差异                                                                 |
 | Shape                        | Circle、Sphere / Hemisphere、Box 体积 / 壳 / 边、Cone 底面 / 体积、Edge；Random / Loop / PingPong / Burst Spread、Spread 量化、位置 / 方向扰动、Align to Direction、Shape TRS                                                                                                                                                                                                                                                                                                                     | 其他形状                                                                                                  |
 | Rotation over Lifetime       | Z 或分轴角速度、生命周期曲线积分                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | 已测范围以外的步长与原生积分差异                                                                          |
@@ -379,18 +396,14 @@ Unity 临时材质对象 ID 不在 NOAP 中；同队列不透明材质分组使�
 
 ### Unsupported
 
-| 模块                      | 未实现行为                                                                                                                      |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| Inherit Velocity          | 继承发射器速度                                                                                                                  |
-| Lifetime by Emitter Speed | 根据发射器速度设置寿命                                                                                                          |
-| Force over Lifetime       | 生命周期内施加力                                                                                                                |
-| Color by Speed            | 根据速度改变颜色                                                                                                                |
-| External Forces           | 外部力场                                                                                                                        |
-| Collision                 | 平面及场景碰撞                                                                                                                  |
-| Triggers                  | 碰撞区域检测与事件                                                                                                              |
-| Lights                    | 粒子灯光                                                                                                                        |
-| Timeline 扩展             | Audio、Signal / Marker、自定义轨道 / Playable、Infinite Clip、AvatarMask、prefab 实例化、自定义属性动画与非默认 clip-end action |
-| Animator 扩展             | Avatar / Root Motion、IK / Mirror、AvatarMask、同步层、BlendTree、OverrideController、嵌套状态机、StateMachineBehaviour         |
+| 模块            | 未实现行为                                                                                                                      |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| External Forces | 外部力场                                                                                                                        |
+| Collision       | 平面及场景碰撞                                                                                                                  |
+| Triggers        | 碰撞区域检测与事件                                                                                                              |
+| Lights          | 粒子灯光                                                                                                                        |
+| Timeline 扩展   | Audio、Signal / Marker、自定义轨道 / Playable、Infinite Clip、AvatarMask、prefab 实例化、自定义属性动画与非默认 clip-end action |
+| Animator 扩展   | Avatar / Root Motion、IK / Mirror、AvatarMask、同步层、BlendTree、OverrideController、嵌套状态机、StateMachineBehaviour         |
 
 ## 开发与预览
 

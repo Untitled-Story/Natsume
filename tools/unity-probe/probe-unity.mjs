@@ -81,7 +81,9 @@ const spriteRendering = process.argv.includes('--sprite-rendering');
 const spriteShapes = process.argv.includes('--sprite-shapes');
 const sceneMaterials = process.argv.includes('--scene-materials');
 const events = process.argv.includes('--events');
-const bySpeed = process.argv.includes('--by-speed');
+const particleModules = process.argv.includes('--particle-modules');
+const bySpeed = process.argv.includes('--by-speed') || particleModules;
+assert(!particleModules || !process.argv.includes('--by-speed'), 'Choose one probe mode');
 const bindings = process.argv.includes('--animation-bindings');
 const animation = process.argv.includes('--animation');
 const meshes = process.argv.includes('--meshes');
@@ -184,7 +186,9 @@ const output = resolve(
                           : events
                             ? 'events'
                             : bySpeed
-                              ? 'by-speed'
+                              ? particleModules
+                                ? 'particle-modules'
+                                : 'by-speed'
                               : bindings
                                 ? 'animation-bindings'
                                 : animation
@@ -310,7 +314,8 @@ const child = runEditor(
     sorting ||
     noiseOptions ||
     stretch ||
-    noiseStatistics
+    noiseStatistics ||
+    particleModules
       ? []
       : ['-nographics']),
     '-projectPath',
@@ -349,7 +354,9 @@ const child = runEditor(
                             : events
                               ? 'NatsumeEventProbe.Run'
                               : bySpeed
-                                ? 'NatsumeBySpeedProbe.Run'
+                                ? particleModules
+                                  ? 'NatsumeParticleModulesProbe.Run'
+                                  : 'NatsumeBySpeedProbe.Run'
                                 : bindings
                                   ? 'NatsumeBindingProbe.Run'
                                   : animation
@@ -418,6 +425,17 @@ await new Promise((accept, reject) => {
 });
 const current = JSON.parse(await readFile(baseline, 'utf8'));
 assert.equal(current.unityVersion, version);
+if (particleModules) {
+  assert.equal(current.cases.length, 328);
+  assert.equal(current.random.length, 8);
+  if (process.argv.includes('--update-fixtures'))
+    await saveJson(
+      resolve(root, 'data/unity-baselines/fixtures/unity-particle-modules.json'),
+      JSON.stringify(current, null, 2) + '\n',
+    );
+  console.log(`Particle module observations: ${current.cases.length}`);
+  process.exit(0);
+}
 if (controller || controllerPlayback) {
   assert.equal(current.cases.length, controller ? 150 : 20);
   console.log(`Animator observations: ${current.cases.length}, ${baseline}`);

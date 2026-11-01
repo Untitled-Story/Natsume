@@ -2,11 +2,13 @@ import type { DeepReadonly as R } from '../pack.js';
 import type { ParticleSystemT } from '../format/generated/noa/ir/particle-system.js';
 import { scalar } from './parameters.js';
 import { ParticleModuleData as M } from '../format/generated/noa/ir/particle-module-data.js';
+import type { ParticleModuleT } from '../format/generated/noa/ir/particle-module.js';
+import type { ScalarParameterT } from '../format/generated/noa/ir/scalar-parameter.js';
+import type { LifetimeByEmitterSpeedModuleT } from '../format/generated/noa/ir/lifetime-by-emitter-speed-module.js';
 import type { SubEmittersModuleT } from '../format/generated/noa/ir/sub-emitters-module.js';
 
 /** Conservative upper bound of authored birth lifetimes, including curve peaks. */
-export function maximumLifetime(main: NonNullable<R<ParticleSystemT>['main']>): number {
-  const p = main.lifetime;
+function maximumParameter(p: R<ScalarParameterT> | null): number {
   let lifetime = Math.max(1e-6, scalar(p, 0, 0), scalar(p, 0, 1));
   if (p && (p.mode === 1 || p.mode === 3)) {
     for (const c of p.mode === 3 ? [p.curveMin, p.curveMax] : [p.curveMax]) {
@@ -30,10 +32,27 @@ export function maximumLifetime(main: NonNullable<R<ParticleSystemT>['main']>): 
   return lifetime;
 }
 
+/** Conservative lifetime bound including emitter-speed modulation. */
+export function maximumLifetime(
+  main: NonNullable<R<ParticleSystemT>['main']>,
+  modules: readonly R<ParticleModuleT>[] = [],
+): number {
+  const module = modules.find((m) => m.dataType === M.LifetimeByEmitterSpeedModule)?.data as
+    | R<LifetimeByEmitterSpeedModuleT>
+    | undefined;
+  return Math.max(
+    1e-6,
+    maximumParameter(main.lifetime) * (module ? maximumParameter(module.multiplier) : 1),
+  );
+}
+
 /** Warm complete cycles until birth lifetimes can reach steady state. */
-export function prewarmDuration(main: NonNullable<R<ParticleSystemT>['main']>): number {
+export function prewarmDuration(
+  main: NonNullable<R<ParticleSystemT>['main']>,
+  modules: readonly R<ParticleModuleT>[] = [],
+): number {
   if (!main.prewarm || !main.loop) return 0;
-  return Math.ceil(maximumLifetime(main) / main.durationSeconds) * main.durationSeconds;
+  return Math.ceil(maximumLifetime(main, modules) / main.durationSeconds) * main.durationSeconds;
 }
 
 /** Connected warm history follows the longest authored lifetime path, not a sum of siblings. */
@@ -69,7 +88,12 @@ export function graphPrewarmEstimate(
       }
   // Propagate accumulated prefixes: Float32 addition is not associative.
   // Shared descendants retain the longest incoming path without expanding the DAG.
-  const paths = new Map([[rootId, Math.fround(maximumLifetime(systems.get(rootId)!.main!))]]);
+  const paths = new Map([
+    [
+      rootId,
+      Math.fround(maximumLifetime(systems.get(rootId)!.main!, systems.get(rootId)!.modules)),
+    ],
+  ]);
   let history = 0;
   for (const id of order) {
     const prefix = paths.get(id);
@@ -78,7 +102,7 @@ export function graphPrewarmEstimate(
     for (const edge of edges(id)) {
       const target = systems.get(edge.systemComponentId);
       if (!target) continue;
-      const next = Math.fround(prefix + Math.fround(maximumLifetime(target.main!)));
+      const next = Math.fround(prefix + Math.fround(maximumLifetime(target.main!, target.modules)));
       paths.set(edge.systemComponentId, Math.max(paths.get(edge.systemComponentId) ?? 0, next));
     }
   }
@@ -106,7 +130,7 @@ export function instancePrewarmWork(
     const main = source.main!;
     if (!enabled.has(id) || !main.prewarm || !main.loop) continue;
     if (!edges(source).some((e) => e.systemComponentId)) {
-      work += main.maxParticles * Math.ceil(prewarmDuration(main) * 60);
+      work += main.maxParticles * Math.ceil(prewarmDuration(main, source.modules) * 60);
       continue;
     }
     work += graphPrewarmEstimate(id, systems).work;
