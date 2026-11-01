@@ -27,20 +27,12 @@ export function emitterSupport(
   const rules = new SupportChecks();
   rules.issues.push(...parameterSupport(source));
   const main = source.main!;
-  for (const field of ['clock', 'stopAction'] as const)
-    rules.require(
-      main[field] === 0,
-      'CAPABILITY',
-      `main.${field}`,
-      main[field],
-      'Particle mode is not implemented',
-    );
   rules.require(
-    main.culling === 0 || main.culling === 3,
+    main.culling !== 1,
     'CAPABILITY',
     'main.culling',
     main.culling,
-    'Particle visibility culling is not implemented',
+    'PauseAndCatchup requires a verified host fixed-step policy',
   );
   rules.require(
     main.emitterVelocityMode !== 1 ||

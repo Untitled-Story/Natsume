@@ -37,6 +37,9 @@ pnpm probe:unity --particle-lights # 实际 Play 的颜色、范围、强度和�
 pnpm probe:unity --light-distribution # 灯光分配、数量限制、死亡补位与随机统计
 pnpm probe:unity --ring-buffer # 环形年龄、循环范围、重力 / Force 与替换后 Death 位置
 pnpm probe:unity --ring-playback # 实际 Play 环形计数、年龄与延迟 Death 事件帧
+pnpm probe:unity --particle-clocks # Scaled / Unscaled、timeScale=0 与 Simulation Speed
+pnpm probe:unity --particle-main # StopAction、停止 / 清空、子系统和残留拖尾
+pnpm probe:unity --particle-culling # 相机离屏 / 恢复与物理固定步长扫描
 pnpm probe:unity --events       # 类型化事件、循环端点与启停顺序
 pnpm probe:unity --boundaries   # 发射、运动、外观与 BakeMesh 边界
 pnpm probe:unity --random       # 随机分布与参数相关性

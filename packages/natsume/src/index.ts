@@ -65,3 +65,5 @@ export type { AnimatorStateInfo, AnimatorTransitionInfo } from './runtime/animat
 export type { AnimationUpdateOptions } from './runtime/simulation.js';
 export { NatsumeDirector } from './runtime/director-handle.js';
 export type { DirectorBindingKey, DirectorBindingTarget } from './runtime/director-handle.js';
+
+export type { ParticleSystemStoppedEvent } from './runtime/particle-stopped.js';

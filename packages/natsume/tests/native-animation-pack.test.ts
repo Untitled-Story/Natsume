@@ -39,7 +39,7 @@ it.skipIf(!existsSync(source))(
             }),
           file,
         ).toThrow(
-          /Required feature is not implemented|Animator controller branch|single-layer|Particle mode|Particle visibility|Emitter requires/,
+          /Required feature is not implemented|Animator controller branch|single-layer|Particle mode|Particle visibility|PauseAndCatchup|Emitter requires/,
         );
         pack.dispose();
         results.push({ file, accepted: false, timed: 0, unsupported });

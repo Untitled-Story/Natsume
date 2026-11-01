@@ -72,6 +72,7 @@ export class SubEmitterGraph {
   private updateOrder: readonly number[] | undefined;
   private readonly visits = new Map<number, number>();
   private orderedDelta = 0;
+  private unscaledDelta: number | undefined;
 
   constructor(private readonly emitters: ReadonlyMap<number, Emitter>) {
     const indegree = new Map<number, number>();
@@ -214,7 +215,25 @@ export class SubEmitterGraph {
         });
   }
 
-  step(delta: number): void {
+  hasLiveDescendants(systemId: number): boolean {
+    for (const id of this.descendants.get(systemId) ?? [])
+      if (id !== systemId && this.emitters.get(id)!.graphPlaying) return true;
+    return false;
+  }
+  step(delta: number, unscaledDelta = delta): void {
+    this.unscaledDelta = unscaledDelta;
+    try {
+      this.stepOrdinary(delta);
+    } finally {
+      this.unscaledDelta = undefined;
+    }
+  }
+  private clockDelta(emitter: Emitter, delta: number): number {
+    return emitter.main.clock === 1 && this.unscaledDelta !== undefined
+      ? this.unscaledDelta
+      : delta;
+  }
+  private stepOrdinary(delta: number): void {
     this.warm();
     if (this.updateOrder) {
       this.stepOrdered(delta, this.updateOrder);
@@ -255,12 +274,13 @@ export class SubEmitterGraph {
         this.visits.set(id, remaining - 1);
         const emitter = this.emitters.get(id)!;
         this.advancing = emitter;
+        let elapsed = 0;
         try {
-          emitter.step(delta);
+          elapsed = emitter.step(this.clockDelta(emitter, delta));
         } finally {
           this.advancing = undefined;
         }
-        this.advanceChannels(emitter, delta);
+        this.advanceChannels(emitter, elapsed);
         // A completed parent job publishes births before the next pool integration.
         while (this.before.size || this.after.size) {
           const target = (this.before.keys().next().value ?? this.after.keys().next().value)!;
@@ -357,14 +377,16 @@ export class SubEmitterGraph {
       this.flush(this.before, emitter.id);
       this.advancing = emitter;
       this.warmingStep = warming !== undefined;
+      let elapsed = delta;
       try {
         if (emitter === warming) emitter.advancePrewarm(localSeconds);
-        else emitter.step(delta);
+        else
+          elapsed = emitter.step(warming || controlled ? delta : this.clockDelta(emitter, delta));
       } finally {
         this.advancing = undefined;
         this.warmingStep = false;
       }
-      this.advanceChannels(emitter, delta);
+      this.advanceChannels(emitter, elapsed);
       if (warming || !this.shared.has(emitter.id)) this.flush(this.after, emitter.id);
     }
   }

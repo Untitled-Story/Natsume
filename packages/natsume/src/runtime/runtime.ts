@@ -62,6 +62,8 @@ export interface ScriptBehavior {
   onControlTimeStart?(): void;
   onControlTime?(seconds: number): void;
   onControlTimeStop?(): void;
+  /** Receives StopAction.Callback from a particle system on this node. */
+  onParticleSystemStopped?(event: import('./particle-stopped.js').ParticleSystemStoppedEvent): void;
   /** Receives source messages from the Animator on this node; return true when handled. */
   onAnimationEvent?: AnimationEventHandler;
   onEnable?(): void;
@@ -151,12 +153,16 @@ export class EffectInstance {
     behavior: ScriptBehavior;
     active: boolean;
     failed: boolean;
+    destroyed?: boolean;
     controlDepth?: number;
     componentId?: number;
   }[] = [];
   private readonly eventHandlers = new Set<AnimationEventHandler>();
   private readonly collisionHandlers = new Set<
     (event: import('./particle-physics.js').ParticleCollisionEvent) => void
+  >();
+  private readonly stoppedHandlers = new Set<
+    (event: import('./particle-stopped.js').ParticleSystemStoppedEvent) => void
   >();
   private readonly triggerHandlers = new Set<
     (event: import('./particle-physics.js').ParticleTriggerEvent) => void
@@ -178,6 +184,19 @@ export class EffectInstance {
     options: InstanceOptions,
   ) {
     simulation.onAnimationEvent = (event) => this.dispatchAnimationEvent(event);
+    simulation.onParticleSystemStopped = (event) =>
+      this.dispatchParticleEvent(
+        event,
+        this.stoppedHandlers,
+        event.systemId,
+        'PARTICLE_STOP_EVENT_ERROR',
+        this.behaviors
+          .filter((b) => b.node.id === event.nodeId && b.behavior.onParticleSystemStopped)
+          .map((b) => (event) => {
+            if (b.node.activeInHierarchy && !b.failed && !b.destroyed)
+              b.behavior.onParticleSystemStopped?.(event);
+          }),
+      );
     simulation.onParticleCollision = (event) =>
       this.dispatchParticleEvent(
         event,
@@ -259,7 +278,10 @@ export class EffectInstance {
   /** Nodes with allocated renderers, including renderers that animations can enable; unique per node. */
   get renderedNodes(): readonly NatsumeNode[] {
     this.assertAlive();
-    return [...new Set(this.meshes.map((mesh) => mesh.node.id))].map((id) => this.getNode(id)!);
+    return [...new Set(this.meshes.map((mesh) => mesh.node.id))].flatMap((id) => {
+      const node = this.getNode(id);
+      return node ? [node] : [];
+    });
   }
   private assertAlive(): void {
     check(!this.disposed, 'DISPOSED', 'Effect instance has been destroyed');
@@ -374,7 +396,7 @@ export class EffectInstance {
   getNode(id: number): NatsumeNode | undefined {
     this.assertAlive();
     const node = this.simulation.scene.nodes.get(id);
-    if (!node) return;
+    if (!node || node.destroyed) return;
     let view = this.nodeViews.get(id);
     if (!view) {
       view = new NatsumeNode(this, node);
@@ -393,6 +415,7 @@ export class EffectInstance {
     this.assertAlive();
     this.simulation.play();
     if (this.disposed) return;
+    this.restoreDestroyedBehaviors();
     this.syncBehaviors();
     this.render();
   }
@@ -412,6 +435,7 @@ export class EffectInstance {
     this.assertAlive();
     this.simulation.restart();
     if (this.disposed) return;
+    this.restoreDestroyedBehaviors();
     this.syncBehaviors();
     this.render();
   }
@@ -469,6 +493,22 @@ export class EffectInstance {
       this.eventHandlers.delete(handler);
     };
   }
+  /** Subscribes to StopAction.Callback after the system and descendants drain. */
+  onParticleSystemStopped(
+    handler: (event: import('./particle-stopped.js').ParticleSystemStoppedEvent) => void,
+  ): () => void {
+    this.assertAlive();
+    check(typeof handler === 'function', 'HOST', 'Particle stop handler must be a function');
+    this.stoppedHandlers.add(handler);
+    return () => {
+      this.stoppedHandlers.delete(handler);
+    };
+  }
+  /** Supplies host visibility for source culling. Defaults to visible; retained across restart. */
+  setParticleSystemVisible(systemId: number, visible: boolean): void {
+    this.assertAlive();
+    this.simulation.setParticleSystemVisible(systemId, visible);
+  }
   /** Subscribes to contacts from systems with collision messages enabled. */
   onParticleCollision(
     handler: (event: import('./particle-physics.js').ParticleCollisionEvent) => void,
@@ -496,23 +536,30 @@ export class EffectInstance {
     handlers: ReadonlySet<(event: T) => void>,
     systemId: number,
     code: string,
+    receivers: readonly ((event: T) => void)[] = [],
   ): void {
     if (this.disposed || this.dispatchingEvent) return;
     this.dispatchingEvent = true;
     const revision = this.eventRevision;
+    const invoke = (handler: (event: T) => void): void => {
+      try {
+        handler(event);
+      } catch (error) {
+        this.simulation.diagnostics.push({
+          code,
+          componentId: systemId,
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
+    };
     try {
       for (const handler of [...handlers]) {
         if (this.disposed || revision !== this.eventRevision) break;
-        if (!handlers.has(handler)) continue;
-        try {
-          handler(event);
-        } catch (error) {
-          this.simulation.diagnostics.push({
-            code,
-            componentId: systemId,
-            message: error instanceof Error ? error.message : String(error),
-          });
-        }
+        if (handlers.has(handler)) invoke(handler);
+      }
+      for (const receiver of receivers) {
+        if (this.disposed || revision !== this.eventRevision) break;
+        invoke(receiver);
       }
     } finally {
       this.dispatchingEvent = false;
@@ -601,8 +648,28 @@ export class EffectInstance {
       return false;
     }
   }
+  private restoreDestroyedBehaviors(): void {
+    const ids = new Set<number>();
+    for (let i = this.behaviors.length - 1; i >= 0; i--) {
+      const b = this.behaviors[i]!;
+      if (b.destroyed && !b.node.destroyed && b.componentId !== undefined) {
+        ids.add(b.componentId);
+        this.behaviors.splice(i, 1);
+      }
+    }
+    if (ids.size) this.initializeScripts(ids);
+  }
   private syncBehaviors(): void {
     for (const b of this.behaviors) {
+      if (b.destroyed) continue;
+      if (b.node.destroyed) {
+        const active = b.active;
+        b.active = false;
+        b.destroyed = true;
+        if (active && !b.failed) this.invoke(() => b.behavior.onDisable?.());
+        this.invoke(() => b.behavior.destroy?.());
+        continue;
+      }
       if (b.failed) continue;
       const active =
         b.node.activeInHierarchy &&
@@ -616,8 +683,9 @@ export class EffectInstance {
       }
     }
   }
-  /** @internal */ initializeScripts(): void {
+  /** @internal */ initializeScripts(componentIds?: ReadonlySet<number>): void {
     for (const c of this.simulation.pack.customComponents) {
+      if (componentIds && !componentIds.has(c.id)) continue;
       const node = this.simulation.scene.nodes.get(c.nodeId);
       if (!node) continue;
       const component = c.data as R<CustomComponentT>,
@@ -667,6 +735,7 @@ export class EffectInstance {
   }
   /** @internal */ setNodeRenderOffset(node: SceneNode, offset: RenderOffset | null): void {
     check(!this.disposed || this.destroying, 'DISPOSED', 'Effect instance has been destroyed');
+    check(!node.destroyed, 'DISPOSED', 'Node has been destroyed');
     const x = offset === null ? 0 : offset.x,
       y = offset === null ? 0 : offset.y;
     check(
@@ -775,6 +844,8 @@ export class EffectInstance {
       failure = error;
     }
     for (const b of this.behaviors) {
+      if (b.destroyed) continue;
+      b.destroyed = true;
       try {
         if (b.active && !b.failed) this.invoke(() => b.behavior.onDisable?.());
       } catch (error) {
@@ -801,6 +872,8 @@ export class EffectInstance {
     this.eventHandlers.clear();
     this.collisionHandlers.clear();
     this.triggerHandlers.clear();
+    this.stoppedHandlers.clear();
+    this.simulation.onParticleSystemStopped = undefined;
     this.simulation.onParticleTrigger = undefined;
     this.simulation.onParticleCollision = undefined;
     this.simulation.onAnimationEvent = undefined;

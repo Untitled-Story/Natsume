@@ -28,6 +28,7 @@ export class SceneNode {
   inheritedRenderOffsetX = 0;
   inheritedRenderOffsetY = 0;
   active: boolean;
+  destroyed = false;
   activeInHierarchy = true;
   layout: LayoutSize | undefined;
   constructor(
@@ -201,6 +202,7 @@ export class Scene {
   }
   reset(): void {
     for (const n of this.ordered) {
+      n.destroyed = false;
       n.active = n.source.active;
       Object.assign(n.localPosition, n.source.transform!.position);
       Object.assign(n.localRotation, n.source.transform!.rotation);
@@ -228,7 +230,7 @@ export class Scene {
           mat4.multiply(n.localMatrix, inverse, canvas.world);
         } else mat4.copy(n.localMatrix, canvas.world);
       }
-      n.activeInHierarchy = n.active && (n.parent?.activeInHierarchy ?? true);
+      n.activeInHierarchy = !n.destroyed && n.active && (n.parent?.activeInHierarchy ?? true);
       const q = n.localRotation;
       quat.set(n.worldRotation, q.x, q.y, q.z, q.w);
       if (n.parent) quat.multiply(n.worldRotation, n.parent.worldRotation, n.worldRotation);

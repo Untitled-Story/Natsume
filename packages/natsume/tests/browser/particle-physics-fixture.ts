@@ -260,3 +260,149 @@ export async function checkParticleLightLifecycle() {
   app.destroy();
   return { blocked, first, replaced, cleared, final, updates };
 }
+
+export async function checkParticleStopLifecycle() {
+  const app = new Application();
+  await app.init({
+    preference: 'webgl',
+    preferWebGLVersion: 2,
+    width: 32,
+    height: 32,
+    autoStart: false,
+  });
+  const runtime = new NatsumeRuntime(app.renderer as WebGLRenderer),
+    identity = new I.ScriptIdentityT('Probe', 'Probe', 'Stopped');
+  const calls: string[] = [];
+  let factories = 0;
+  runtime.registerScript(identity, () => {
+    factories++;
+    return {
+      onEnable() {
+        calls.push('enable');
+      },
+      onDisable() {
+        calls.push('disable');
+      },
+      destroy() {
+        calls.push('destroy');
+      },
+      onParticleSystemStopped(e) {
+        calls.push(`bridge:${e.systemId}`);
+      },
+    };
+  });
+  const makePack = (action: number, receiverEnabled = true) => {
+    const doc = minimalDocument(),
+      source = particleSource();
+    source.main!.playOnEnable = true;
+    source.main!.durationSeconds = 0.05;
+    source.main!.lifetime = constant(0.02);
+    source.main!.stopAction = action;
+    source.modules.push(
+      new I.ParticleModuleT(
+        I.ParticleModuleData.EmissionModule,
+        new I.EmissionModuleT(constant(0), constant(0), [new I.BurstT(0, constant(1), 1, 0, 1)]),
+      ),
+    );
+    doc.components = [
+      new I.ComponentT(5, 1, true, I.ComponentData.ParticleSystem, source),
+      new I.ComponentT(
+        6,
+        1,
+        receiverEnabled,
+        I.ComponentData.CustomComponent,
+        new I.CustomComponentT(identity),
+      ),
+    ];
+    return new EffectPack(
+      doc,
+      {
+        format: 'noa-package',
+        version: 1,
+        noir_version: [1, 0],
+        document: 'scene.noir',
+        files: [],
+      },
+      new Map(),
+      new Map(),
+    );
+  };
+  const pack = makePack(I.StopAction.Callback),
+    effect = await runtime.instantiate(pack);
+  let recursive = false,
+    late = 0,
+    received = 0;
+  const offError = effect.onParticleSystemStopped(() => {
+    throw new Error('stop failure');
+  });
+  const off = effect.onParticleSystemStopped((e) => {
+    received++;
+    if (e.systemId !== 5) throw new Error('system');
+    try {
+      effect.update(0);
+    } catch {
+      recursive = true;
+    }
+  });
+  effect.play();
+  for (let i = 0; i < 10; i++) effect.update(1 / 60);
+  const firstBridge = calls.filter((c) => c === 'bridge:5').length;
+  off();
+  off();
+  offError();
+  const cancel = effect.onParticleSystemStopped(() => effect.restart());
+  const after = effect.onParticleSystemStopped(() => late++);
+  effect.restart();
+  for (let i = 0; i < 4; i++) effect.update(1 / 60);
+  cancel();
+  after();
+  const cancelledBridge = calls.filter((c) => c === 'bridge:5').length === firstBridge;
+  effect.stop('clear');
+  effect.update(0);
+  const diagnostics = effect.diagnostics.map((d) => d.code);
+  effect.destroy();
+  pack.dispose();
+  const disabledPack = makePack(I.StopAction.Callback, false);
+  const disabled = await runtime.instantiate(disabledPack);
+  const beforeDisabled = calls.filter((c) => c === 'bridge:5').length;
+  disabled.play();
+  for (let i = 0; i < 10; i++) disabled.update(1 / 60);
+  const disabledReceiver = calls.filter((c) => c === 'bridge:5').length === beforeDisabled + 1;
+  disabled.destroy();
+  disabledPack.dispose();
+  const destroyedPack = makePack(I.StopAction.Destroy),
+    destroyed = await runtime.instantiate(destroyedPack);
+  const beforeDestroy = calls.filter((c) => c === 'destroy').length;
+  destroyed.play();
+  const handle = destroyed.getNode(1)!;
+  for (let i = 0; i < 10; i++) destroyed.update(1 / 60);
+  const removed = destroyed.getNode(1) === undefined;
+  let rejects = false;
+  try {
+    handle.setActive(true);
+  } catch {
+    rejects = true;
+  }
+  const afterDestroy = calls.filter((c) => c === 'destroy').length - beforeDestroy;
+  const beforeRestart = factories;
+  destroyed.restart();
+  const recreated = factories === beforeRestart + 1 && !!destroyed.getNode(1);
+  destroyed.destroy();
+  destroyed.destroy();
+  destroyedPack.dispose();
+  runtime.destroy();
+  app.destroy();
+  return {
+    recursive,
+    received,
+    late,
+    firstBridge,
+    cancelledBridge,
+    diagnostics,
+    removed,
+    rejects,
+    afterDestroy,
+    recreated,
+    disabledReceiver,
+  };
+}

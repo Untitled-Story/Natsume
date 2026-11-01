@@ -66,3 +66,26 @@ test('owns particle-light handles across replacement, stop, restart and disposal
   });
   expect(result.updates).toBeGreaterThan(2);
 });
+
+test('dispatches stopped messages once, cancels stale receivers and recreates destroyed scripts on restart', async ({
+  page,
+}) => {
+  await page.goto('/');
+  const result = await page.evaluate(
+    async (path) => (await import('/@fs' + path)).checkParticleStopLifecycle(),
+    new URL('./particle-physics-fixture.ts', import.meta.url).pathname,
+  );
+  expect(result).toMatchObject({
+    recursive: true,
+    received: 1,
+    late: 0,
+    firstBridge: 1,
+    cancelledBridge: true,
+    removed: true,
+    rejects: true,
+    afterDestroy: 1,
+    recreated: true,
+    disabledReceiver: true,
+  });
+  expect(result.diagnostics).toContain('PARTICLE_STOP_EVENT_ERROR');
+});

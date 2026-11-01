@@ -90,6 +90,9 @@ const lightDistribution = process.argv.includes('--light-distribution');
 const particleTriggers = process.argv.includes('--particle-triggers');
 const ringBuffer = process.argv.includes('--ring-buffer');
 const ringPlayback = process.argv.includes('--ring-playback');
+const particleClockPlayback = process.argv.includes('--particle-clocks');
+const particleMainPlayback = process.argv.includes('--particle-main');
+const particleCullingPlayback = process.argv.includes('--particle-culling');
 const particleProbe = particleModules
   ? ['particle-modules', 'NatsumeParticleModulesProbe.Run']
   : externalForces
@@ -108,7 +111,13 @@ const particleProbe = particleModules
                 ? ['ring-buffer', 'NatsumeParticleRingBufferProbe.Run']
                 : ringPlayback
                   ? ['ring-playback', 'NatsumeParticleRingPlaybackProbe.Run']
-                  : undefined;
+                  : particleClockPlayback
+                    ? ['particle-clocks', 'NatsumeParticleClockPlaybackProbe.Run']
+                    : particleMainPlayback
+                      ? ['particle-main', 'NatsumeParticleMainPlaybackProbe.Run']
+                      : particleCullingPlayback
+                        ? ['particle-culling', 'NatsumeParticleCullingPlaybackProbe.Run']
+                        : undefined;
 const bySpeed = process.argv.includes('--by-speed') || !!particleProbe;
 assert(
   [
@@ -121,6 +130,9 @@ assert(
     lightDistribution,
     ringBuffer,
     ringPlayback,
+    particleClockPlayback,
+    particleMainPlayback,
+    particleCullingPlayback,
     process.argv.includes('--by-speed'),
   ].filter(Boolean).length <= 1,
   'Choose one probe mode',
@@ -446,7 +458,10 @@ const child = runEditor(
     particleTriggers ||
     particleLights ||
     lightDistribution ||
-    ringPlayback
+    ringPlayback ||
+    particleClockPlayback ||
+    particleMainPlayback ||
+    particleCullingPlayback
       ? []
       : ['-quit']),
     '-logFile',
@@ -477,6 +492,19 @@ await new Promise((accept, reject) => {
 });
 const current = JSON.parse(await readFile(baseline, 'utf8'));
 assert.equal(current.unityVersion, version);
+if (particleClockPlayback || particleMainPlayback || particleCullingPlayback) {
+  assert.equal(current.cases.length, particleClockPlayback ? 18 : particleMainPlayback ? 60 : 84);
+  if (process.argv.includes('--update-fixtures'))
+    await saveJson(
+      resolve(
+        root,
+        `data/unity-baselines/fixtures/${particleClockPlayback ? 'unity-particle-clock-playback' : particleMainPlayback ? 'unity-particle-main-playback' : 'unity-particle-culling-playback'}.json`,
+      ),
+      JSON.stringify(current, null, 2) + '\n',
+    );
+  console.log(`Particle playback observations: ${current.cases.length}`);
+  process.exit(0);
+}
 if (ringBuffer || ringPlayback) {
   assert.equal(current.cases.length, ringBuffer ? 24 : 9);
   if (process.argv.includes('--update-fixtures'))

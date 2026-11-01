@@ -84,6 +84,11 @@ export interface AnimationUpdateOptions {
 }
 
 export class Simulation {
+  onParticleSystemStopped:
+    | ((event: import('./particle-stopped.js').ParticleSystemStoppedEvent) => void)
+    | undefined;
+  private readonly stoppedSystems = new Set<number>();
+  private dispatchingStoppedEvents = false;
   onParticleTrigger:
     | ((event: import('./particle-physics.js').ParticleTriggerEvent) => void)
     | undefined;
@@ -116,6 +121,7 @@ export class Simulation {
   time = 0;
   droppedSeconds = 0;
   private accumulator = 0;
+  private unscaledAccumulator = 0;
   private revision = 0;
   private updating = false;
   private dispatchingEvents = false;
@@ -216,6 +222,14 @@ export class Simulation {
       emitter.onCollisionMessage = (event) => this.collisionEvents.push(event);
     for (const emitter of this.emitters.values())
       emitter.onTriggerMessage = (event) => this.triggerEvents.push(event);
+    const stopNodes = new Set(
+      [...this.emitters.values()].filter((e) => e.main.stopAction !== 0).map((e) => e.node),
+    );
+    for (const emitter of this.emitters.values()) {
+      let node: SceneNode | undefined = emitter.node;
+      while (node && !stopNodes.has(node)) node = node.parent;
+      if (node) emitter.enableLifetimeProgress();
+    }
     this.subEmitters = new SubEmitterGraph(this.emitters);
     this.subEmitters.setUpdateOrder(options.subEmitterUpdateOrder);
     this.diagnostics.push(
@@ -363,6 +377,12 @@ export class Simulation {
     const emitter = this.emitters.get(systemId);
     check(emitter, 'HOST', 'Unknown particle system');
     return Array.from({ length: emitter.count }, (_, index) => particleSnapshot(emitter, index));
+  }
+  setParticleSystemVisible(systemId: number, visible: boolean): void {
+    const emitter = this.emitters.get(systemId);
+    check(emitter, 'HOST', 'Unknown particle system');
+    check(typeof visible === 'boolean', 'HOST', 'Particle visibility must be boolean');
+    emitter.visible = visible;
   }
   emitSubEmitter(systemId: number, slot: number, particleId?: number): void {
     this.subEmitters.trigger(systemId, slot, particleId);
@@ -517,6 +537,7 @@ export class Simulation {
         ? 'stopped'
         : 'draining';
     this.accumulator = 0;
+    this.unscaledAccumulator = 0;
   }
   restart(): void {
     this.revision++;
@@ -525,10 +546,12 @@ export class Simulation {
     for (const director of this.directors.values()) director.reset();
     this.flushDirectors();
     this.enabledDirectors.clear();
+    this.stoppedSystems.clear();
     this.subEmitters.clear();
     this.subEmitters.externallyControlled.clear();
     this.time = 0;
     this.accumulator = 0;
+    this.unscaledAccumulator = 0;
     this.droppedSeconds = 0;
     this.initialized = false;
     this.players.clear();
@@ -553,6 +576,7 @@ export class Simulation {
   setNodeActive(id: number, active: boolean): void {
     const n = this.scene.nodes.get(id);
     check(n, 'HOST', 'Unknown node');
+    check(!n.destroyed, 'DISPOSED', 'Node has been destroyed');
     n.active = active;
     this.sync();
   }
@@ -814,15 +838,78 @@ export class Simulation {
       }
     }
   }
+  private applyParticleStopActions(): boolean {
+    if (!this.initialized || this.state === 'paused') return true;
+    const revision = this.revision;
+    let changed = false;
+    for (const emitter of this.emitters.values()) {
+      if (emitter.main.stopAction === 0) continue;
+      if (!emitter.completed) {
+        this.stoppedSystems.delete(emitter.id);
+        continue;
+      }
+      if (
+        this.stoppedSystems.has(emitter.id) ||
+        emitter.timelineControlled ||
+        this.subEmitters.hasLiveDescendants(emitter.id)
+      )
+        continue;
+      let alive = (this.trails.get(emitter.id)?.records.size ?? 0) > 0;
+      for (const child of this.emitters.values()) {
+        if (child === emitter || !child.node.activeInHierarchy) continue;
+        let ancestor: SceneNode | undefined = child.node;
+        while (ancestor && ancestor !== emitter.node) ancestor = ancestor.parent;
+        if (
+          ancestor &&
+          (child.graphPlaying || (this.trails.get(child.id)?.records.size ?? 0) > 0)
+        ) {
+          alive = true;
+          break;
+        }
+      }
+      if (alive) continue;
+      this.stoppedSystems.add(emitter.id);
+      switch (emitter.main.stopAction) {
+        case 1:
+          emitter.node.active = false;
+          changed = true;
+          break;
+        case 2:
+          for (const node of this.scene.ordered) {
+            let ancestor: SceneNode | undefined = node;
+            while (ancestor && ancestor !== emitter.node) ancestor = ancestor.parent;
+            if (ancestor) node.destroyed = true;
+          }
+          changed = true;
+          break;
+        case 3:
+          this.onParticleSystemStopped?.({ systemId: emitter.id, nodeId: emitter.node.id });
+          break;
+      }
+      if (revision !== this.revision) return false;
+    }
+    if (changed) this.sync();
+    return revision === this.revision;
+  }
   update(seconds: number, clocks: AnimationUpdateOptions = {}): void {
     check(
       Number.isFinite(seconds) && seconds >= 0,
       'HOST',
       'Delta time must be finite nonnegative seconds',
     );
-    check(!this.updating, 'HOST', 'Recursive animation update is unsupported');
+    check(
+      !this.updating && !this.dispatchingStoppedEvents,
+      'HOST',
+      'Recursive animation update is unsupported',
+    );
     check(!this.flushingDirectors, 'HOST', 'Recursive animation update is unsupported');
     this.flushDirectors();
+    this.dispatchingStoppedEvents = true;
+    try {
+      if (!this.applyParticleStopActions()) return;
+    } finally {
+      this.dispatchingStoppedEvents = false;
+    }
     if (this.state !== 'playing' && this.state !== 'draining') return;
     check(
       clocks !== null && typeof clocks === 'object',
@@ -874,11 +961,26 @@ export class Simulation {
         'UnscaledTime requires unscaledDeltaSeconds',
       );
     }
+    const hasUnscaledParticles = [...this.emitters.values()].some(
+      (emitter) =>
+        emitter.main.clock === 1 &&
+        emitter.enabled &&
+        emitter.node.activeInHierarchy &&
+        !this.subEmitters.externallyControlled.has(emitter.id),
+    );
+    check(
+      !hasUnscaledParticles || clocks.unscaledDeltaSeconds !== undefined,
+      'HOST',
+      'Unscaled particles require unscaledDeltaSeconds',
+    );
     this.updating = true;
     try {
       const accepted = Math.min(seconds, 0.25);
-      this.droppedSeconds += seconds - accepted;
+      const unscaled = hasUnscaledParticles ? clocks.unscaledDeltaSeconds! : 0;
+      const acceptedUnscaled = Math.min(unscaled, 0.25);
+      this.droppedSeconds += Math.max(seconds - accepted, unscaled - acceptedUnscaled);
       this.accumulator += accepted;
+      this.unscaledAccumulator += acceptedUnscaled;
       this.sync();
       if (this.state === 'playing') {
         for (const step of clocks.physicsSteps ?? []) {
@@ -897,13 +999,21 @@ export class Simulation {
       let steps = 0;
       let directorsAdvanced = false;
       let unscaledDelta = clocks.unscaledDeltaSeconds;
-      while (this.accumulator + 1e-10 >= this.fixedDelta && steps < 8) {
+      while (
+        (this.accumulator + 1e-10 >= this.fixedDelta ||
+          this.unscaledAccumulator + 1e-10 >= this.fixedDelta) &&
+        steps < 8
+      ) {
+        const scaledStep = this.accumulator + 1e-10 >= this.fixedDelta ? this.fixedDelta : 0;
+        const unscaledStep =
+          this.unscaledAccumulator + 1e-10 >= this.fixedDelta ? this.fixedDelta : 0;
         const revision = this.revision;
         if (this.state === 'playing' && this.players.size > 0) {
-          this.advanceAnimations(0, this.fixedDelta, unscaledDelta);
+          this.advanceAnimations(0, scaledStep, unscaledDelta);
           unscaledDelta = undefined;
           if (revision !== this.revision) {
             this.accumulator = 0;
+            this.unscaledAccumulator = 0;
             return;
           }
           this.sync();
@@ -913,9 +1023,10 @@ export class Simulation {
           directorsAdvanced = true;
           if (!this.advanceDirectors(seconds, clocks)) return;
         }
-        this.subEmitters.step(this.fixedDelta);
-        this.time += this.fixedDelta;
-        this.accumulator -= this.fixedDelta;
+        this.subEmitters.step(scaledStep, unscaledStep);
+        this.time += scaledStep;
+        this.accumulator -= scaledStep;
+        this.unscaledAccumulator -= unscaledStep;
         steps++;
         if (this.collisionEvents.length) {
           const revision = this.revision;
@@ -942,11 +1053,14 @@ export class Simulation {
       }
       if (this.state === 'playing' && !directorsAdvanced && !this.advanceDirectors(seconds, clocks))
         return;
-      if (this.accumulator >= this.fixedDelta) {
-        const excess = Math.floor((this.accumulator + 1e-10) / this.fixedDelta) * this.fixedDelta;
-        this.droppedSeconds += excess;
-        this.accumulator -= excess;
-      }
+      const excessScaled =
+        Math.max(0, Math.floor((this.accumulator + 1e-10) / this.fixedDelta)) * this.fixedDelta;
+      const excessUnscaled =
+        Math.max(0, Math.floor((this.unscaledAccumulator + 1e-10) / this.fixedDelta)) *
+        this.fixedDelta;
+      this.droppedSeconds += Math.max(excessScaled, excessUnscaled);
+      this.accumulator -= excessScaled;
+      this.unscaledAccumulator -= excessUnscaled;
       if (this.state === 'draining' && this.particleCount === 0 && this.trailPoints.count === 0)
         this.state = 'stopped';
     } finally {

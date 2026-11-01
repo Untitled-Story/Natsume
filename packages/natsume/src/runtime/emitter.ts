@@ -211,6 +211,9 @@ export class Emitter {
   private delayRemaining = 0;
   count = 0;
   emitting = true;
+  visible = true;
+  private culledSeconds = 0;
+  private wasCulled = false;
   constructor(
     readonly id: number,
     readonly node: SceneNode,
@@ -603,6 +606,8 @@ export class Emitter {
     this.nextSerial = 0;
     this.ringWrite = 0;
     this.forceStep = 0;
+    this.culledSeconds = 0;
+    this.wasCulled = false;
     this.time = 0;
     this.rateTime = 0;
     this.rateSpacing = 0;
@@ -653,6 +658,8 @@ export class Emitter {
       this.lastVelocityPosition[axis] = this.node.worldMatrix[12 + axis]!;
     this.updateEmitterVelocity(0);
     if (!active) {
+      this.culledSeconds = 0;
+      this.wasCulled = false;
       this.clearRetiredRingParticles();
       this.lights?.clear();
       this.trigger?.clear();
@@ -1252,11 +1259,44 @@ export class Emitter {
     if (properties & 8)
       this.lifetimes[index] = Math.max(1e-5, this.lifetimes[index]! * parent.remainingLifetime);
   }
-  step(delta: number): void {
-    if (!this.enabledLast) return;
+  /** @internal Natural completion excludes descendant pools and retained trails. */
+  get completed(): boolean {
+    return (
+      this.enabledLast &&
+      this.started &&
+      this.count === 0 &&
+      this.retiredRingCount === 0 &&
+      (!this.emitting ||
+        (this.delayRemaining <= 0 &&
+          !this.main.loop &&
+          this.time + 1e-7 >= this.main.durationSeconds))
+    );
+  }
+  step(delta: number): number {
+    if (!this.enabledLast || delta <= 0) return 0;
+    const culling = this.main.culling === 0 ? (this.main.loop ? 2 : 3) : this.main.culling;
+    if (this.timelineControlled) {
+      this.culledSeconds = 0;
+      this.wasCulled = false;
+    }
+    if (!this.timelineControlled && !this.visible && culling !== 3) {
+      this.wasCulled = true;
+      if (culling === 1) this.culledSeconds += delta;
+      return 0;
+    }
+    if (this.wasCulled) {
+      this.wasCulled = false;
+      if (culling === 2) return 0;
+    }
+    delta += this.culledSeconds;
+    this.culledSeconds = 0;
+    if (this.completed && !this.timelineControlled) {
+      this.onAdvanced?.(delta * this.main.simulationSpeed);
+      return 0;
+    }
     this.updateEmitterVelocity(delta);
     let dt = delta * this.main.simulationSpeed;
-    if (dt <= 0) return;
+    if (dt <= 0) return 0;
     if (this.delayRemaining > 0) {
       this.delayRemaining -= dt;
       if (this.delayRemaining > 0) {
@@ -1265,13 +1305,13 @@ export class Emitter {
           this.node.worldMatrix[13]!,
           this.node.worldMatrix[14]!,
         ]);
-        return;
+        return delta;
       }
       dt = -this.delayRemaining;
       this.delayRemaining = 0;
       if (!this.birthDriven) this.bursts(-Number.EPSILON, 0);
       if (!this.timelineControlled) this.prewarm();
-      if (dt <= 0) return;
+      if (dt <= 0) return 0;
     }
     const steps = Math.ceil(dt / Math.fround(0.03));
     const substep = dt / steps;
@@ -1283,6 +1323,7 @@ export class Emitter {
       }
       this.pendingPrewarmTime = 0;
     }
+    return delta;
   }
 
   private clearRetiredRingParticles(): void {
