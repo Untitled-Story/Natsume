@@ -7,6 +7,7 @@ import { mat4, quat, vec3 } from 'gl-matrix';
 import { check } from '../errors.js';
 import { SpriteShapeSampler } from './sprite-shape.js';
 import { MeshShapeSampler } from './mesh-shape.js';
+import { ShapeTextureSampler } from './shape-texture.js';
 import { RendererShapeTransform } from './renderer-shape.js';
 import type { MeshShapeT } from '../format/generated/noa/ir/mesh-shape.js';
 import { ShapeGeometry } from '../format/generated/noa/ir/shape-geometry.js';
@@ -164,7 +165,10 @@ export class Emitter {
   private readonly initialInheritedVelocities: Float32Array | undefined;
   private readonly bakeInitialInheritance: boolean;
   private readonly direction = vec3.create();
-  private readonly birth = new Float64Array(10);
+  private readonly birth = new Float64Array(12);
+  private readonly shapeTexture: ShapeTextureSampler | undefined;
+  private textureBirths = new Float64Array(0);
+  private textureLive = new Uint32Array(0);
   private readonly spriteShape: SpriteShapeSampler | MeshShapeSampler | undefined;
   private readonly rendererShape: RendererShapeTransform | undefined;
   private nextSerial = 0;
@@ -384,11 +388,23 @@ export class Emitter {
       this.moduleSpeeds = new Float32Array(cap);
     if (this.shape?.geometryType === ShapeGeometry.SpriteShape) {
       check(pack, 'CAPABILITY', 'Sprite emission requires source assets');
-      this.spriteShape = new SpriteShapeSampler(pack, this.shape.geometry as R<SpriteShapeT>);
+      this.spriteShape = new SpriteShapeSampler(
+        pack,
+        this.shape.geometry as R<SpriteShapeT>,
+        this.shape.texture?.uvChannel,
+      );
     }
     if (this.shape?.geometryType === ShapeGeometry.MeshShape) {
       check(pack, 'CAPABILITY', 'Mesh emission requires source assets');
-      this.spriteShape = new MeshShapeSampler(pack, this.shape.geometry as R<MeshShapeT>);
+      this.spriteShape = new MeshShapeSampler(
+        pack,
+        this.shape.geometry as R<MeshShapeT>,
+        this.shape.texture?.uvChannel,
+      );
+    }
+    if (this.shape?.texture) {
+      check(pack, 'CAPABILITY', 'Shape texture requires source assets');
+      this.shapeTexture = new ShapeTextureSampler(pack, this.shape.texture);
     }
     const sourceRenderer = this.spriteShape?.definition.sourceRendererComponentId;
     if (sourceRenderer)
@@ -998,6 +1014,32 @@ export class Emitter {
         }
       }
   }
+  private sampleBirth(
+    serial: number,
+    phase: number,
+    index: number,
+    count: number,
+    seconds: number,
+  ): void {
+    if (this.rendererShape?.unavailable) {
+      this.birth.fill(0, 0, 5);
+      this.birth[5] = 1;
+      this.birth.fill(1, 6, 10);
+      this.birth[10] = this.birth[11] = 0;
+    } else if (this.shape)
+      sampleShape(
+        this.shape,
+        this.seed,
+        serial,
+        phase,
+        index,
+        count,
+        this.birth,
+        seconds,
+        this.main.durationSeconds,
+        this.spriteShape,
+      );
+  }
   private emit(
     amount: number,
     phase = (this.time % this.main.durationSeconds) / this.main.durationSeconds,
@@ -1017,14 +1059,54 @@ export class Emitter {
             amount - Math.ceil(this.maximumBirthLifetime / (spacing * (nativeBirthDelta ?? 1))) - 1,
           )
         : 0;
+    const serialBase = this.nextSerial;
     this.nextSerial += first;
+    const requested = Math.min(amount - first, ring ? 100_000 : capacity * 2);
+    let textureCount = requested;
+    if (this.shapeTexture) {
+      const aligned = (requested + 3) & ~3;
+      if (this.textureLive.length < aligned) {
+        const size = 2 ** Math.ceil(Math.log2(Math.max(4, aligned)));
+        this.textureBirths = new Float64Array(size * 12);
+        this.textureLive = new Uint32Array(size);
+      }
+      this.textureLive.fill(0, 0, aligned);
+      for (let n = 0; n < aligned; n++) {
+        this.sampleBirth(serialBase + first + n, phase, first + n, amount, seconds);
+        this.textureLive[n] = Number(this.shapeTexture.sample(this.birth));
+        this.textureBirths.set(this.birth, n * 12);
+      }
+      // Native texture clipping replaces rejected lanes from the padded batch tail.
+      textureCount = requested;
+      for (let n = 0; n < aligned; n++) textureCount -= 1 - this.textureLive[n]!;
+      textureCount = Math.max(0, textureCount);
+      let tail = aligned - 1;
+      for (let read = 0; read < textureCount; read++) {
+        let source = read;
+        if (!this.textureLive[source]) {
+          while (tail > read && !this.textureLive[tail]) tail--;
+          source = tail--;
+        }
+        if (source !== read)
+          this.textureBirths.copyWithin(read * 12, source * 12, (source + 1) * 12);
+        this.textureLive[read] = serialBase + first + source;
+      }
+    }
+    const textureSerialEnd = serialBase + first + ((requested + 3) & ~3);
+    let textureBirthIndex = 0;
     for (
       let n = first;
-      n < amount &&
+      n < (this.shapeTexture ? first + textureCount : amount) &&
       (ring || n < first + capacity * 2) &&
       (this.count < capacity || this.main.ringBuffer !== 0);
       n++
     ) {
+      const serial = this.shapeTexture ? this.textureLive[textureBirthIndex]! : this.nextSerial++;
+      if (this.shapeTexture) {
+        for (let k = 0; k < 12; k++)
+          this.birth[k] = this.textureBirths[textureBirthIndex * 12 + k]!;
+        textureBirthIndex++;
+      } else if (this.shape) this.sampleBirth(serial, phase, n, amount, seconds);
       const replacing = this.count === capacity;
       const i = replacing ? this.ringWrite : this.count++;
       if (replacing) {
@@ -1032,8 +1114,7 @@ export class Emitter {
         this.trigger?.forget(this.serials[i]!);
       }
       this.ringWrite = (i + 1) % capacity;
-      const o = i * 3,
-        serial = this.nextSerial++;
+      const o = i * 3;
       this.serials[i] = serial;
       if (this.subParentSystems) {
         this.subParentSystems[i] = 0;
@@ -1066,23 +1147,6 @@ export class Emitter {
         dy = 0,
         dz = 1;
       if (this.shape) {
-        if (this.rendererShape?.unavailable) {
-          this.birth.fill(0, 0, 5);
-          this.birth[5] = 1;
-          this.birth.fill(1, 6, 10);
-        } else
-          sampleShape(
-            this.shape,
-            this.seed,
-            serial,
-            t,
-            n,
-            amount,
-            this.birth,
-            seconds,
-            this.main.durationSeconds,
-            this.spriteShape,
-          );
         const [px, py, pz, bx, by, bz] = this.birth;
         const m = this.shapeMatrix;
         x = m[0]! * px! + m[4]! * py! + m[8]! * pz! + m[12]!;
@@ -1214,6 +1278,13 @@ export class Emitter {
       if (this.spriteShape)
         for (let channel = 0; channel < 4; channel++)
           this.startColors[i * 4 + channel]! *= this.birth[6 + channel]!;
+      if (this.shapeTexture)
+        for (let channel = 0; channel < 4; channel++) {
+          // Native samples multiply 8-bit birth colors, then quantize once.
+          if (!this.spriteShape) this.startColors[i * 4 + channel]! *= this.birth[6 + channel]!;
+          this.startColors[i * 4 + channel] =
+            Math.round(Math.max(0, Math.min(1, this.startColors[i * 4 + channel]!)) * 255) / 255;
+        }
       if (this.subBirth) this.inheritSubBirth(i, this.subBirth.parent, this.subBirth.properties);
       if (this.subAges) this.subAges[i] = 0;
       if (this.lifetimeProgress) {
@@ -1224,6 +1295,7 @@ export class Emitter {
       if (this.birthStepSeconds) this.birthStepSeconds[i] = NaN;
       this.updateCustom(i, 0);
       this.onBirth?.(i, phase);
+      const birthIndex = this.shapeTexture ? serial - serialBase : n;
       const age =
         nativeBirthDelta !== undefined
           ? Math.fround(
@@ -1232,13 +1304,14 @@ export class Emitter {
                   1,
                   Math.max(
                     Math.fround(1e-6),
-                    Math.fround(Math.fround(amount - n - 1 + remainder) * spacing),
+                    Math.fround(Math.fround(amount - birthIndex - 1 + remainder) * spacing),
                   ),
                 ),
             )
-          : (amount - n - 1 + remainder) * spacing;
+          : (amount - birthIndex - 1 + remainder) * spacing;
       if (age > 0) this.advanceParticles(age, i, i + 1);
     }
+    if (this.shapeTexture) this.nextSerial = textureSerialEnd;
   }
   /** Emits into this system's existing pool, including when automatic emission is disabled. */
   emitTriggeredBurst(parent: ParticleSnapshot, properties: number, parentSystem = 0): void {

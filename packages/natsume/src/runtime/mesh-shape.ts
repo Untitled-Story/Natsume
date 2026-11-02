@@ -15,6 +15,7 @@ export class MeshShapeSampler {
   constructor(
     pack: EffectPack,
     readonly definition: R<MeshShapeT>,
+    private readonly uvChannel = 0,
   ) {
     const mesh = pack.getMesh(definition.meshAssetId);
     check(mesh && mesh.positions.length, 'CAPABILITY', 'Mesh emission requires source geometry');
@@ -128,6 +129,11 @@ export class MeshShapeSampler {
     out[3] = nx;
     out[4] = ny;
     out[5] = nz;
+    if (out.length >= 12) {
+      const uv = mesh.texcoords.find((t) => t.channel === this.uvChannel)?.values;
+      out[10] = (uv?.[i]?.x ?? 0) * u + (uv?.[j]?.x ?? 0) * v + (uv?.[k]?.x ?? 0) * w;
+      out[11] = (uv?.[i]?.y ?? 0) * u + (uv?.[j]?.y ?? 0) * v + (uv?.[k]?.y ?? 0) * w;
+    }
     if (out.length >= 10) {
       out.fill(1, 6, 10);
       if (d.useMeshColors && mesh.colors.length) {

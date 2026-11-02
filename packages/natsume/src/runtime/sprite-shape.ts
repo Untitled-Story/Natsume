@@ -9,6 +9,7 @@ export class SpriteShapeSampler {
   constructor(
     pack: EffectPack,
     readonly definition: R<SpriteShapeT>,
+    private readonly uvChannel = 0,
   ) {
     const sprite = pack.document.assets.find((a) => a.id === definition.spriteAssetId)?.sprite;
     const mesh = sprite && pack.getMesh(sprite.meshAssetId);
@@ -32,6 +33,7 @@ export class SpriteShapeSampler {
     if (!mesh) {
       out.fill(0, 0, 5);
       out[5] = 1;
+      if (out.length >= 12) out[10] = out[11] = 0;
       return;
     }
     let i = 0,
@@ -87,6 +89,11 @@ export class SpriteShapeSampler {
     out[2] = p.z * u + q.z * v + r.z * w + d.normalOffset;
     out[3] = out[4] = 0;
     out[5] = 1;
+    if (out.length >= 12) {
+      const uv = mesh.texcoords.find((t) => t.channel === this.uvChannel)?.values;
+      out[10] = (uv?.[i]?.x ?? 0) * u + (uv?.[j]?.x ?? 0) * v + (uv?.[k]?.x ?? 0) * w;
+      out[11] = (uv?.[i]?.y ?? 0) * u + (uv?.[j]?.y ?? 0) * v + (uv?.[k]?.y ?? 0) * w;
+    }
     if (d.useMeshColors && mesh.colors.length && out.length >= 10) {
       const p = mesh.colors[i]!,
         q = mesh.colors[j]!,

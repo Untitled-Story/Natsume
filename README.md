@@ -182,6 +182,8 @@ MeshFilter / MeshRenderer 使用包内真实三角网格，支持可选顶点色
 
 Mesh / Sprite Shape 支持静态资产与实例内 Renderer 来源、Vertex / Edge / Triangle 采样、法线偏移、顶点色与扫描；源变换随节点更新，Renderer 启用状态与 Sprite 翻转 / tint 不影响发射。Donut 使用环面采样。Sprite 序列保留源图像与 UV，同图集共享纹理，跨图像按粒子顺序分段绘制。
 
+Shape Texture 支持 RGBA 阈值裁剪、颜色 / Alpha 调制和最近点 / 双线性取色；Mesh / Sprite 使用指定 UV 通道，基本形状使用原生形状映射。CPU 像素按包缓存并在释放包时回收。
+
 Canvas 支持 Overlay / Camera / World；Image 支持 Simple / Sliced / Tiled / Filled、九宫格、径向填充、裁边 Sprite 和 Pixel Perfect。CanvasGroup 处理透明度继承；UIMask 与 RectMask2D 支持嵌套、padding 和 softness。Sprite Mask 对 Sprite / 粒子支持 Inside / Outside、alpha cutoff 和排序范围。
 
 屏幕 Canvas 需要宿主提供显示尺寸；Camera 模式另需视图及投影矩阵：

@@ -1,4 +1,5 @@
 import { check } from './errors.js';
+import { decodePngPixels, type ImagePixels } from './loader/png-pixels.js';
 import type { DocumentT } from './format/generated/noa/ir/document.js';
 import type { MeshT } from './format/generated/noa/mesh/mesh.js';
 import { ComponentData } from './format/generated/noa/ir/component-data.js';
@@ -24,6 +25,8 @@ export class EffectPack {
   #files: Map<string, Uint8Array>;
   #meshes: Map<number, DeepReadonly<MeshT>>;
   #disposed = false;
+  #pixels = new Map<number, ImagePixels>();
+  #decodedPixelCount = 0;
 
   constructor(
     document: DocumentT,
@@ -80,6 +83,25 @@ export class EffectPack {
     if (!bytes || bytes.length < 24) return;
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
     return { width: view.getUint32(16), height: view.getUint32(20) };
+  }
+  /** @internal Lazily shares raw CPU pixels between shape samplers. Released with this pack. */
+  getImagePixels(id: number): ImagePixels {
+    this.#assertAlive();
+    let image = this.#pixels.get(id);
+    if (!image) {
+      const size = this.getImageSize(id);
+      check(
+        size && this.#decodedPixelCount + size.width * size.height <= 64 * 1024 * 1024,
+        'LIMIT',
+        'Decoded image budget exceeded',
+      );
+      const bytes = this.getAssetBytes(id);
+      check(bytes, 'SEMANTIC', 'Missing shape image bytes');
+      image = decodePngPixels(bytes);
+      this.#pixels.set(id, image);
+      this.#decodedPixelCount += image.width * image.height;
+    }
+    return image;
   }
   describe() {
     const counts: Record<string, number> = {};
@@ -154,6 +176,8 @@ export class EffectPack {
     this.#disposed = true;
     this.#files.clear();
     this.#meshes.clear();
+    this.#pixels.clear();
+    this.#decodedPixelCount = 0;
   }
   #assertAlive() {
     check(!this.#disposed, 'DISPOSED', 'Pack has been disposed');

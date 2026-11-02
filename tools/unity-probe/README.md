@@ -49,6 +49,7 @@ pnpm probe:unity --boundaries   # 发射、运动、外观与 BakeMesh 边界
 pnpm probe:unity --random       # 随机分布与参数相关性
 pnpm probe:unity --shape        # 位置扰动与 Burst Spread
 pnpm probe:unity --basic-shapes     # 基础 Shape 区域、厚度、初速度分布
+pnpm probe:unity --shape-textures   # 纹理 UV、裁剪、颜色与批次边界
 pnpm probe:unity --rotation-prewarm  # 生命周期旋转、预热窗口和首次更新余量
 pnpm probe:unity --rect-layout  # 有符号 RectTransform 布局
 pnpm probe:unity --noise-statistics # Noise 总体统计、三档首步位置、滚动轨迹、旋转与尺寸

@@ -155,6 +155,10 @@ export function sampleShape(
       dz = 0;
       x = dx * outer * fraction;
       y = dy * outer * fraction;
+      if (s.geometryType === G.ConeShape && out.length >= 12) {
+        out[10] = 0.5 + Math.cos(angle) * fraction * fraction * 0.5;
+        out[11] = 0.5 + Math.sin(angle) * fraction * fraction * 0.5;
+      }
       if (s.geometryType === G.ConeShape) {
         const cone = c as R<ConeShapeT>;
         // Native cone direction is normalized (radial * tan(angle), 1).
@@ -253,6 +257,38 @@ export function sampleShape(
   } else {
     dx = dy = 0;
     dz = 1;
+  }
+  if (
+    out.length >= 12 &&
+    s.geometryType !== G.MeshShape &&
+    s.geometryType !== G.SpriteShape &&
+    s.geometryType !== G.ConeShape
+  ) {
+    let extent = 1;
+    const geometry = s.geometry;
+    if (geometry && 'radius' in geometry)
+      extent =
+        2 *
+        (typeof geometry.radius === 'number'
+          ? geometry.radius
+          : scalar(geometry.radius, phase, rnd(2)));
+    if (s.geometryType === G.DonutShape)
+      extent = 2 * ((geometry as R<DonutShapeT>).radius + (geometry as R<DonutShapeT>).tubeRadius);
+    if (s.geometryType === G.EdgeShape)
+      extent = 2 * scalar((geometry as R<EdgeShapeT>).halfLength, phase, rnd(2));
+    out[10] = extent ? x / extent + 0.5 : 0.5;
+    out[11] = extent ? y / extent + 0.5 : 0.5;
+    if (s.geometryType === G.EdgeShape) out[11] = 0;
+    if (s.geometryType === G.SphereShape) {
+      out[10] = (((Math.atan2(y, x) / (2 * Math.PI)) % 1) + 1) % 1;
+      const r = Math.hypot(x, y, z);
+      out[11] = r ? 0.5 + (z / r) * 0.5 : 0.5;
+    }
+    if (s.geometryType === G.DonutShape) {
+      const d = geometry as R<DonutShapeT>;
+      out[10] = d.tubeRadius ? (Math.hypot(x, y) - d.radius) / (2 * d.tubeRadius) + 0.5 : 0.5;
+      out[11] = d.tubeRadius ? z / (2 * d.tubeRadius) + 0.5 : 0.5;
+    }
   }
   if (s.randomPosition) {
     const h = rnd(12) * 2 - 1,

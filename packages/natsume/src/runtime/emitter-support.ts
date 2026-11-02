@@ -197,13 +197,6 @@ export function emitterSupport(
     if (module.dataType === M.ShapeModule) {
       const shape = module.data as R<ShapeModuleT>;
       rules.require(
-        !shape.texture,
-        'CAPABILITY',
-        `${path}.texture`,
-        shape.texture,
-        'Shape textures are not implemented',
-      );
-      rules.require(
         shape.geometry &&
           shape.geometryType >= ShapeGeometry.CircleShape &&
           shape.geometryType <= ShapeGeometry.MeshShape,
@@ -213,19 +206,6 @@ export function emitterSupport(
         'Unsupported shape',
       );
     }
-    if (
-      module.dataType === M.TextureSheetModule &&
-      module.data &&
-      'flipUProbability' in module.data
-    )
-      for (const field of ['flipUProbability', 'flipVProbability'] as const)
-        rules.require(
-          module.data[field] === 0,
-          'CAPABILITY',
-          `${path}.${field}`,
-          module.data[field],
-          'Texture sheet probability flipping is not implemented',
-        );
     if (module.dataType === M.NoiseModule) {
       const noise = module.data as R<NoiseModuleT>;
       rules.require(
