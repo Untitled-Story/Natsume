@@ -15,6 +15,7 @@ interface Row {
   delta: number;
   unscaledDelta: number;
   visible: boolean;
+  fixedUnscaledDelta?: number;
 }
 interface Case {
   mode: number;
@@ -80,6 +81,106 @@ it('matches native Automatic, Pause and AlwaysSimulate visibility across both cl
 const clocks = JSON.parse(readNativeFixture('unity-particle-clock-playback.json')) as {
   cases: (Case & { timeScale: number })[];
 };
+for (const [label, observations] of [
+  ['capture', culling],
+  [
+    'realtime',
+    JSON.parse(readNativeFixture('unity-particle-culling-realtime.json')) as { cases: Case[] },
+  ],
+  [
+    'validation',
+    JSON.parse(readNativeFixture('unity-particle-culling-validation.json')) as { cases: Case[] },
+  ],
+] as const)
+  it('matches fixed-step catchup against native playback ' + label, () => {
+    let scaledTime = 0,
+      unscaledTime = 0,
+      scaledCount = 0,
+      unscaledCount = 0,
+      settled = 0;
+    for (const c of observations.cases.filter((c) => c.mode === 1)) {
+      const source = sourceFor(c),
+        pack = packFor(source),
+        scene = new Scene(pack, [1]);
+      const e = new Emitter(
+        3,
+        scene.nodes.get(1)!,
+        source,
+        true,
+        1,
+        [],
+        undefined,
+        undefined,
+        undefined,
+        { fog: { mode: 'none' }, fixedDeltaSeconds: c.fixedDelta },
+      );
+      e.enableLifetimeProgress();
+      e.sync();
+      try {
+        for (const f of c.frames) {
+          if (f.frame) {
+            e.visible = f.visible;
+            e.step(
+              c.unscaled ? f.unscaledDelta : f.delta,
+              f.delta,
+              label === 'capture'
+                ? f.fixedUnscaledDelta! / c.fixedDelta
+                : f.delta > 0
+                  ? f.unscaledDelta / f.delta
+                  : 1,
+            );
+          }
+          const time = Math.abs(e.elapsedSeconds - f.time),
+            count = Math.abs(e.count - f.count);
+          if (c.unscaled) {
+            unscaledTime = Math.max(unscaledTime, time);
+            unscaledCount = Math.max(unscaledCount, count);
+          } else {
+            scaledTime = Math.max(scaledTime, time);
+            scaledCount = Math.max(scaledCount, count);
+          }
+          if (f.frame >= 31) settled = Math.max(settled, time);
+        }
+      } finally {
+        pack.dispose();
+      }
+    }
+    recordError(
+      label + '-particle-catchup-scaled-time',
+      scaledTime,
+      'second',
+      `${observations.cases.filter((c) => c.mode === 1).length / 2} cases × 50 frames`,
+    );
+    recordError(
+      label + '-particle-catchup-scaled-count',
+      scaledCount,
+      'particle',
+      `${observations.cases.filter((c) => c.mode === 1).length / 2} cases × 50 frames`,
+    );
+    recordError(
+      label + '-particle-catchup-unscaled-time',
+      unscaledTime,
+      'second',
+      `${observations.cases.filter((c) => c.mode === 1).length / 2} cases × 50 frames`,
+    );
+    recordError(
+      label + '-particle-catchup-unscaled-count',
+      unscaledCount,
+      'particle',
+      `${observations.cases.filter((c) => c.mode === 1).length / 2} cases × 50 frames`,
+    );
+    recordError(
+      label + '-particle-catchup-settled-time',
+      settled,
+      'second',
+      `${observations.cases.filter((c) => c.mode === 1).length} cases, frame 31 onward`,
+    );
+    expect(scaledTime).toBeLessThan(3e-5);
+    expect(scaledCount).toBeLessThanOrEqual(1);
+    expect(unscaledTime).toBeLessThan(3e-5);
+    expect(unscaledCount).toBeLessThanOrEqual(1);
+    expect(settled).toBeLessThan(3e-5);
+  });
 it('matches native clocks at three time scales and simulation speeds, including timeScale zero', () => {
   let maxTime = 0,
     maxCount = 0,

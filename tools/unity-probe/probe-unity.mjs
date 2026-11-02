@@ -93,6 +93,8 @@ const ringPlayback = process.argv.includes('--ring-playback');
 const particleClockPlayback = process.argv.includes('--particle-clocks');
 const particleMainPlayback = process.argv.includes('--particle-main');
 const particleCullingPlayback = process.argv.includes('--particle-culling');
+const cullingRealtime = particleCullingPlayback && process.argv.includes('--realtime');
+const cullingValidation = cullingRealtime && process.argv.includes('--validation');
 const meshShapes = process.argv.includes('--mesh-shapes');
 const particleProbe = meshShapes
   ? ['mesh-shapes', 'NatsumeMeshShapeProbe.Run']
@@ -119,7 +121,14 @@ const particleProbe = meshShapes
                       : particleMainPlayback
                         ? ['particle-main', 'NatsumeParticleMainPlaybackProbe.Run']
                         : particleCullingPlayback
-                          ? ['particle-culling', 'NatsumeParticleCullingPlaybackProbe.Run']
+                          ? [
+                              cullingValidation
+                                ? 'particle-culling-validation'
+                                : cullingRealtime
+                                  ? 'particle-culling-realtime'
+                                  : 'particle-culling',
+                              'NatsumeParticleCullingPlaybackProbe.Run',
+                            ]
                           : undefined;
 const bySpeed = process.argv.includes('--by-speed') || !!particleProbe;
 assert(
@@ -476,6 +485,8 @@ const child = runEditor(
     env: {
       ...process.env,
       NATSUME_COMPAT_OUTPUT: baseline,
+      ...(cullingRealtime ? { NATSUME_CULLING_REALTIME: '1' } : {}),
+      ...(cullingValidation ? { NATSUME_CULLING_VALIDATION: '1' } : {}),
       ...(traceOrder ? { NATSUME_NATIVE_MAP: nativeMap, NATSUME_NATIVE_TRACE: nativeTrace } : {}),
       ...(sharedSubEmitters
         ? {
@@ -509,12 +520,15 @@ if (meshShapes) {
   process.exit(0);
 }
 if (particleClockPlayback || particleMainPlayback || particleCullingPlayback) {
-  assert.equal(current.cases.length, particleClockPlayback ? 18 : particleMainPlayback ? 60 : 84);
+  assert.equal(
+    current.cases.length,
+    particleClockPlayback ? 18 : particleMainPlayback ? 60 : cullingValidation ? 144 : 84,
+  );
   if (process.argv.includes('--update-fixtures'))
     await saveJson(
       resolve(
         root,
-        `data/unity-baselines/fixtures/${particleClockPlayback ? 'unity-particle-clock-playback' : particleMainPlayback ? 'unity-particle-main-playback' : 'unity-particle-culling-playback'}.json`,
+        `data/unity-baselines/fixtures/${particleClockPlayback ? 'unity-particle-clock-playback' : particleMainPlayback ? 'unity-particle-main-playback' : cullingValidation ? 'unity-particle-culling-validation' : cullingRealtime ? 'unity-particle-culling-realtime' : 'unity-particle-culling-playback'}.json`,
       ),
       JSON.stringify(current, null, 2) + '\n',
     );

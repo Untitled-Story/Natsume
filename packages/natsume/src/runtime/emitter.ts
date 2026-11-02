@@ -215,6 +215,9 @@ export class Emitter {
   emitting = true;
   visible = true;
   private culledSeconds = 0;
+  private catchupRemainder = 0;
+  private culledHostFrame: number | undefined;
+  private resumedHostFrame: number | undefined;
   private wasCulled = false;
   constructor(
     readonly id: number,
@@ -450,6 +453,14 @@ export class Emitter {
   ): readonly [number, number, number] {
     const velocity = value?.rigidbodyVelocities?.[String(this.main.hostRigidbodyVelocitySlot)];
     check(
+      this.main.culling !== 1 ||
+        (value?.fixedDeltaSeconds !== undefined &&
+          Number.isFinite(value.fixedDeltaSeconds) &&
+          value.fixedDeltaSeconds > 0),
+      'HOST',
+      'PauseAndCatchup requires particleEnvironment.fixedDeltaSeconds',
+    );
+    check(
       this.main.emitterVelocityMode !== EmitterVelocityMode.Rigidbody ||
         (velocity && velocity.length === 3 && velocity.every(Number.isFinite)),
       'HOST',
@@ -613,6 +624,8 @@ export class Emitter {
     this.ringWrite = 0;
     this.forceStep = 0;
     this.culledSeconds = 0;
+    this.catchupRemainder = 0;
+    this.culledHostFrame = this.resumedHostFrame = undefined;
     this.wasCulled = false;
     this.time = 0;
     this.rateTime = 0;
@@ -665,6 +678,8 @@ export class Emitter {
     this.updateEmitterVelocity(0);
     if (!active) {
       this.culledSeconds = 0;
+      this.catchupRemainder = 0;
+      this.culledHostFrame = this.resumedHostFrame = undefined;
       this.wasCulled = false;
       this.clearRetiredRingParticles();
       this.lights?.clear();
@@ -1278,24 +1293,70 @@ export class Emitter {
           this.time + 1e-7 >= this.main.durationSeconds))
     );
   }
-  step(delta: number): number {
-    if (!this.enabledLast || delta <= 0) return 0;
+  step(
+    delta: number,
+    scaledDelta = delta,
+    unscaledFixedRatio = scaledDelta > 0 ? delta / scaledDelta : 1,
+    hostFrame?: number,
+    hostScaledDelta = scaledDelta,
+  ): number {
+    if (!this.enabledLast) return 0;
+    if (!this.timelineControlled && hostFrame !== undefined && this.resumedHostFrame === hostFrame)
+      return 0;
     const culling = this.main.culling === 0 ? (this.main.loop ? 2 : 3) : this.main.culling;
     if (this.timelineControlled) {
       this.culledSeconds = 0;
+      this.catchupRemainder = 0;
+      this.culledHostFrame = this.resumedHostFrame = undefined;
       this.wasCulled = false;
     }
     if (!this.timelineControlled && !this.visible && culling !== 3) {
-      this.wasCulled = true;
-      if (culling === 1) this.culledSeconds += delta;
+      if (
+        culling === 1 &&
+        this.wasCulled &&
+        (hostFrame === undefined || this.culledHostFrame !== hostFrame)
+      )
+        this.culledSeconds += scaledDelta;
+      if (delta > 0 || scaledDelta > 0) {
+        if (!this.wasCulled) this.culledHostFrame = hostFrame;
+        this.wasCulled = true;
+      }
       return 0;
     }
+    if (delta <= 0) return 0;
+    let catchupStep: number | undefined;
     if (this.wasCulled) {
+      this.resumedHostFrame = hostFrame;
       this.wasCulled = false;
       if (culling === 2) return 0;
+      if (culling === 1) {
+        const speed = this.main.simulationSpeed;
+        catchupStep =
+          this.environment!.fixedDeltaSeconds! * (this.main.clock === 1 ? unscaledFixedRatio : 1);
+        // Unity timestamps the first culled frame, then catches up through the restoration frame.
+        const backlog = Math.fround((this.culledSeconds + hostScaledDelta) * speed);
+        const steps =
+          catchupStep > 0 ? Math.max(0, Math.floor(Math.fround(backlog / catchupStep))) : 0;
+        check(steps <= 100_000, 'LIMIT', 'Particle catchup fixed-step budget exceeded');
+        const elapsed = steps > 0 ? Math.fround(steps * catchupStep) : 0;
+        // The restoration frame only runs complete catchup steps. Its ordinary delta is skipped.
+        this.catchupRemainder =
+          catchupStep > 0 && speed > 0
+            ? Math.fround(Math.max(0, Math.fround(backlog - elapsed)) / speed)
+            : 0;
+        delta = speed > 0 ? elapsed / speed : 0;
+      }
+      this.culledSeconds = 0;
+    } else if (this.catchupRemainder > 0) {
+      const remainder = this.catchupRemainder;
+      this.catchupRemainder = 0;
+      const elapsed = this.advanceStep(remainder, remainder * this.main.simulationSpeed);
+      return elapsed + this.advanceStep(delta);
     }
-    delta += this.culledSeconds;
-    this.culledSeconds = 0;
+    if (delta <= 0) return 0;
+    return this.advanceStep(delta, catchupStep);
+  }
+  private advanceStep(delta: number, catchupStep?: number): number {
     if (this.completed && !this.timelineControlled) {
       this.onAdvanced?.(delta * this.main.simulationSpeed);
       return 0;
@@ -1319,7 +1380,8 @@ export class Emitter {
       if (!this.timelineControlled) this.prewarm();
       if (dt <= 0) return 0;
     }
-    const steps = Math.ceil(dt / Math.fround(0.03));
+    const ratio = dt / (catchupStep ?? Math.fround(0.03));
+    const steps = Math.max(1, Math.ceil(ratio - (catchupStep ? 1e-7 * Math.max(1, ratio) : 1e-8)));
     const substep = dt / steps;
     for (let i = 0; i < steps; i++) this.advance(substep);
     if (this.pendingPrewarmTime > 0) {

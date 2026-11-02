@@ -40,6 +40,8 @@ pnpm probe:unity --ring-playback # 实际 Play 环形计数、年龄与延迟 De
 pnpm probe:unity --mesh-shapes # Mesh 发射、子网格、顶点色、扫描与退化几何
 pnpm probe:unity --particle-clocks # Scaled / Unscaled、timeScale=0 与 Simulation Speed
 pnpm probe:unity --particle-main # StopAction、停止 / 清空、子系统和残留拖尾
+pnpm probe:unity --particle-culling --realtime --validation # timeScale=0 / 0.25 / 1 / 2 独立验证
+pnpm probe:unity --particle-culling --realtime # 普通 Play 的四种裁剪模式
 pnpm probe:unity --particle-culling # 相机离屏 / 恢复与物理固定步长扫描
 pnpm probe:unity --events       # 类型化事件、循环端点与启停顺序
 pnpm probe:unity --boundaries   # 发射、运动、外观与 BakeMesh 边界

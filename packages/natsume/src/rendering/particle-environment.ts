@@ -21,6 +21,8 @@ export type ParticleFog =
 /** Host gravity, view, fog and depth inputs. Texture ownership stays with the host. */
 export interface ParticleEnvironment {
   readonly fog: ParticleFog;
+  /** Unity project fixedDeltaTime in seconds. Required for PauseAndCatchup culling. */
+  readonly fixedDeltaSeconds?: number | undefined;
   /** Acceleration in Unity world units per second squared. */
   readonly gravity?: readonly [number, number, number] | undefined;
   /** Physics2D acceleration in Unity world units per second squared. */
@@ -58,6 +60,12 @@ export function copyEnvironment(
   value: ParticleEnvironment | undefined,
 ): ParticleEnvironment | undefined {
   if (!value) return;
+  check(
+    value.fixedDeltaSeconds === undefined ||
+      (Number.isFinite(value.fixedDeltaSeconds) && value.fixedDeltaSeconds > 0),
+    'HOST',
+    'Particle fixedDeltaSeconds must be finite and positive',
+  );
   const f = value.fog;
   check(
     f && ['none', 'linear', 'exp', 'exp2'].includes(f.mode),
@@ -181,6 +189,7 @@ export function copyEnvironment(
   }
   return {
     fog: f.mode === 'none' ? { mode: 'none' } : { ...f, color: [...f.color] },
+    fixedDeltaSeconds: value.fixedDeltaSeconds,
     gravity: g ? [g[0], g[1], g[2]] : undefined,
     gravity2D: g2 ? [g2[0], g2[1]] : undefined,
     forceFields: copyForceFields(value.forceFields),

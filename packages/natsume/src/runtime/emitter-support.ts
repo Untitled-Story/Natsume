@@ -28,11 +28,14 @@ export function emitterSupport(
   rules.issues.push(...parameterSupport(source));
   const main = source.main!;
   rules.require(
-    main.culling !== 1,
-    'CAPABILITY',
-    'main.culling',
-    main.culling,
-    'PauseAndCatchup requires a verified host fixed-step policy',
+    main.culling !== 1 ||
+      (environment?.fixedDeltaSeconds !== undefined &&
+        Number.isFinite(environment.fixedDeltaSeconds) &&
+        environment.fixedDeltaSeconds > 0),
+    'HOST',
+    'particleEnvironment.fixedDeltaSeconds',
+    environment?.fixedDeltaSeconds,
+    'PauseAndCatchup requires particleEnvironment.fixedDeltaSeconds',
   );
   rules.require(
     main.emitterVelocityMode !== 1 ||

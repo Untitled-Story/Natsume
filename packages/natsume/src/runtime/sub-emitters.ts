@@ -73,6 +73,10 @@ export class SubEmitterGraph {
   private readonly visits = new Map<number, number>();
   private orderedDelta = 0;
   private unscaledDelta: number | undefined;
+  private unscaledFixedRatio = 1;
+  private hostSequence = 0;
+  private hostFrame: number | undefined;
+  private hostScaledDelta = 0;
 
   constructor(private readonly emitters: ReadonlyMap<number, Emitter>) {
     const indegree = new Map<number, number>();
@@ -220,12 +224,25 @@ export class SubEmitterGraph {
       if (id !== systemId && this.emitters.get(id)!.graphPlaying) return true;
     return false;
   }
-  step(delta: number, unscaledDelta = delta): void {
+  beginHostUpdate(scaledDelta: number): void {
+    this.hostFrame = ++this.hostSequence;
+    this.hostScaledDelta = scaledDelta;
+  }
+  endHostUpdate(): void {
+    this.hostFrame = undefined;
+  }
+  step(
+    delta: number,
+    unscaledDelta = delta,
+    unscaledFixedRatio = delta > 0 ? unscaledDelta / delta : 1,
+  ): void {
+    this.unscaledFixedRatio = unscaledFixedRatio;
     this.unscaledDelta = unscaledDelta;
     try {
       this.stepOrdinary(delta);
     } finally {
       this.unscaledDelta = undefined;
+      this.unscaledFixedRatio = 1;
     }
   }
   private clockDelta(emitter: Emitter, delta: number): number {
@@ -276,7 +293,13 @@ export class SubEmitterGraph {
         this.advancing = emitter;
         let elapsed = 0;
         try {
-          elapsed = emitter.step(this.clockDelta(emitter, delta));
+          elapsed = emitter.step(
+            this.clockDelta(emitter, delta),
+            delta,
+            this.unscaledFixedRatio,
+            this.hostFrame,
+            this.hostFrame === undefined ? delta : this.hostScaledDelta,
+          );
         } finally {
           this.advancing = undefined;
         }
@@ -381,7 +404,13 @@ export class SubEmitterGraph {
       try {
         if (emitter === warming) emitter.advancePrewarm(localSeconds);
         else
-          elapsed = emitter.step(warming || controlled ? delta : this.clockDelta(emitter, delta));
+          elapsed = emitter.step(
+            warming || controlled ? delta : this.clockDelta(emitter, delta),
+            delta,
+            this.unscaledFixedRatio,
+            warming || controlled ? undefined : this.hostFrame,
+            this.hostFrame === undefined ? delta : this.hostScaledDelta,
+          );
       } finally {
         this.advancing = undefined;
         this.warmingStep = false;

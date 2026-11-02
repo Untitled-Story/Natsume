@@ -6,7 +6,8 @@ import { readNativeFixture } from './native-fixture.js';
 import { recordError } from './measurement.js';
 import { minimalDocument } from './helpers.js';
 import { particleSource, constant } from './particle-fixtures.js';
-function setup(culling: readonly [number, number] = [0, 0]) {
+import { copyEnvironment } from '../src/rendering/particle-environment.js';
+function setup(culling: readonly [number, number] = [0, 0], fixedDeltaSeconds?: number) {
   const document = minimalDocument();
   const sources = [0, 1].map((clock) => {
     const source = particleSource();
@@ -28,10 +29,74 @@ function setup(culling: readonly [number, number] = [0, 0]) {
     (s, i) => new I.ComponentT(3 + i, 1, true, I.ComponentData.ParticleSystem, s),
   );
   const pack = new EffectPack(document, { files: [] } as never, new Map(), new Map());
-  const sim = new Simulation(pack);
+  const sim = new Simulation(pack, {
+    particleEnvironment: { fog: { mode: 'none' }, fixedDeltaSeconds },
+  });
   sim.play();
   return { pack, sim, sources };
 }
+it('requires a positive host catchup step and validates environment replacements', () => {
+  expect(() => setup([1, 3])).toThrow(/fixedDeltaSeconds/);
+  for (const value of [0, -1, NaN, Infinity])
+    expect(() => copyEnvironment({ fog: { mode: 'none' }, fixedDeltaSeconds: value })).toThrow(
+      /fixedDeltaSeconds/,
+    );
+  const { pack, sim } = setup([1, 3], 0.02);
+  try {
+    expect(
+      copyEnvironment({ fog: { mode: 'none' }, fixedDeltaSeconds: 0.02 })!.fixedDeltaSeconds,
+    ).toBe(0.02);
+    expect(() => sim.emitters.get(3)!.resolveEnvironment({ fog: { mode: 'none' } })).toThrow(
+      /fixedDeltaSeconds/,
+    );
+  } finally {
+    pack.dispose();
+  }
+});
+it('catches up offscreen systems, keeps sub-step remainder and clears it on restart', () => {
+  const { pack, sim } = setup([1, 3], 0.02);
+  try {
+    sim.setParticleSystemVisible(3, false);
+    sim.update(1 / 60, { unscaledDeltaSeconds: 1 / 60 });
+    sim.update(0.1, { unscaledDeltaSeconds: 0.1 });
+    expect(sim.emitters.get(3)!.elapsedSeconds).toBe(0);
+    sim.pause();
+    sim.update(0.1, { unscaledDeltaSeconds: 0.1 });
+    sim.play();
+    sim.setParticleSystemVisible(3, true);
+    sim.update(1 / 60, { unscaledDeltaSeconds: 1 / 60 });
+    expect(sim.emitters.get(3)!.elapsedSeconds).toBeCloseTo(0.1, 6);
+    sim.update(1 / 60, { unscaledDeltaSeconds: 1 / 60 });
+    expect(sim.emitters.get(3)!.elapsedSeconds).toBeCloseTo(0.1 + 2 / 60, 6);
+    sim.setParticleSystemVisible(3, false);
+    sim.update(1 / 60, { unscaledDeltaSeconds: 1 / 60 });
+    sim.setParticleSystemVisible(3, true);
+    sim.update(1 / 60, { unscaledDeltaSeconds: 1 / 60 });
+    sim.restart();
+    sim.update(1 / 60, { unscaledDeltaSeconds: 1 / 60 });
+    expect(sim.emitters.get(3)!.elapsedSeconds).toBeCloseTo(1 / 60, 6);
+  } finally {
+    pack.dispose();
+  }
+});
+it('derives unscaled catchup steps from the host clock ratio and keeps Timeline simulation explicit', () => {
+  const { pack, sim } = setup([3, 1], 0.02);
+  try {
+    sim.setParticleSystemVisible(4, false);
+    for (let i = 0; i < 8; i++) sim.update(1 / 60, { unscaledDeltaSeconds: 2 / 60 });
+    sim.setParticleSystemVisible(4, true);
+    sim.update(1 / 60, { unscaledDeltaSeconds: 2 / 60 });
+    expect(sim.emitters.get(4)!.elapsedSeconds).toBeCloseTo(0.12, 6);
+    sim.emitters.get(4)!.timelineControlled = true;
+    sim.subEmitters.stepControlled(1 / 60, new Set([4]));
+    expect(sim.emitters.get(4)!.elapsedSeconds).toBeCloseTo(0.12 + 1 / 60, 6);
+    sim.emitters.get(4)!.timelineControlled = false;
+    sim.update(1 / 60, { unscaledDeltaSeconds: 2 / 60 });
+    expect(sim.emitters.get(4)!.elapsedSeconds).toBeCloseTo(0.12 + 3 / 60, 6);
+  } finally {
+    pack.dispose();
+  }
+});
 it('advances unscaled particles at zero scaled time and keeps both fractional clocks independent', () => {
   const { pack, sim } = setup();
   try {

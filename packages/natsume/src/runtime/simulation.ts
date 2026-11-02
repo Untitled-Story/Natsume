@@ -1004,6 +1004,10 @@ export class Simulation {
           this.unscaledAccumulator + 1e-10 >= this.fixedDelta) &&
         steps < 8
       ) {
+        if (steps === 0)
+          this.subEmitters.beginHostUpdate(
+            Math.min(8, Math.floor((this.accumulator + 1e-10) / this.fixedDelta)) * this.fixedDelta,
+          );
         const scaledStep = this.accumulator + 1e-10 >= this.fixedDelta ? this.fixedDelta : 0;
         const unscaledStep =
           this.unscaledAccumulator + 1e-10 >= this.fixedDelta ? this.fixedDelta : 0;
@@ -1023,7 +1027,11 @@ export class Simulation {
           directorsAdvanced = true;
           if (!this.advanceDirectors(seconds, clocks)) return;
         }
-        this.subEmitters.step(scaledStep, unscaledStep);
+        this.subEmitters.step(
+          scaledStep,
+          unscaledStep,
+          seconds > 0 ? (clocks.unscaledDeltaSeconds ?? seconds) / seconds : 1,
+        );
         this.time += scaledStep;
         this.accumulator -= scaledStep;
         this.unscaledAccumulator -= unscaledStep;
@@ -1064,6 +1072,7 @@ export class Simulation {
       if (this.state === 'draining' && this.particleCount === 0 && this.trailPoints.count === 0)
         this.state = 'stopped';
     } finally {
+      this.subEmitters.endHostUpdate();
       this.updating = false;
     }
   }

@@ -245,6 +245,7 @@ export async function showPreview(pack: EffectPack, signal: AbortSignal): Promis
     parentLayout: { width: app!.screen.width, height: app!.screen.height },
     particleEnvironment: {
       fog: { mode: 'none' },
+      fixedDeltaSeconds: 0.02,
       viewPosition: [0, 0, -1000],
       gravity: [0, gravityY, 0],
     },
@@ -321,6 +322,7 @@ gravityInput.addEventListener('change', () => {
   }
   effect?.setParticleEnvironment({
     fog: { mode: 'none' },
+    fixedDeltaSeconds: 0.02,
     viewPosition: [0, 0, -1000],
     gravity: [0, next, 0],
   });
