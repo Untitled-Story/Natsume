@@ -364,7 +364,7 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
     this.frameSelections = new Uint32Array(emitter.ages.length);
     this.sheetTextures = sheetTextures;
     this.frameUV =
-      emitter.sheet?.mode === 1 && definition.mode === RenderMode.Mesh
+      emitter.sheet?.mode === 1
         ? emitter.sheet.spriteAssetIds.map((id) =>
             spriteUVTransform(pack, pack.document.assets.find((a) => a.id === id)!.sprite!),
           )
@@ -773,6 +773,7 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
         cz = Math.cos(e.rotations[o + 2]! + roll),
         snz = Math.sin(e.rotations[o + 2]! + roll) * rotationSign;
       e.sampleColor(i, this.scratchColor);
+      const flipSheet = e.sheet;
       const sheet =
           e.sheet?.mode === 0 && e.sheet.uvChannelMask & (1 << (this.binding?.uvSet ?? 0))
             ? e.sheet
@@ -804,10 +805,10 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
       const flip = this.definition.flip;
       const flipX =
         (flip ? random(e.seed, e.serials[i]!, 57) < flip.x : false) !==
-        (sheet ? random(e.seed, e.serials[i]!, 60) < sheet.flipUProbability : false);
+        (flipSheet ? random(e.seed, e.serials[i]!, 60) < flipSheet.flipUProbability : false);
       const flipY =
         (flip ? random(e.seed, e.serials[i]!, 58) < flip.y : false) !==
-        (sheet ? random(e.seed, e.serials[i]!, 61) < sheet.flipVProbability : false);
+        (flipSheet ? random(e.seed, e.serials[i]!, 61) < flipSheet.flipVProbability : false);
       const custom = this.definition.vertexStreams.some(
         (s) => s.semantic === VertexSemantic.Custom1,
       )
@@ -910,10 +911,38 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
         v[k + 1] = (matrix[1]! * wx + matrix[5]! * wy + matrix[9]! * wz + matrix[13]!) / w;
         v[k + 2] = (matrix[2]! * wx + matrix[6]! * wy + matrix[10]! * wz + matrix[14]!) / w;
         // No bitmap upload flip: authored bottom-left Unity UVs are flipped here once.
-        const su = flipX ? 1 - uv.x : uv.x;
-        const sv = flipY ? 1 - uv.y : uv.y;
+        let su = flipX ? 1 - uv.x : uv.x;
+        let sv = flipY ? 1 - uv.y : uv.y;
+        const spriteMap = this.frameUV[frameIndex];
+        const spriteUVEnabled = !!(
+          (e.sheet?.uvChannelMask ?? 0) &
+          (1 << (this.binding?.uvSet ?? 0))
+        );
+        if (
+          spriteMap &&
+          this.definition.mode !== RenderMode.Mesh &&
+          (!spriteUVEnabled || flipX || flipY)
+        ) {
+          const a = spriteMap[0]!,
+            b = spriteMap[1]!,
+            c = spriteMap[2]!,
+            d = spriteMap[3]!,
+            f = spriteMap[4]!,
+            g = spriteMap[5]!;
+          const determinant = a * f - b * d;
+          if (Math.abs(determinant) > 1e-12) {
+            let u = ((uv.x - c) * f - (uv.y - g) * b) / determinant;
+            let v = ((uv.y - g) * a - (uv.x - c) * d) / determinant;
+            if (flipX) u = 1 - u;
+            if (flipY) v = 1 - v;
+            su = spriteUVEnabled ? a * u + b * v + c : u;
+            sv = spriteUVEnabled ? d * u + f * v + g : v;
+          }
+        }
         const map =
-          e.sheet?.mode === 1 && !!(e.sheet.uvChannelMask & (1 << (this.binding?.uvSet ?? 0)))
+          this.definition.mode === RenderMode.Mesh &&
+          e.sheet?.mode === 1 &&
+          !!(e.sheet.uvChannelMask & (1 << (this.binding?.uvSet ?? 0)))
             ? this.frameUV[frameIndex]
             : undefined;
         const sampledU = map ? map[0]! * su + map[1]! * sv + map[2]! : su;

@@ -25,6 +25,20 @@ test('matches native sprite sheet frame boundaries and first-frame geometric sca
   );
   expect(measured.pixels[0]).toEqual([64, 0, 128, 192]);
   expect(measured.pixels[1]).toEqual([128, 0, 64, 192]);
+  const base = measured.flips.find(
+    (f: { mask: number; u: number; v: number }) => f.mask === 1 && f.u === 0 && f.v === 0,
+  )!;
+  for (const f of measured.flips)
+    for (let i = 0; i < 4; i++) {
+      const b = base.vertices[i]!,
+        v = f.vertices[i]!;
+      expect(v.x).toBe(b.x);
+      expect(v.y).toBe(b.y);
+      expect(v.u).toBeCloseTo(f.u ? 1 - b.u! : b.u!, 6);
+      const bv = f.mask & 1 ? b.v! : b.v! * 2,
+        span = f.mask & 1 ? 0.5 : 1;
+      expect(v.v).toBeCloseTo(f.v ? span - bv : bv, 6);
+    }
   native.cases.forEach((c, i) =>
     c.vertices.forEach((p, j) => {
       for (const axis of ['x', 'y', 'z'] as const)

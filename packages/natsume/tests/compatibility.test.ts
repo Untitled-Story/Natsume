@@ -36,6 +36,34 @@ const context: CompatibilityContext = {
   disposed: false,
 };
 
+it('accepts known shader-unused streams without requiring wider built-in vertex buffers', () => {
+  const f = fixture();
+  for (let semantic = 0; semantic <= 32; semantic++) {
+    if ([0, 2, 3].includes(semantic)) continue;
+    f.renderer.vertexStreams.push(new VertexStreamT(semantic, 1));
+  }
+  const pack = f.pack();
+  try {
+    expect(
+      checkCompatibility(pack, {}, context).issues.filter((i) => i.field.endsWith('vertexStreams')),
+    ).toEqual([]);
+  } finally {
+    pack.dispose();
+  }
+  const invalid = fixture();
+  invalid.renderer.vertexStreams.push(new VertexStreamT(33 as never, 1));
+  const rejected = invalid.pack();
+  try {
+    expect(
+      checkCompatibility(rejected, {}, context).issues.some(
+        (i) => i.field.endsWith('vertexStreams') && i.severity === 'error',
+      ),
+    ).toBe(true);
+  } finally {
+    rejected.dispose();
+  }
+});
+
 function fixture() {
   const doc = minimalDocument();
   const source = particleSource();

@@ -73,6 +73,7 @@ export async function measureSpriteSheets(ages: number[]) {
     const sprite = new SpriteAssetT();
     sprite.meshAssetId = 10 + i;
     sprite.pixelsPerUnit = 4;
+    sprite.pivot = { x: i === 0 ? 0.25 : 0.5, y: i === 0 ? 1.25 : 0.5 } as typeof sprite.pivot;
     sprite.rect = { x: 0, y: 0, z: i === 0 ? 16 : 8, w: 8 } as typeof sprite.rect;
     doc.assets.push(new AssetT(20 + i, 4, sprite));
   }
@@ -115,6 +116,30 @@ export async function measureSpriteSheets(ages: number[]) {
       v: 1 - v[j * 16 + 4]!,
     }));
   });
+  const flips = [];
+  e.ages[0] = 0;
+  for (const mask of [0, 1, 2])
+    for (const u of [0, 1])
+      for (const v of [0, 1]) {
+        sheet.uvChannelMask = mask;
+        sheet.flipUProbability = u;
+        sheet.flipVProbability = v;
+        mesh.sync([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1], 'gamma');
+        const data = mesh.geometry.getBuffer('aPosition').data as Float32Array;
+        flips.push({
+          mask,
+          u,
+          v,
+          vertices: Array.from({ length: 4 }, (_, i) => ({
+            x: data[i * 16],
+            y: data[i * 16 + 1],
+            u: data[i * 16 + 3],
+            v: 1 - data[i * 16 + 4]!,
+          })),
+        });
+      }
+  sheet.uvChannelMask = 1;
+  sheet.flipUProbability = sheet.flipVProbability = 0;
   mesh.destroy();
   const textures = [
     [255, 0, 0, 128],
@@ -160,5 +185,5 @@ export async function measureSpriteSheets(ages: number[]) {
   textures.forEach((t) => t.destroy(true));
   pack.dispose();
   app.destroy();
-  return { result, pixels };
+  return { result, pixels, flips };
 }

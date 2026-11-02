@@ -124,7 +124,7 @@ export function rendererSupport(
     definition.vertexStreams.every(
       (s) =>
         s.semantic >= 0 &&
-        s.semantic <= VertexSemantic.VertexId &&
+        s.semantic <= VertexSemantic.MeshAxisOfRotation &&
         s.components >= 1 &&
         s.components <= 4,
     ) &&
