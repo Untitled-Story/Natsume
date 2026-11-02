@@ -69,6 +69,11 @@ export function animationSupport(animation: R<AnimationT>): readonly SupportIssu
     AnimationProperty.RendererMaterialFloat,
     AnimationProperty.RendererTextureST,
     AnimationProperty.SpriteColor,
+    AnimationProperty.CameraFov,
+    AnimationProperty.CameraOrthoSize,
+    AnimationProperty.CameraNear,
+    AnimationProperty.CameraFar,
+    AnimationProperty.CameraActive,
   ]);
   for (const [index, track] of animation.tracks.entries())
     rules.require(

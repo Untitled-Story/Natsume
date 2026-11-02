@@ -36,6 +36,8 @@ import { instancePrewarmWork } from './prewarm.js';
 import { subEmitterSupport } from './sub-emitter-support.js';
 
 export interface SimulationOptions {
+  /** Host display area for package cameras; use mainCameraId when a main view is ambiguous. */
+  readonly cameraEnvironment?: import('../rendering/camera-environment.js').CameraEnvironment;
   /** Complete fixed-step system order; repeat shared pools once per independent root. Defaults to stable scheduling. */
   readonly subEmitterUpdateOrder?: readonly number[];
   /** Maximum retained trail points per instance. Defaults to 65,536; overflow throws. */
@@ -172,13 +174,21 @@ export class Simulation {
     );
     check(entry, 'HOST', 'Unknown entry');
     check(
-      entry.cameraPolicy === CameraPolicy.HostRequired,
+      entry.cameraPolicy !== CameraPolicy.SourcePreserved,
       'CAPABILITY',
-      'Embedded cameras are not implemented; use a host display matrix',
+      'Source-preserved cameras require a source execution adapter',
     );
     this.entry = entry;
-    this.scene = new Scene(pack, entry.roots, options.parentLayout, options.canvasEnvironment);
+    this.scene = new Scene(
+      pack,
+      entry.roots,
+      options.parentLayout,
+      options.canvasEnvironment,
+      options.cameraEnvironment,
+      entry.cameraComponentId || undefined,
+    );
     this.bindings = new AnimationBindings(pack, this.scene);
+    this.scene.setCameraDefinitions(this.bindings.cameras);
     this.diagnostics.push({
       code: 'NATSUME_RANDOM_SEQUENCE',
       message:

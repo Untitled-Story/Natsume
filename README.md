@@ -184,9 +184,24 @@ Mesh / Sprite Shape 支持静态资产与实例内 Renderer 来源、Vertex / Ed
 
 Shape Texture 支持 RGBA 阈值裁剪、颜色 / Alpha 调制和最近点 / 双线性取色；Mesh / Sprite 使用指定 UV 通道，基本形状使用原生形状映射。CPU 像素按包缓存并在释放包时回收。
 
+Texture Sheet 的 U / V 翻转按粒子独立采样概率；Sprite 在自身图集区域内翻转。UV mask 只控制帧映射，不关闭翻转。已知内置材质不消费的顶点流保留声明，不额外扩展顶点缓冲；源 Shader 的消费规则另行检查。
+
+包内 Camera 支持透视 / 正交、物理投影、五种 Gate Fit、自定义矩阵、viewport、层裁剪、浮点绘制顺序和投影 / 启用动画。宿主提供显示区域，Natsume 用矩阵变换几何：
+
+```ts
+const effect = await runtime.instantiate(pack, {
+  cameraEnvironment: { targetDisplay: 0, width: 1280, height: 720, mainCameraId: 12 },
+});
+effect.setCameraEnvironment({ targetDisplay: 0, width: 1920, height: 1080, mainCameraId: 12 });
+```
+
+`mainCameraId` 是包内 Camera 组件 ID；单相机或 Embedded 入口可省略。多相机仍按源顺序绘制，需要主视图的功能必须明确选择。ScreenCamera Canvas 优先使用其源 Camera 引用，否则使用选定主相机；World Canvas 可由多个相机观察，Overlay 仅绘制一次。
+
+Skybox 缺少规范化天空盒资源时使用源背景色，并返回诊断。HDR / MSAA / 动态分辨率许可由宿主绘制目标决定，不分配独立相机目标；预检返回 `CAMERA_HOST_RENDER_TARGET`。
+
 Canvas 支持 Overlay / Camera / World；Image 支持 Simple / Sliced / Tiled / Filled、九宫格、径向填充、裁边 Sprite 和 Pixel Perfect。CanvasGroup 处理透明度继承；UIMask 与 RectMask2D 支持嵌套、padding 和 softness。Sprite Mask 对 Sprite / 粒子支持 Inside / Outside、alpha cutoff 和排序范围。
 
-屏幕 Canvas 需要宿主提供显示尺寸；Camera 模式另需视图及投影矩阵：
+没有包内 Camera 时，屏幕 Canvas 需要宿主提供显示尺寸；Camera 模式另需视图及投影矩阵：
 
 ```ts
 const canvasEnvironment = {
@@ -330,8 +345,6 @@ Trigger 引用通过 `particleEnvironment.colliders` 绑定。Collider 的 `swee
 
 Unscaled 粒子使用 `effect.update(dt, { unscaledDeltaSeconds })`；缺少所需时钟会报错。宿主用 `effect.setParticleSystemVisible(systemId, visible)` 提供可见性，默认可见，设置跨重播保留。PauseAndCatchup 需要 `particleEnvironment.fixedDeltaSeconds`（Unity 工程通常为 `0.02`）；Unscaled 固定步按本次缩放 / 未缩放时钟比例计算。停止回调用 `effect.onParticleSystemStopped(callback)` 订阅，也会调用同节点 Bridge 的 `onParticleSystemStopped(event)`；事件包含 `systemId` 和 `nodeId`；激活节点上的禁用 Bridge 组件也会收到回调。Disable 停用所属节点，Destroy 销毁该节点及子层级；`restart()` 恢复节点并重建已销毁的 Bridge 行为。
 
-
-
 ## Script Bridge
 
 在实例化前，用包内 MonoBehaviour 的真实身份注册行为。以下示例将该组件所在节点及其子树绘制到父节点原点，保留粒子模拟与深度：
@@ -384,7 +397,7 @@ runtime.registerScript(
 | Color by Speed            | 速度区间、四种颜色参数、HDR 输入及粒子颜色量化                                                                                    |
 | External Forces           | LayerMask / List / LayerMaskAndList；宿主世界空间力场采样、身份去重、动态启用与年龄乘数                                           |
 | Triggers                  | Inside / Outside / Enter / Exit、Ignore / Kill / Callback；宿主球体扫掠、三种 Collider 查询、重复槽与自动子发射器                 |
-| Lights                    | 宿主模板与独立灯光句柄、随机 / 均匀分配、数量上限、粒子颜色 / 尺寸 / Alpha 与年龄曲线 |
+| Lights                    | 宿主模板与独立灯光句柄、随机 / 均匀分配、数量上限、粒子颜色 / 尺寸 / Alpha 与年龄曲线                                             |
 
 速度取样包含重力、Velocity 和 Limit，不包含 Speed Multiplier 与 Noise 位移。零宽区间按 Unity 的端点规则处理。
 
@@ -394,9 +407,9 @@ runtime.registerScript(
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
 | Sub Emitters                 | Birth / Death / 自动 Collision / Trigger、宿主 Manual；概率与五项继承、共享池、重复槽、多级 DAG、连续发射、组合预热                                                                                                                                                                                                                                                                                                                                                                               | 共享池按串行根调度；Unity 并行与全局注册顺序存在差异，返回 `SHARED_SUB_EMITTER_ORDER`；延迟预热例外见下文 |
 | Collision                    | Planes 节点 +Y 平面；World 3D/2D 宿主球体扫掠、反弹 / 阻尼 / 寿命 / 杀死速度、半径、层 / 动态 / 内部筛选、Collider Force、碰撞事件及自动子发射器                                                                                                                                                                                                                                                                                                                                                  | Medium / Low 原生体素缓存历史由宿主查询策略决定                                                           |
-| Main                         | 循环、初始寿命 / 速度 / 尺寸 / 旋转 / 颜色、旋转翻转、种子；2D / 3D 环境重力、三种发射器速度、启动延迟、Simulation Speed；Local / World / Custom 模拟，Hierarchy / Local / Shape 缩放；有限预热；RingBuffer 两种保留模式、循环范围与替换后延迟 Death；Scaled / Unscaled、StopAction、Automatic / Pause / PauseAndCatchup / AlwaysSimulate 可见性裁剪 | duration 至少 1/60 s，容量与预热预算有限                    |
+| Main                         | 循环、初始寿命 / 速度 / 尺寸 / 旋转 / 颜色、旋转翻转、种子；2D / 3D 环境重力、三种发射器速度、启动延迟、Simulation Speed；Local / World / Custom 模拟，Hierarchy / Local / Shape 缩放；有限预热；RingBuffer 两种保留模式、循环范围与替换后延迟 Death；Scaled / Unscaled、StopAction、Automatic / Pause / PauseAndCatchup / AlwaysSimulate 可见性裁剪                                                                                                                                              | duration 至少 1/60 s，容量与预热预算有限                                                                  |
 | Emission                     | Rate over Time / Distance、Burst，含正间隔与零间隔无限重复                                                                                                                                                                                                                                                                                                                                                                                                                                        | 短周期重复 Burst 保留已量化的末步计数差异                                                                 |
-| Shape                        | Circle、Sphere / Hemisphere、Box 体积 / 壳 / 边、Cone 底面 / 体积、Edge、Rectangle、Mesh Vertex / Edge / Triangle（子网格、法线与顶点色），MeshRenderer / SpriteRenderer 来源；Random / Loop / PingPong / Burst Spread、Spread 量化、位置 / 方向扰动、Align to Direction、Shape TRS                                                                                                                                                                                                                                                                                                                     | 其他形状                                                                                                  |
+| Shape                        | Circle、Sphere / Hemisphere、Box 体积 / 壳 / 边、Cone 底面 / 体积、Edge、Rectangle、Mesh Vertex / Edge / Triangle（子网格、法线与顶点色），MeshRenderer / SpriteRenderer 来源；Random / Loop / PingPong / Burst Spread、Spread 量化、位置 / 方向扰动、Align to Direction、Shape TRS                                                                                                                                                                                                               | 其他形状                                                                                                  |
 | Rotation over Lifetime       | Z 或分轴角速度、生命周期曲线积分                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | 已测范围以外的步长与原生积分差异                                                                          |
 | Velocity over Lifetime       | Local / World 线性、轨道 / 偏移 / 径向速度，Speed Multiplier                                                                                                                                                                                                                                                                                                                                                                                                                                      | 复杂空间、非均匀缩放与旋转的所有交叉组合尚未验收                                                          |
 | Limit Velocity over Lifetime | Local / World 标量与分轴限速、Dampen、Drag，含尺寸 / 速度乘算                                                                                                                                                                                                                                                                                                                                                                                                                                     | 任意剪切与非均匀缩放组合尚未验收                                                                          |

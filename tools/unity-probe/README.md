@@ -50,6 +50,8 @@ pnpm probe:unity --random       # 随机分布与参数相关性
 pnpm probe:unity --shape        # 位置扰动与 Burst Spread
 pnpm probe:unity --basic-shapes     # 基础 Shape 区域、厚度、初速度分布
 pnpm probe:unity --shape-textures   # 纹理 UV、裁剪、颜色与批次边界
+pnpm probe:unity --uv-flips         # 逐粒子 UV 翻转、图集区域、mask 与频率
+pnpm probe:unity --cameras          # 源相机投影、清屏、层裁剪、多相机与 Canvas
 pnpm probe:unity --rotation-prewarm  # 生命周期旋转、预热窗口和首次更新余量
 pnpm probe:unity --rect-layout  # 有符号 RectTransform 布局
 pnpm probe:unity --noise-statistics # Noise 总体统计、三档首步位置、滚动轨迹、旋转与尺寸
@@ -206,4 +208,4 @@ node tools/unity-probe/verify-pack-lifecycle.mjs path/to/packages path/to/sortin
 
 读取目录中的 `.noap`，逐入口检查至少一个非循环发射周期，或两个循环周期，再加寿命窗口；固定步长 1/60 s，每 10 步提交一次 WebGL 绘制。覆盖暂停、停止发射后排空、清空、同种子重播、粒子有限值与容量、WebGL 错误及销毁后的纹理引用释放。单入口检查时长上限 1,000 秒，超出时报错。
 
-宿主明确提供重力 `(0,-9.81,0)`、无雾、视点 `(0,0,-1000)` 和 640×360 外部布局，不绑定游戏脚本。结果写入 `data/unity-baselines/package-lifecycle.json`；通过表示运行与生命周期检查通过，不代表游戏画面或 Unity 最终像素相同。
+宿主明确提供重力 `(0,-9.81,0)`、无雾、视点 `(0,0,-1000)`、`fixedDeltaSeconds: 0.02` 和 640×360 外部布局，不绑定游戏脚本。结果写入 `data/unity-baselines/package-lifecycle.json`；通过表示运行与生命周期检查通过，不代表游戏画面或 Unity 最终像素相同。

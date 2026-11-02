@@ -39,6 +39,7 @@ const options = {
   parentLayout: { width: 640, height: 360 },
   renderEnvironment: { globalMipBias: 0, sortingLayers: { '-348333445': 2 } },
   particleEnvironment: {
+    fixedDeltaSeconds: 0.02,
     gravity: [0, -9.81, 0],
     fog: { mode: 'none' },
     viewPosition: [0, 0, -1000],

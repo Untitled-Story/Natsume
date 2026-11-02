@@ -51,6 +51,11 @@ async function init(): Promise<void> {
       observer = new ResizeObserver(() => {
         next.renderer.resize(Math.max(1, viewport.clientWidth), Math.max(1, viewport.clientHeight));
         effect?.setCanvasEnvironment(canvasEnvironment());
+        effect?.setCameraEnvironment({
+          targetDisplay: 0,
+          width: app!.screen.width,
+          height: app!.screen.height,
+        });
         place();
       });
       observer.observe(viewport);
@@ -242,6 +247,7 @@ export async function showPreview(pack: EffectPack, signal: AbortSignal): Promis
     seed: 12345,
     renderEnvironment: { globalMipBias: 0 },
     canvasEnvironment: canvasEnvironment(),
+    cameraEnvironment: { targetDisplay: 0, width: app!.screen.width, height: app!.screen.height },
     parentLayout: { width: app!.screen.width, height: app!.screen.height },
     particleEnvironment: {
       fog: { mode: 'none' },

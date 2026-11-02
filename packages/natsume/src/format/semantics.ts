@@ -86,6 +86,9 @@ export const SUPPORTED_FEATURES: Readonly<Record<string, number>> = Object.freez
       'scene.trs',
       'layout.rect',
       'camera.host',
+      'camera.authored',
+      'camera.embedded',
+      'animation.camera',
       'script.bridge',
       'animator.controller',
       'timeline.director',
@@ -571,7 +574,13 @@ export function validateDocument(document: DocumentT): void {
         if (curve.preWrap === 3 || curve.postWrap === 3) requireFeature('curve.unity-infinity');
         break;
       }
-      case 'Camera':
+      case 'Camera': {
+        const viewport = object(o.viewport);
+        check(
+          number(viewport, 'z') >= 0 && number(viewport, 'w') >= 0,
+          'SEMANTIC',
+          'Invalid camera viewport',
+        );
         check(
           number(o, 'nearPlane') > 0 && number(o, 'farPlane') > number(o, 'nearPlane'),
           'SEMANTIC',
@@ -583,6 +592,14 @@ export function validateDocument(document: DocumentT): void {
             'SEMANTIC',
             'Invalid camera FOV',
           );
+        if (o.projection === 0 && o.physical) {
+          const sensor = object(o.sensorSizeMm);
+          check(
+            number(sensor, 'x') > 0 && number(sensor, 'y') > 0 && number(o, 'focalLengthMm') > 0,
+            'SEMANTIC',
+            'Invalid physical camera sensor or focal length',
+          );
+        }
         if (o.projection === 1)
           check(number(o, 'orthoHalfHeight') > 0, 'SEMANTIC', 'Invalid orthographic size');
         if (o.projection === 2)
@@ -594,6 +611,7 @@ export function validateDocument(document: DocumentT): void {
           );
         if (o.aspectMode === 1) check(number(o, 'aspect') > 0, 'SEMANTIC', 'Invalid camera aspect');
         break;
+      }
     }
   };
   const visit = (type: string, value: unknown, source = false) => {

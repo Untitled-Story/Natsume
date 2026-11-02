@@ -1,4 +1,10 @@
 import { NatsumeAnimator } from './animator-handle.js';
+import {
+  AuthoredCamera,
+  copyCameraEnvironment,
+  type CameraEnvironment,
+} from '../rendering/camera-environment.js';
+import { CameraClearMesh } from '../rendering/camera-clear.js';
 import { NatsumeDirector } from './director-handle.js';
 import type { AnimationUpdateOptions } from './simulation.js';
 import type { ParticleSnapshot } from './particle-snapshot.js';
@@ -7,7 +13,6 @@ import { createSpriteMasks } from './sprite-masks.js';
 import { createUIRenderers } from './ui-renderers.js';
 import { spriteMaterial } from '../rendering/sprite-material.js';
 import { copyCanvasEnvironment, type CanvasEnvironment } from '../rendering/canvas-environment.js';
-import { canvasEnvironmentSupport } from '../rendering/canvas-layout.js';
 import { spriteTextureKey } from '../rendering/sprite-texture.js';
 import { spriteGeometry } from '../rendering/sprite-geometry.js';
 import { MeshRendererT as MeshRendererDefinition } from '../format/generated/noa/ir/mesh-renderer.js';
@@ -138,6 +143,14 @@ export class NatsumeNode {
 }
 
 export class EffectInstance {
+  private cameraEnvironment: CameraEnvironment | undefined;
+  private readonly cameraPasses = new Map<
+    number,
+    { camera: AuthoredCamera; container: Container; clear: CameraClearMesh; cursor: number }
+  >();
+  private readonly cameraOrder: number[] = [];
+  private readonly meshCameras = new Map<ParticleMesh | SceneMesh, number>();
+  private buildingCamera: number | undefined;
   private readonly directorHandles = new Map<number, NatsumeDirector>();
   private readonly animatorHandles = new Map<number, NatsumeAnimator>();
   readonly container = new Container({ label: 'Natsume effect' });
@@ -230,6 +243,28 @@ export class EffectInstance {
     this.environment = copyEnvironment(options.particleEnvironment);
     this.renderEnvironment = copyRenderEnvironment(options.renderEnvironment);
     this.canvasEnvironment = copyCanvasEnvironment(options.canvasEnvironment);
+    this.cameraEnvironment = copyCameraEnvironment(options.cameraEnvironment);
+    for (const component of simulation.pack.components) {
+      if (component.dataType !== ComponentData.Camera) continue;
+      const node = simulation.scene.nodes.get(component.nodeId);
+      if (!node) continue;
+      const camera = new AuthoredCamera(
+        component.id,
+        node,
+        simulation.bindings.cameras.get(component.id)!,
+      );
+      const container = new Container({ label: `Natsume camera ${component.id}` });
+      const clear = new CameraClearMesh(camera, simulation.pack);
+      container.addChild(clear);
+      this.container.addChild(container);
+      this.cameraPasses.set(component.id, { camera, container, clear, cursor: 1 });
+      this.cameraOrder.push(component.id);
+    }
+    this.cameraOrder.sort(
+      (a, b) =>
+        this.cameraPasses.get(a)!.camera.definition.order -
+        this.cameraPasses.get(b)!.camera.definition.order,
+    );
     this.colorSpace =
       options.sourceColorSpace ??
       (simulation.pack.document.colorContext?.projectColorSpace === ColorSpace.Linear
@@ -292,6 +327,19 @@ export class EffectInstance {
     this.colorSpace = value;
     this.render();
   }
+  /** Replaces the display area used by authored cameras. Source projection parameters stay package-owned. */
+  setCameraEnvironment(value: CameraEnvironment): void {
+    this.assertAlive();
+    const copy = copyCameraEnvironment(value)!;
+    check(
+      copy.mainCameraId === undefined || this.cameraPasses.has(copy.mainCameraId),
+      'HOST',
+      'Unknown main Camera',
+    );
+    this.simulation.scene.setCameraEnvironment(copy);
+    this.cameraEnvironment = copy;
+    this.render();
+  }
   /** Replaces particle environment inputs. Host depth textures remain borrowed. */
   setParticleEnvironment(value: ParticleEnvironment): void {
     this.assertAlive();
@@ -308,7 +356,7 @@ export class EffectInstance {
           definition.mode !== RenderMode.HorizontalBillboard &&
           definition.mode !== RenderMode.VerticalBillboard);
       check(
-        !requiresViewPosition || next?.viewPosition,
+        !requiresViewPosition || this.meshCameras.has(mesh) || next?.viewPosition,
         'HOST',
         'Facing alignment and Freeform stretch require particleEnvironment.viewPosition',
       );
@@ -356,8 +404,6 @@ export class EffectInstance {
   setCanvasEnvironment(value: CanvasEnvironment): void {
     this.assertAlive();
     const next = copyCanvasEnvironment(value)!;
-    for (const canvas of this.simulation.scene.canvases.values())
-      assertSupport(canvasEnvironmentSupport(canvas, next));
     this.simulation.scene.setCanvasEnvironment(next);
     this.canvasEnvironment = next;
     this.render();
@@ -713,9 +759,23 @@ export class EffectInstance {
   }
   /** @internal */ addAuxiliaryMesh(mesh: SceneMesh): void {
     this.auxiliaryMeshes.push(mesh);
+    if (this.buildingCamera !== undefined) this.meshCameras.set(mesh, this.buildingCamera);
+  }
+  /** @internal Allocation pass; source geometry buffers are independent between cameras. */
+  beginCameraPass(id: number | undefined): void {
+    this.buildingCamera = id;
+    if (id !== undefined)
+      this.cameraPasses.get(id)!.camera.sync(this.cameraEnvironment!, this.simulation.time);
+  }
+  /** @internal */ cameraParticleEnvironment(
+    id: number | undefined,
+  ): ParticleEnvironment | undefined {
+    return id === undefined
+      ? this.environment
+      : this.cameraPasses.get(id)!.camera.particleEnvironment(this.environment);
   }
   /** @internal */ addMesh(mesh: ParticleMesh | SceneMesh): void {
-    mesh.environment = this.environment;
+    mesh.environment = this.cameraParticleEnvironment(this.buildingCamera);
     mesh.renderEnvironment = this.renderEnvironment;
     if (mesh instanceof SceneMesh && mesh.canvasSortingLayerId !== undefined)
       mesh.definition.sortingLayerRank = canvasSortingRank(
@@ -731,7 +791,10 @@ export class EffectInstance {
     )
       this.canvasPassOrder.set(mesh.uiSortGroup, this.meshes.length);
     this.meshes.push(mesh);
-    this.container.addChild(mesh);
+    if (this.buildingCamera !== undefined && !(mesh instanceof SceneMesh && mesh.uiOverlay)) {
+      this.meshCameras.set(mesh, this.buildingCamera);
+      this.cameraPasses.get(this.buildingCamera)!.container.addChild(mesh);
+    } else this.container.addChild(mesh);
   }
   /** @internal */ setNodeRenderOffset(node: SceneNode, offset: RenderOffset | null): void {
     check(!this.disposed || this.destroying, 'DISPOSED', 'Effect instance has been destroyed');
@@ -776,8 +839,25 @@ export class EffectInstance {
     for (const emitter of this.simulation.emitters.values()) emitter.lights?.sync(emitter);
     this.syncLayoutBounds();
     const scene = this.simulation.scene;
+    for (const { camera, container, clear } of this.cameraPasses.values()) {
+      const env = this.cameraEnvironment!;
+      camera.sync(env, this.simulation.time);
+      container.visible =
+        camera.node.activeInHierarchy &&
+        !!this.simulation.bindings.enabled.get(camera.id) &&
+        camera.definition.targetDisplay === env.targetDisplay &&
+        camera.viewport[2]! > camera.viewport[0]! &&
+        camera.viewport[3]! > camera.viewport[1]!;
+      clear.updateClear(this.colorSpace);
+    }
+    for (let i = 0; i < this.cameraOrder.length; i++) {
+      const container = this.cameraPasses.get(this.cameraOrder[i]!)!.container;
+      if (this.container.children[i] !== container) this.container.setChildIndex(container, i);
+    }
     for (let pass = 0; pass < 2; pass++)
       for (const mesh of pass === 0 ? this.auxiliaryMeshes : this.meshes) {
+        const cameraId = this.meshCameras.get(mesh),
+          camera = cameraId === undefined ? undefined : this.cameraPasses.get(cameraId)!.camera;
         const root = scene.rootCanvases.get(mesh.node.id);
         const layout = root === undefined ? undefined : scene.canvasLayouts.get(root);
         if (
@@ -785,10 +865,24 @@ export class EffectInstance {
           layout &&
           scene.canvases.get(root!)?.mode === 1
         ) {
-          mesh.observationMatrix = this.canvasEnvironment!.mainCamera!.viewMatrix;
+          mesh.observationMatrix = scene.canvasEnvironmentFor(
+            scene.canvases.get(root!),
+          )!.mainCamera!.viewMatrix;
         }
-        mesh.canvasViewport = layout?.viewport;
-        mesh.sync(layout?.display ?? this.matrix, this.colorSpace);
+        if (camera) {
+          if (mesh instanceof ParticleMesh || mesh instanceof TrailMesh)
+            mesh.observationMatrix = camera.view;
+          mesh.environment = camera.particleEnvironment(this.environment);
+        }
+        mesh.canvasViewport = camera?.viewport ?? layout?.viewport;
+        mesh.sync(camera?.display ?? layout?.display ?? this.matrix, this.colorSpace);
+        if (camera && !(mesh.node.source.layerMask & camera.definition.cullingMask))
+          mesh.visible = false;
+        if (camera && mesh instanceof SceneMesh && mesh.uiSortGroup !== undefined) {
+          const canvas = root === undefined ? undefined : scene.canvases.get(root);
+          if (canvas?.mode === 1 && scene.canvasCameraId(canvas) !== camera.id)
+            mesh.visible = false;
+        }
       }
     this.meshes.sort((a, b) => {
       const stage =
@@ -827,9 +921,14 @@ export class EffectInstance {
       }
       return this.passOrder.get(a)! - this.passOrder.get(b)!;
     });
+    let rootIndex = this.cameraPasses.size;
+    for (const pass of this.cameraPasses.values()) pass.cursor = 1;
     for (let i = 0; i < this.meshes.length; i++) {
       const mesh = this.meshes[i]!;
-      if (this.container.children[i] !== mesh) this.container.setChildIndex(mesh, i);
+      const id = this.meshCameras.get(mesh);
+      const parent = mesh.parent!,
+        index = id === undefined ? rootIndex++ : this.cameraPasses.get(id)!.cursor++;
+      if (parent.children[index] !== mesh) parent.setChildIndex(mesh, index);
     }
   }
   destroy(): void {
@@ -860,6 +959,12 @@ export class EffectInstance {
     this.destroying = false;
     for (const mesh of this.meshes) mesh.destroy();
     for (const mesh of this.auxiliaryMeshes) mesh.destroy();
+    for (const { clear, container } of this.cameraPasses.values()) {
+      clear.destroy();
+      container.destroy();
+    }
+    this.cameraPasses.clear();
+    this.meshCameras.clear();
     this.meshes.length = 0;
     this.passOrder.clear();
     this.canvasPassOrder.clear();
@@ -939,10 +1044,14 @@ export class NatsumeRuntime {
     if (!compatibility.compatible) throw new NatsumeCompatibilityError(compatibility);
     const environment = copyEnvironment(options.particleEnvironment);
     const renderEnvironment = copyRenderEnvironment(options.renderEnvironment);
+    const canvasEnvironment = copyCanvasEnvironment(options.canvasEnvironment);
+    const cameraEnvironment = copyCameraEnvironment(options.cameraEnvironment);
     options = {
       ...options,
       ...(environment ? { particleEnvironment: environment } : {}),
       ...(renderEnvironment ? { renderEnvironment } : {}),
+      ...(canvasEnvironment ? { canvasEnvironment } : {}),
+      ...(cameraEnvironment ? { cameraEnvironment } : {}),
     };
     const simulation = new Simulation(pack, {
         ...options,
@@ -960,168 +1069,185 @@ export class NatsumeRuntime {
       options,
     );
     try {
-      const masks = await createSpriteMasks(pack, simulation, async (material, key) => {
-        const lease = this.acquireTexture(pack, material, key);
-        releases.push(lease.release);
-        const texture = await lease.promise;
-        return texture;
-      });
-      for (const mesh of masks.meshes) instance.addAuxiliaryMesh(mesh);
-      check(!this.disposed, 'DISPOSED', 'Runtime has been destroyed');
-      const renderers = pack.components
-        .filter(
-          (c) =>
-            rendererCanPlay(pack, c.id, c.enabled) &&
-            c.dataType === ComponentData.ParticleRenderer &&
-            simulation.scene.nodes.has(c.nodeId),
-        )
-        .map((c) => ({ id: c.id, data: c.data as R<ParticleRendererT> }));
-      renderers.sort(
-        (a, b) =>
-          a.data.sortingLayerRank - b.data.sortingLayerRank ||
-          a.data.sortingOrder - b.data.sortingOrder ||
-          a.id - b.id,
+      const cameras = pack.components.filter(
+        (c) => c.dataType === ComponentData.Camera && simulation.scene.nodes.has(c.nodeId),
       );
-      const totalVertices = renderers.reduce((sum, { data }) => {
-        const emitter = simulation.emitters.get(data.systemComponentId);
-        check(emitter, 'SEMANTIC', 'Renderer system is outside entry');
-        const count = rendererVertexStride(data, pack);
-        check(count !== undefined, 'SEMANTIC', 'Missing mesh');
-        return sum + emitter.main.maxParticles * count * particleMaterialSlots(data).length;
-      }, 0);
-      check(totalVertices <= 1_000_000, 'LIMIT', 'Instance expanded vertex budget exceeded');
-      for (const { id, data } of renderers) {
-        const emitter = simulation.emitters.get(data.systemComponentId);
-        check(emitter, 'SEMANTIC', 'Renderer system is outside entry');
-        for (const slot of particleMaterialSlots(data)) {
-          const material =
-            simulation.bindings.materials.get(`${id}:${slot}`) ??
-            pack.document.materials.find((m) => m.id === data.materials[slot]);
-          check(material, 'SEMANTIC', 'Missing material');
-          const frames = emitter.sheet?.mode === 1 ? emitter.sheet.spriteAssetIds : [];
-          const sheetTextures: Texture[] = [];
-          for (const frame of frames) {
-            const sprite = pack.document.assets.find((a) => a.id === frame)!.sprite!;
-            const lease = this.acquireTexture(
+      for (const camera of cameras.length ? cameras : [undefined]) {
+        instance.beginCameraPass(camera?.id);
+        const masks = await createSpriteMasks(pack, simulation, async (material, key) => {
+          const lease = this.acquireTexture(pack, material, key);
+          releases.push(lease.release);
+          const texture = await lease.promise;
+          return texture;
+        });
+        for (const mesh of masks.meshes) instance.addAuxiliaryMesh(mesh);
+        check(!this.disposed, 'DISPOSED', 'Runtime has been destroyed');
+        const renderers = pack.components
+          .filter(
+            (c) =>
+              rendererCanPlay(pack, c.id, c.enabled) &&
+              c.dataType === ComponentData.ParticleRenderer &&
+              simulation.scene.nodes.has(c.nodeId),
+          )
+          .map((c) => ({ id: c.id, data: c.data as R<ParticleRendererT> }));
+        renderers.sort(
+          (a, b) =>
+            a.data.sortingLayerRank - b.data.sortingLayerRank ||
+            a.data.sortingOrder - b.data.sortingOrder ||
+            a.id - b.id,
+        );
+        const totalVertices = renderers.reduce((sum, { data }) => {
+          const emitter = simulation.emitters.get(data.systemComponentId);
+          check(emitter, 'SEMANTIC', 'Renderer system is outside entry');
+          const count = rendererVertexStride(data, pack);
+          check(count !== undefined, 'SEMANTIC', 'Missing mesh');
+          return sum + emitter.main.maxParticles * count * particleMaterialSlots(data).length;
+        }, 0);
+        check(
+          totalVertices * Math.max(1, cameras.length) <= 1_000_000,
+          'LIMIT',
+          'Instance expanded vertex budget exceeded',
+        );
+        for (const { id, data } of renderers) {
+          const emitter = simulation.emitters.get(data.systemComponentId);
+          check(emitter, 'SEMANTIC', 'Renderer system is outside entry');
+          for (const slot of particleMaterialSlots(data)) {
+            const material =
+              simulation.bindings.materials.get(`${id}:${slot}`) ??
+              pack.document.materials.find((m) => m.id === data.materials[slot]);
+            check(material, 'SEMANTIC', 'Missing material');
+            const frames = emitter.sheet?.mode === 1 ? emitter.sheet.spriteAssetIds : [];
+            const sheetTextures: Texture[] = [];
+            for (const frame of frames) {
+              const sprite = pack.document.assets.find((a) => a.id === frame)!.sprite!;
+              const lease = this.acquireTexture(
+                pack,
+                spriteMaterial(material, sprite),
+                spriteTextureKey(sprite),
+              );
+              releases.push(lease.release);
+              sheetTextures.push(await lease.promise);
+            }
+            const lease = frames.length ? undefined : this.acquireTexture(pack, material);
+            if (lease) releases.push(lease.release);
+            const texture = sheetTextures[0] ?? (await lease!.promise);
+            check(!this.disposed, 'DISPOSED', 'Runtime was destroyed during instantiation');
+            const mesh = new ParticleMesh(
+              emitter,
+              data,
+              material,
+              texture,
               pack,
-              spriteMaterial(material, sprite),
-              spriteTextureKey(sprite),
+              instance.cameraParticleEnvironment(camera?.id),
+              options.renderEnvironment,
+              sheetTextures,
             );
-            releases.push(lease.release);
-            sheetTextures.push(await lease.promise);
+            masks.attach(mesh, data);
+            mesh.animationEnabled = () => simulation.bindings.enabled.get(id) ?? false;
+            instance.addMesh(mesh);
           }
-          const lease = frames.length ? undefined : this.acquireTexture(pack, material);
-          if (lease) releases.push(lease.release);
-          const texture = sheetTextures[0] ?? (await lease!.promise);
-          check(!this.disposed, 'DISPOSED', 'Runtime was destroyed during instantiation');
-          const mesh = new ParticleMesh(
-            emitter,
-            data,
-            material,
-            texture,
-            pack,
-            options.particleEnvironment,
-            options.renderEnvironment,
-            sheetTextures,
-          );
-          masks.attach(mesh, data);
-          mesh.animationEnabled = () => simulation.bindings.enabled.get(id) ?? false;
-          instance.addMesh(mesh);
+          const trails = simulation.trails.get(emitter.id);
+          const trailMaterialId = data.materials[1];
+          if (trails && trailMaterialId && data.environment?.castShadows !== 3) {
+            const material =
+              simulation.bindings.materials.get(`${id}:1`) ??
+              pack.document.materials.find((m) => m.id === trailMaterialId)!;
+            const lease = this.acquireTexture(pack, material);
+            releases.push(lease.release);
+            const texture = await lease.promise;
+            check(!this.disposed, 'DISPOSED', 'Runtime was destroyed during instantiation');
+            const mesh = new TrailMesh(trails, data, material, texture, pack);
+            masks.attach(mesh, data);
+            mesh.animationEnabled = () => simulation.bindings.enabled.get(id) ?? false;
+            instance.addMesh(mesh);
+          }
         }
-        const trails = simulation.trails.get(emitter.id);
-        const trailMaterialId = data.materials[1];
-        if (trails && trailMaterialId && data.environment?.castShadows !== 3) {
-          const material =
-            simulation.bindings.materials.get(`${id}:1`) ??
-            pack.document.materials.find((m) => m.id === trailMaterialId)!;
-          const lease = this.acquireTexture(pack, material);
+        for (const component of pack.components) {
+          if (
+            component.dataType !== ComponentData.MeshRenderer ||
+            !rendererCanPlay(pack, component.id, component.enabled)
+          )
+            continue;
+          const node = simulation.scene.nodes.get(component.nodeId);
+          if (!node) continue;
+          const definition = component.data as R<MeshRendererT>;
+          const filter = pack.getComponent(definition.meshFilterComponentId)!
+            .data as R<MeshFilterT>;
+          const geometry = filter.meshAssetId ? pack.getMesh(filter.meshAssetId) : undefined;
+          for (const pass of sceneMaterialPasses(definition, geometry)) {
+            const material =
+              simulation.bindings.materials.get(`${component.id}:${pass.slot}`) ??
+              pack.document.materials.find((m) => m.id === definition.materials[pass.slot])!;
+            const lease = this.acquireTexture(pack, material);
+            releases.push(lease.release);
+            const texture = await lease.promise;
+            check(!this.disposed, 'DISPOSED', 'Runtime has been destroyed');
+            const mesh = new SceneMesh(
+              node,
+              definition,
+              material,
+              geometry!,
+              pass.submesh,
+              texture,
+              pack,
+            );
+            mesh.animationEnabled = () => simulation.bindings.enabled.get(component.id) ?? false;
+            instance.addMesh(mesh);
+          }
+        }
+        for (const component of pack.components) {
+          if (
+            component.dataType !== ComponentData.SpriteRenderer ||
+            !rendererCanPlay(pack, component.id, component.enabled)
+          )
+            continue;
+          const node = simulation.scene.nodes.get(component.nodeId);
+          if (!node) continue;
+          const definition = component.data as R<SpriteRendererT>;
+          if (!definition.spriteAssetId) continue;
+          const sprite = pack.document.assets.find(
+            (a) => a.id === definition.spriteAssetId,
+          )!.sprite!;
+          const geometry = spriteGeometry(pack, sprite, definition);
+          if (!geometry.indices.length) continue;
+          for (const [slot, id] of definition.materials.entries()) {
+            if (!id) continue;
+            const original =
+              simulation.bindings.materials.get(`${component.id}:${slot}`) ??
+              pack.document.materials.find((m) => m.id === id)!;
+            const material = spriteMaterial(original, sprite);
+            const lease = this.acquireTexture(pack, material, spriteTextureKey(sprite));
+            releases.push(lease.release);
+            const texture = await lease.promise;
+            check(!this.disposed, 'DISPOSED', 'Runtime has been destroyed');
+            const renderer = new MeshRendererDefinition(
+              0,
+              [id],
+              definition.sortingLayerId,
+              definition.sortingLayerIndex,
+              definition.sortingOrder,
+            );
+            const mesh = new SceneMesh(node, renderer, material, geometry, 0, texture, pack);
+            mesh.animationEnabled = () => simulation.bindings.enabled.get(component.id) ?? false;
+            mesh.rendererColor = () =>
+              simulation.bindings.spriteColors.get(component.id) ?? definition.color!;
+            mesh.sortAtPivot = definition.sortPoint === 1;
+            masks.attach(mesh, definition);
+            instance.addMesh(mesh);
+          }
+        }
+        const ui = await createUIRenderers(pack, simulation, async (material, key) => {
+          const lease = this.acquireTexture(pack, material, key);
           releases.push(lease.release);
           const texture = await lease.promise;
-          check(!this.disposed, 'DISPOSED', 'Runtime was destroyed during instantiation');
-          const mesh = new TrailMesh(trails, data, material, texture, pack);
-          masks.attach(mesh, data);
-          mesh.animationEnabled = () => simulation.bindings.enabled.get(id) ?? false;
-          instance.addMesh(mesh);
+          return texture;
+        });
+        for (const mesh of ui) {
+          if (mesh.uiOverlay && camera && camera !== cameras[0]) mesh.destroy();
+          else instance.addMesh(mesh);
         }
       }
-      for (const component of pack.components) {
-        if (
-          component.dataType !== ComponentData.MeshRenderer ||
-          !rendererCanPlay(pack, component.id, component.enabled)
-        )
-          continue;
-        const node = simulation.scene.nodes.get(component.nodeId);
-        if (!node) continue;
-        const definition = component.data as R<MeshRendererT>;
-        const filter = pack.getComponent(definition.meshFilterComponentId)!.data as R<MeshFilterT>;
-        const geometry = filter.meshAssetId ? pack.getMesh(filter.meshAssetId) : undefined;
-        for (const pass of sceneMaterialPasses(definition, geometry)) {
-          const material =
-            simulation.bindings.materials.get(`${component.id}:${pass.slot}`) ??
-            pack.document.materials.find((m) => m.id === definition.materials[pass.slot])!;
-          const lease = this.acquireTexture(pack, material);
-          releases.push(lease.release);
-          const texture = await lease.promise;
-          check(!this.disposed, 'DISPOSED', 'Runtime has been destroyed');
-          const mesh = new SceneMesh(
-            node,
-            definition,
-            material,
-            geometry!,
-            pass.submesh,
-            texture,
-            pack,
-          );
-          mesh.animationEnabled = () => simulation.bindings.enabled.get(component.id) ?? false;
-          instance.addMesh(mesh);
-        }
-      }
-      for (const component of pack.components) {
-        if (
-          component.dataType !== ComponentData.SpriteRenderer ||
-          !rendererCanPlay(pack, component.id, component.enabled)
-        )
-          continue;
-        const node = simulation.scene.nodes.get(component.nodeId);
-        if (!node) continue;
-        const definition = component.data as R<SpriteRendererT>;
-        if (!definition.spriteAssetId) continue;
-        const sprite = pack.document.assets.find((a) => a.id === definition.spriteAssetId)!.sprite!;
-        const geometry = spriteGeometry(pack, sprite, definition);
-        if (!geometry.indices.length) continue;
-        for (const [slot, id] of definition.materials.entries()) {
-          if (!id) continue;
-          const original =
-            simulation.bindings.materials.get(`${component.id}:${slot}`) ??
-            pack.document.materials.find((m) => m.id === id)!;
-          const material = spriteMaterial(original, sprite);
-          const lease = this.acquireTexture(pack, material, spriteTextureKey(sprite));
-          releases.push(lease.release);
-          const texture = await lease.promise;
-          check(!this.disposed, 'DISPOSED', 'Runtime has been destroyed');
-          const renderer = new MeshRendererDefinition(
-            0,
-            [id],
-            definition.sortingLayerId,
-            definition.sortingLayerIndex,
-            definition.sortingOrder,
-          );
-          const mesh = new SceneMesh(node, renderer, material, geometry, 0, texture, pack);
-          mesh.animationEnabled = () => simulation.bindings.enabled.get(component.id) ?? false;
-          mesh.rendererColor = () =>
-            simulation.bindings.spriteColors.get(component.id) ?? definition.color!;
-          mesh.sortAtPivot = definition.sortPoint === 1;
-          masks.attach(mesh, definition);
-          instance.addMesh(mesh);
-        }
-      }
-      const ui = await createUIRenderers(pack, simulation, async (material, key) => {
-        const lease = this.acquireTexture(pack, material, key);
-        releases.push(lease.release);
-        const texture = await lease.promise;
-        return texture;
-      });
-      for (const mesh of ui) instance.addMesh(mesh);
+      instance.beginCameraPass(undefined);
       check(!this.disposed, 'DISPOSED', 'Runtime has been destroyed');
       instance.initializeScripts();
       for (const issue of compatibility.issues)

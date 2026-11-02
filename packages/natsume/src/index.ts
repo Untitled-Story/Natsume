@@ -14,6 +14,7 @@ export {
   type ScriptBehavior,
 } from './runtime/runtime.js';
 export { type SourceColorSpace } from './rendering/particle-mesh.js';
+export type { CameraEnvironment } from './rendering/camera-environment.js';
 export { type LayoutSize } from './runtime/scene.js';
 export { type PlaybackState, type AnimationTarget } from './runtime/simulation.js';
 export { type Diagnostic } from './runtime/emitter.js';

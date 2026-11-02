@@ -1,4 +1,5 @@
 import { SourceResolution } from '../format/generated/noa/ir/source-resolution.js';
+import { copyCameraEnvironment } from '../rendering/camera-environment.js';
 import { MaterialModel as M } from '../format/generated/noa/ir/material-model.js';
 import { canvasSortingRank } from '../rendering/canvas-sorting.js';
 import { imageGeometry } from '../rendering/image-geometry.js';
@@ -301,11 +302,11 @@ export function checkCompatibility(
     return finish();
   }
   global.require(
-    entry.cameraPolicy === CameraPolicy.HostRequired,
+    entry.cameraPolicy !== CameraPolicy.SourcePreserved,
     'CAPABILITY',
     'cameraPolicy',
     entry.cameraPolicy,
-    'Authored and source-preserved cameras require an execution adapter',
+    'Source-preserved cameras require a source execution adapter',
   );
   const children = new Map<number, number[]>();
   for (const node of pack.nodes) {
@@ -329,6 +330,57 @@ export function checkCompatibility(
     queue.push(...(children.get(id) ?? []));
   }
   const components = pack.components.filter((c) => nodeIds.has(c.nodeId));
+  const cameras = components.filter((c) => c.dataType === C.Camera);
+  if (cameras.length) {
+    for (const component of cameras) {
+      const camera = component.data as R<import('../format/generated/noa/ir/camera.js').CameraT>;
+      if (camera.clear === 0)
+        global.warn(
+          'CAMERA_SKYBOX_BACKGROUND',
+          `components.${component.id}.clear`,
+          camera.clear,
+          'Camera skybox assets are not part of the normalized contract; Skybox clears to the authored background color.',
+        );
+      if (camera.hdr || camera.msaa || camera.dynamicResolution)
+        global.warn(
+          'CAMERA_HOST_RENDER_TARGET',
+          `components.${component.id}`,
+          { hdr: camera.hdr, msaa: camera.msaa, dynamicResolution: camera.dynamicResolution },
+          'Camera HDR, MSAA and dynamic-resolution permissions use the host render target; per-camera intermediate targets are not allocated.',
+        );
+    }
+    global.require(
+      options.cameraEnvironment,
+      'HOST',
+      'cameraEnvironment',
+      options.cameraEnvironment,
+      'Authored cameras require a host display area',
+    );
+    if (options.cameraEnvironment) {
+      try {
+        copyCameraEnvironment(options.cameraEnvironment);
+      } catch (error) {
+        global.require(
+          false,
+          'HOST',
+          'cameraEnvironment',
+          options.cameraEnvironment,
+          String(error),
+        );
+      }
+      const main = options.cameraEnvironment.mainCameraId;
+      global.require(
+        main === undefined || cameras.some((c) => c.id === main),
+        'HOST',
+        'cameraEnvironment.mainCameraId',
+        main,
+        'Main Camera must belong to this entry',
+      );
+    }
+  }
+  const rendererEnvironment = cameras.length
+    ? { ...(env ?? { fog: { mode: 'none' as const } }), viewPosition: [0, 0, 0] as const }
+    : env;
   const systems = components.filter((c) => c.dataType === C.ParticleSystem);
   const systemMap = new Map(systems.map((c) => [c.id, c.data as R<ParticleSystemT>]));
   try {
@@ -478,7 +530,22 @@ export function checkCompatibility(
     }
     if (c.dataType === C.Canvas && c.enabled) {
       const canvas = c.data as R<CanvasT>;
-      rules.issues.push(...canvasEnvironmentSupport(canvas, canvasEnvironment));
+      try {
+        uiScene ??= new Scene(
+          pack,
+          entry.roots,
+          layout,
+          canvasEnvironment,
+          options.cameraEnvironment,
+          entry.cameraComponentId || undefined,
+        );
+        rules.issues.push(
+          ...canvasEnvironmentSupport(canvas, uiScene.canvasEnvironmentFor(canvas)),
+        );
+      } catch (error) {
+        if (!(error instanceof NatsumeError)) throw error;
+        rules.require(false, error.code, 'canvasEnvironment', undefined, error.message);
+      }
       rules.require(
         canvasSortingRank(pack, canvas.sortingLayerId, options.renderEnvironment) !== undefined,
         'HOST',
@@ -490,7 +557,14 @@ export function checkCompatibility(
     if (c.dataType === C.UIImage) {
       const image = c.data as R<UIImageT>;
       try {
-        const scene = (uiScene ??= new Scene(pack, entry.roots, layout, canvasEnvironment)),
+        const scene = (uiScene ??= new Scene(
+            pack,
+            entry.roots,
+            layout,
+            canvasEnvironment,
+            options.cameraEnvironment,
+            entry.cameraComponentId || undefined,
+          )),
           node = scene.nodes.get(c.nodeId)!;
         rules.require(
           node.rect && node.layout,
@@ -642,15 +716,31 @@ export function checkCompatibility(
           'Missing material',
         );
         if (system && material) {
+          rules.require(
+            !(
+              cameras.length &&
+              [M.LegacyParticleAdditive, M.LegacyParticleAlphaBlend].includes(material.model)
+            ) || env,
+            'HOST',
+            'particleEnvironment',
+            env,
+            'Legacy particles require explicit host fog and depth inputs',
+          );
           rules.issues.push(
             ...(slot === 1
-              ? trailRendererSupport(definition, material, pack, env, options.renderEnvironment)
+              ? trailRendererSupport(
+                  definition,
+                  material,
+                  pack,
+                  rendererEnvironment,
+                  options.renderEnvironment,
+                )
               : rendererSupport(
                   definition,
                   material,
                   pack,
                   system.main!.maxParticles,
-                  env,
+                  rendererEnvironment,
                   options.renderEnvironment,
                 )),
           );
@@ -862,7 +952,7 @@ export function checkCompatibility(
   for (const count of trailPassCounts.values()) maxTrailPasses = Math.max(maxTrailPasses, count);
   vertices += 2 * (options.maxTrailPoints ?? 65_536) * maxTrailPasses;
   totals.require(
-    vertices <= 1_000_000,
+    vertices * Math.max(1, cameras.length) <= 1_000_000,
     'LIMIT',
     'maxParticles*vertices',
     vertices,

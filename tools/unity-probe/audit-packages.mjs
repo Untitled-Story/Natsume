@@ -122,6 +122,7 @@ try {
           },
           parentLayout: { width: 640, height: 360 },
           particleEnvironment: {
+            fixedDeltaSeconds: 0.02,
             fog: { mode: 'none' },
             gravity: [0, -9.81, 0],
             viewPosition: [0, 0, -1000],

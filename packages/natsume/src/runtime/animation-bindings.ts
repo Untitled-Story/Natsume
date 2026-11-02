@@ -35,6 +35,7 @@ export interface CompiledBinding {
 
 /** Per-instance numeric state. Source assets and texture leases stay shared and immutable. */
 export class AnimationBindings {
+  readonly cameras = new Map<number, import('../format/generated/noa/ir/camera.js').CameraT>();
   readonly systems = new Map<number, ParticleSystemT>();
   readonly materials = new Map<string, MaterialT>();
   readonly spriteColors = new Map<number, import('../format/generated/noa/ir/color.js').ColorT>();
@@ -44,7 +45,16 @@ export class AnimationBindings {
     readonly pack: EffectPack,
     readonly scene: Scene,
   ) {
-    for (const c of pack.components) this.enabled.set(c.id, c.enabled);
+    for (const c of pack.components) {
+      this.enabled.set(c.id, c.enabled);
+      if (c.dataType === C.Camera) {
+        const state = structuredClone(
+          c.data,
+        ) as import('../format/generated/noa/ir/camera.js').CameraT;
+        this.cameras.set(c.id, state);
+        this.resets.push(() => restore(state, c.data!));
+      }
+    }
     for (const clip of pack.document.animations)
       for (const track of clip.tracks) {
         const b = track.binding!,
@@ -201,11 +211,32 @@ export class AnimationBindings {
       }
       case P.ComponentEnabled:
       case P.RendererEnabled:
+      case P.CameraActive:
         read = () => [Number(this.enabled.get(b.targetId))];
         write = (v) => {
           this.enabled.set(b.targetId, !!v[0]);
         };
         break;
+      case P.CameraFov:
+      case P.CameraOrthoSize:
+      case P.CameraNear:
+      case P.CameraFar: {
+        const camera = this.cameras.get(b.targetId);
+        check(camera, 'SEMANTIC', 'Missing animated Camera');
+        const field = (
+          {
+            [P.CameraFov]: 'fovRadians',
+            [P.CameraOrthoSize]: 'orthoHalfHeight',
+            [P.CameraNear]: 'nearPlane',
+            [P.CameraFar]: 'farPlane',
+          } as const
+        )[b.property];
+        read = () => [camera[field]];
+        write = (v) => {
+          camera[field] = v[0]!;
+        };
+        break;
+      }
       case P.ParticleLoop:
         check(main, 'SEMANTIC', 'Missing animated particle system');
         read = () => [Number(main.loop)];
@@ -399,7 +430,11 @@ export function bindingWrites(pack: EffectPack, track: R<TrackT>): readonly stri
     return [`node:${nodeId}:position`];
   if (b.property === P.NodeScale || b.property === P.NodeRotation)
     return [`node:${nodeId}:${b.property}`];
-  if (b.property === P.ComponentEnabled || b.property === P.RendererEnabled)
+  if (
+    b.property === P.ComponentEnabled ||
+    b.property === P.RendererEnabled ||
+    b.property === P.CameraActive
+  )
     return [`component:${b.targetId}:enabled`];
   const key = `${b.targetId}:${b.property}:${b.parameter}:${b.propertyName}:${b.slotIndex}`;
   if (
