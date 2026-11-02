@@ -76,6 +76,7 @@ export const SUPPORTED_FEATURES: Readonly<Record<string, number>> = Object.freez
       'particle.shape.sprite',
       'particle.shape.rectangle',
       'particle.shape.mesh',
+      'particle.shape.renderer',
       'particle.shape.donut',
       'scene.mesh-renderer',
       'material.unity-sprite-default',

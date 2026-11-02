@@ -420,6 +420,22 @@ export function checkCompatibility(
       for (const [index, module] of source.modules.entries()) {
         if (module.dataType !== ParticleModuleData.ShapeModule) continue;
         const shape = module.data as R<ShapeModuleT>;
+        if (shape.geometry && 'sourceRendererComponentId' in shape.geometry) {
+          const id = shape.geometry.sourceRendererComponentId;
+          if (id) {
+            const renderer = pack.getComponent(id);
+            rules.require(
+              renderer?.dataType ===
+                (shape.geometryType === ShapeGeometry.MeshShape
+                  ? C.MeshRenderer
+                  : C.SpriteRenderer) && nodeIds.has(renderer.nodeId),
+              'CAPABILITY',
+              `modules.${index}.geometry.sourceRendererComponentId`,
+              id,
+              'Shape source renderer is outside the instance or has an invalid type',
+            );
+          }
+        }
         if (shape.geometryType === ShapeGeometry.MeshShape) {
           const definition = shape.geometry as R<MeshShapeT>;
           try {

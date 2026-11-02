@@ -95,41 +95,44 @@ const particleMainPlayback = process.argv.includes('--particle-main');
 const particleCullingPlayback = process.argv.includes('--particle-culling');
 const cullingRealtime = particleCullingPlayback && process.argv.includes('--realtime');
 const cullingValidation = cullingRealtime && process.argv.includes('--validation');
+const rendererShapes = process.argv.includes('--renderer-shapes');
 const meshShapes = process.argv.includes('--mesh-shapes');
-const particleProbe = meshShapes
-  ? ['mesh-shapes', 'NatsumeMeshShapeProbe.Run']
-  : particleModules
-    ? ['particle-modules', 'NatsumeParticleModulesProbe.Run']
-    : externalForces
-      ? ['external-forces', 'NatsumeExternalForcesProbe.Run']
-      : particleCollisions
-        ? ['particle-collisions', 'NatsumeParticleCollisionProbe.Run']
-        : colliderForcePlayback
-          ? ['collider-force', 'NatsumeParticleForcePlaybackProbe.Run']
-          : particleTriggers
-            ? ['particle-triggers', 'NatsumeParticleTriggerPlaybackProbe.Run']
-            : particleLights
-              ? ['particle-lights', 'NatsumeParticleLightsProbe.Run']
-              : lightDistribution
-                ? ['light-distribution', 'NatsumeParticleLightDistributionProbe.Run']
-                : ringBuffer
-                  ? ['ring-buffer', 'NatsumeParticleRingBufferProbe.Run']
-                  : ringPlayback
-                    ? ['ring-playback', 'NatsumeParticleRingPlaybackProbe.Run']
-                    : particleClockPlayback
-                      ? ['particle-clocks', 'NatsumeParticleClockPlaybackProbe.Run']
-                      : particleMainPlayback
-                        ? ['particle-main', 'NatsumeParticleMainPlaybackProbe.Run']
-                        : particleCullingPlayback
-                          ? [
-                              cullingValidation
-                                ? 'particle-culling-validation'
-                                : cullingRealtime
-                                  ? 'particle-culling-realtime'
-                                  : 'particle-culling',
-                              'NatsumeParticleCullingPlaybackProbe.Run',
-                            ]
-                          : undefined;
+const particleProbe = rendererShapes
+  ? ['renderer-shapes', 'NatsumeRendererShapeProbe.Run']
+  : meshShapes
+    ? ['mesh-shapes', 'NatsumeMeshShapeProbe.Run']
+    : particleModules
+      ? ['particle-modules', 'NatsumeParticleModulesProbe.Run']
+      : externalForces
+        ? ['external-forces', 'NatsumeExternalForcesProbe.Run']
+        : particleCollisions
+          ? ['particle-collisions', 'NatsumeParticleCollisionProbe.Run']
+          : colliderForcePlayback
+            ? ['collider-force', 'NatsumeParticleForcePlaybackProbe.Run']
+            : particleTriggers
+              ? ['particle-triggers', 'NatsumeParticleTriggerPlaybackProbe.Run']
+              : particleLights
+                ? ['particle-lights', 'NatsumeParticleLightsProbe.Run']
+                : lightDistribution
+                  ? ['light-distribution', 'NatsumeParticleLightDistributionProbe.Run']
+                  : ringBuffer
+                    ? ['ring-buffer', 'NatsumeParticleRingBufferProbe.Run']
+                    : ringPlayback
+                      ? ['ring-playback', 'NatsumeParticleRingPlaybackProbe.Run']
+                      : particleClockPlayback
+                        ? ['particle-clocks', 'NatsumeParticleClockPlaybackProbe.Run']
+                        : particleMainPlayback
+                          ? ['particle-main', 'NatsumeParticleMainPlaybackProbe.Run']
+                          : particleCullingPlayback
+                            ? [
+                                cullingValidation
+                                  ? 'particle-culling-validation'
+                                  : cullingRealtime
+                                    ? 'particle-culling-realtime'
+                                    : 'particle-culling',
+                                'NatsumeParticleCullingPlaybackProbe.Run',
+                              ]
+                            : undefined;
 const bySpeed = process.argv.includes('--by-speed') || !!particleProbe;
 assert(
   [
@@ -146,6 +149,7 @@ assert(
     particleMainPlayback,
     particleCullingPlayback,
     meshShapes,
+    rendererShapes,
     process.argv.includes('--by-speed'),
   ].filter(Boolean).length <= 1,
   'Choose one probe mode',
@@ -507,6 +511,16 @@ await new Promise((accept, reject) => {
 });
 const current = JSON.parse(await readFile(baseline, 'utf8'));
 assert.equal(current.unityVersion, version);
+if (rendererShapes) {
+  assert.equal(current.cases.length, 432);
+  if (process.argv.includes('--update-fixtures'))
+    await saveJson(
+      resolve(root, 'data/unity-baselines/fixtures/unity-renderer-shape.json'),
+      JSON.stringify(current, null, 2) + '\n',
+    );
+  console.log('Renderer shape observations: 432 cases');
+  process.exit(0);
+}
 if (meshShapes) {
   assert.equal(current.cases.length, 56);
   assert.equal(current.variants.length, 3);

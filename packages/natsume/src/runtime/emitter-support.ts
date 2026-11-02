@@ -203,14 +203,6 @@ export function emitterSupport(
         shape.texture,
         'Shape textures are not implemented',
       );
-      if (shape.geometry && 'sourceRendererComponentId' in shape.geometry)
-        rules.require(
-          !shape.geometry.sourceRendererComponentId,
-          'CAPABILITY',
-          `${path}.geometry.sourceRendererComponentId`,
-          shape.geometry.sourceRendererComponentId,
-          'Renderer-sourced emission is not implemented',
-        );
       rules.require(
         shape.geometry &&
           shape.geometryType >= ShapeGeometry.CircleShape &&

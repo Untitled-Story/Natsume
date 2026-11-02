@@ -7,6 +7,7 @@ import { mat4, quat, vec3 } from 'gl-matrix';
 import { check } from '../errors.js';
 import { SpriteShapeSampler } from './sprite-shape.js';
 import { MeshShapeSampler } from './mesh-shape.js';
+import { RendererShapeTransform } from './renderer-shape.js';
 import type { MeshShapeT } from '../format/generated/noa/ir/mesh-shape.js';
 import { ShapeGeometry } from '../format/generated/noa/ir/shape-geometry.js';
 import type { SpriteShapeT } from '../format/generated/noa/ir/sprite-shape.js';
@@ -165,6 +166,7 @@ export class Emitter {
   private readonly direction = vec3.create();
   private readonly birth = new Float64Array(10);
   private readonly spriteShape: SpriteShapeSampler | MeshShapeSampler | undefined;
+  private readonly rendererShape: RendererShapeTransform | undefined;
   private nextSerial = 0;
   private ringWrite = 0;
   private readonly retiredRingPools: Emitter[] = [];
@@ -388,6 +390,18 @@ export class Emitter {
       check(pack, 'CAPABILITY', 'Mesh emission requires source assets');
       this.spriteShape = new MeshShapeSampler(pack, this.shape.geometry as R<MeshShapeT>);
     }
+    const sourceRenderer = this.spriteShape?.definition.sourceRendererComponentId;
+    if (sourceRenderer)
+      this.rendererShape = new RendererShapeTransform(
+        pack!,
+        sourceRenderer,
+        this.shape!.geometryType === ShapeGeometry.SpriteShape,
+        main.space,
+        main.scaling,
+        node,
+        sceneNodes,
+      );
+    this.rendererShape?.update();
     if (this.velocityModule || this.sheet?.timeMode === SheetTime.Speed || this.inheritVelocity)
       this.renderVelocities = new Float32Array(cap * 3);
     this.startSizes = new Float32Array(cap * 3);
@@ -547,6 +561,7 @@ export class Emitter {
   }
   /** Refreshes the coordinate frame without moving particles already stored in that frame. */
   updateSpace(): void {
+    this.rendererShape?.update();
     const frame =
       this.main.space === Space.Local
         ? this.node
@@ -1051,18 +1066,23 @@ export class Emitter {
         dy = 0,
         dz = 1;
       if (this.shape) {
-        sampleShape(
-          this.shape,
-          this.seed,
-          serial,
-          t,
-          n,
-          amount,
-          this.birth,
-          seconds,
-          this.main.durationSeconds,
-          this.spriteShape,
-        );
+        if (this.rendererShape?.unavailable) {
+          this.birth.fill(0, 0, 5);
+          this.birth[5] = 1;
+          this.birth.fill(1, 6, 10);
+        } else
+          sampleShape(
+            this.shape,
+            this.seed,
+            serial,
+            t,
+            n,
+            amount,
+            this.birth,
+            seconds,
+            this.main.durationSeconds,
+            this.spriteShape,
+          );
         const [px, py, pz, bx, by, bz] = this.birth;
         const m = this.shapeMatrix;
         x = m[0]! * px! + m[4]! * py! + m[8]! * pz! + m[12]!;
@@ -1073,8 +1093,35 @@ export class Emitter {
         dx = this.direction[0]!;
         dy = this.direction[1]!;
         dz = this.direction[2]!;
+        if (this.rendererShape) {
+          dx = m[0]! * bx! + m[4]! * by! + m[8]! * bz!;
+          dy = m[1]! * bx! + m[5]! * by! + m[9]! * bz!;
+          dz = m[2]! * bx! + m[6]! * by! + m[10]! * bz!;
+          const length = Math.hypot(dx, dy, dz);
+          if (length > 0) {
+            dx /= length;
+            dy /= length;
+            dz /= length;
+          }
+        }
       }
-      if (this.main.space !== Space.Local || this.main.scaling === ScalingMode.Shape) {
+      if (this.rendererShape) {
+        this.birth[0] = x;
+        this.birth[1] = y;
+        this.birth[2] = z;
+        this.birth[3] = dx;
+        this.birth[4] = dy;
+        this.birth[5] = dz;
+        this.rendererShape.transform(this.birth);
+        [x, y, z, dx, dy, dz] = this.birth as unknown as [
+          number,
+          number,
+          number,
+          number,
+          number,
+          number,
+        ];
+      } else if (this.main.space !== Space.Local || this.main.scaling === ScalingMode.Shape) {
         const m =
             this.main.scaling === ScalingMode.Shape ? this.node.worldMatrix : this.emitterMatrix,
           inv = this.inverseSimulationMatrix;
