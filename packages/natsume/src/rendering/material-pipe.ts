@@ -8,6 +8,7 @@ import {
   type Geometry,
   type Shader,
   type WebGLRenderer,
+  type InstructionSet,
 } from 'pixi.js';
 import type { DeepReadonly as R } from '../pack.js';
 import type { RenderStateT } from '../format/generated/noa/ir/render-state.js';
@@ -25,6 +26,24 @@ export interface MaterialDraw extends Mesh<Geometry, Shader> {
 /** Executes source pass state, restoring GL values that Pixi does not track. */
 class MaterialAdaptor extends GlMeshAdaptor {
   private readonly maskTransform = new Matrix();
+  private snapshot: Map<number, unknown> | undefined;
+
+  /** Source passes restore these values before the next draw in this run. */
+  withSnapshot(draw: () => void): void {
+    const previous = this.snapshot;
+    this.snapshot = new Map();
+    try {
+      draw();
+    } finally {
+      this.snapshot = previous;
+    }
+  }
+  private parameter(gl: WebGL2RenderingContext, name: number): unknown {
+    const read = () => (name === gl.STENCIL_TEST ? gl.isEnabled(name) : gl.getParameter(name));
+    if (!this.snapshot) return read();
+    if (!this.snapshot.has(name)) this.snapshot.set(name, read());
+    return this.snapshot.get(name);
+  }
   override execute(pipe: MeshPipe, mesh: Mesh<Geometry, Shader>): void {
     const passes = (mesh as MaterialDraw).spriteMaskPasses;
     const uniforms = pipe.localUniforms;
@@ -103,13 +122,14 @@ class MaterialAdaptor extends GlMeshAdaptor {
         gl.clearDepth(depthClear);
       }
     }
-    const enabled = activeStencil || draw.uiStencil ? gl.isEnabled(gl.STENCIL_TEST) : false;
-    const hostReference = enabled ? (gl.getParameter(gl.STENCIL_REF) as number) : 0;
-    const hostCompare = enabled ? (gl.getParameter(gl.STENCIL_FUNC) as number) : gl.ALWAYS;
+    const enabled =
+      activeStencil || draw.uiStencil ? (this.parameter(gl, gl.STENCIL_TEST) as boolean) : false;
+    const hostReference = enabled ? (this.parameter(gl, gl.STENCIL_REF) as number) : 0;
+    const hostCompare = enabled ? (this.parameter(gl, gl.STENCIL_FUNC) as number) : gl.ALWAYS;
     const compose = !!(enabled && draw.uiStencil && hostCompare === gl.EQUAL);
     const shift = compose ? Math.ceil(Math.log2(hostReference + 1)) : 0;
     const hostRead = compose
-      ? ((1 << shift) - 1) & (gl.getParameter(gl.STENCIL_VALUE_MASK) as number)
+      ? ((1 << shift) - 1) & (this.parameter(gl, gl.STENCIL_VALUE_MASK) as number)
       : 0;
     check(
       !activeStencil || !enabled || compose,
@@ -156,10 +176,10 @@ class MaterialAdaptor extends GlMeshAdaptor {
       gl.INCR_WRAP,
       gl.DECR_WRAP,
     ];
-    const mask = gl.getParameter(gl.COLOR_WRITEMASK) as boolean[];
+    const mask = this.parameter(gl, gl.COLOR_WRITEMASK) as boolean[];
     const previousMask =
       (mask[0] ? 8 : 0) | (mask[1] ? 4 : 0) | (mask[2] ? 2 : 0) | (mask[3] ? 1 : 0);
-    const depth = gl.getParameter(gl.DEPTH_FUNC) as number;
+    const depth = this.parameter(gl, gl.DEPTH_FUNC) as number;
     const customBlend =
       state.srcRgb !== 1 ||
       state.dstRgb !== 5 ||
@@ -175,7 +195,7 @@ class MaterialAdaptor extends GlMeshAdaptor {
           gl.BLEND_DST_ALPHA,
           gl.BLEND_EQUATION_RGB,
           gl.BLEND_EQUATION_ALPHA,
-        ].map((p) => gl.getParameter(p) as number)
+        ].map((p) => this.parameter(gl, p) as number)
       : [];
     const faces = configureStencil
       ? [
@@ -197,7 +217,7 @@ class MaterialAdaptor extends GlMeshAdaptor {
             gl.STENCIL_BACK_PASS_DEPTH_FAIL,
             gl.STENCIL_BACK_PASS_DEPTH_PASS,
           ],
-        ].map((params) => params.map((p) => gl.getParameter(p) as number))
+        ].map((params) => params.map((p) => this.parameter(gl, p) as number))
       : [];
     const sourceMask = state.colorWriteMask;
     const write =
@@ -268,7 +288,47 @@ class MaterialAdaptor extends GlMeshAdaptor {
   }
 }
 
+interface MaterialRun {
+  readonly renderPipeId: 'natsumeMaterials';
+  readonly canBundle: false;
+  readonly meshes: Mesh[];
+}
+
+/** One snapshot per uninterrupted instruction run; never reuse host state across boundaries. */
+class MaterialPipe extends MeshPipe {
+  constructor(
+    renderer: WebGLRenderer,
+    private readonly materialAdaptor = new MaterialAdaptor(),
+  ) {
+    super(renderer, materialAdaptor);
+  }
+  override addRenderable(mesh: Mesh, instructions: InstructionSet): void {
+    super.addRenderable(mesh, instructions);
+    const last = instructions.instructionSize - 1;
+    if (instructions.instructions[last] !== mesh) return;
+    const previous = instructions.instructions[last - 1] as MaterialRun | undefined;
+    if (previous?.renderPipeId === 'natsumeMaterials' && 'meshes' in previous) {
+      previous.meshes.push(mesh);
+      instructions.instructionSize--;
+    } else {
+      const run: MaterialRun = {
+        renderPipeId: 'natsumeMaterials',
+        canBundle: false,
+        meshes: [mesh],
+      };
+      instructions.instructions[last] = run;
+    }
+  }
+  override execute(instruction: Mesh | MaterialRun): void {
+    this.materialAdaptor.withSnapshot(() => {
+      if ('meshes' in instruction) {
+        for (const mesh of instruction.meshes) super.execute(mesh);
+      } else super.execute(instruction);
+    });
+  }
+}
+
 export function ensureMaterialPipe(renderer: WebGLRenderer): void {
   const pipes = renderer.renderPipes as unknown as Record<string, unknown>;
-  pipes.natsumeMaterials ??= new MeshPipe(renderer, new MaterialAdaptor());
+  pipes.natsumeMaterials ??= new MaterialPipe(renderer);
 }

@@ -8,6 +8,7 @@ import {
   BufferImageSource,
   Container,
   RenderTexture,
+  RenderContainer,
   Texture,
   type WebGLRenderer,
 } from 'pixi.js';
@@ -376,4 +377,106 @@ export async function exerciseSceneAnimation(bytes: number[]) {
     invalidEnvironmentRejected,
     released,
   };
+}
+
+/** Checks snapshot boundaries against host state changed between source draws. */
+export async function exerciseMaterialSnapshots(bytes: number[]) {
+  const app = new Application();
+  await app.init({
+    preference: 'webgl',
+    preferWebGLVersion: 2,
+    width: 64,
+    height: 64,
+    autoStart: false,
+  });
+  const renderer = app.renderer as WebGLRenderer;
+  ensureMaterialPipe(renderer);
+  const pack = await loadPack(Uint8Array.from(bytes));
+  const scene = new Scene(pack, pack.document.entries[0]!.roots);
+  const geometry = pack.getMesh(pack.document.assets.find((a) => a.kind === 2)!.id)!;
+  const material = new MaterialT();
+  material.model = 1;
+  material.renderState = new RenderStateT();
+  material.renderState.srcRgb = material.renderState.srcAlpha = 1;
+  material.renderState.dstRgb = material.renderState.dstAlpha = 0;
+  const gl = renderer.gl;
+  let initialMask = 15;
+  const restored: { mask: boolean[]; depth: number }[] = [];
+  const inspect = () =>
+    restored.push({
+      mask: Array.from(gl.getParameter(gl.COLOR_WRITEMASK) as boolean[]),
+      depth: gl.getParameter(gl.DEPTH_FUNC) as number,
+    });
+  app.stage.addChild(
+    new RenderContainer(() => {
+      renderer.colorMask.setMask(initialMask);
+      gl.depthFunc(gl.LESS);
+    }),
+  );
+  const make = () => {
+    const mesh = new SceneMesh(
+      scene.ordered[0]!,
+      new MeshRendererT(),
+      material,
+      geometry,
+      0,
+      Texture.WHITE,
+      pack,
+    );
+    mesh.sync([16, 0, 0, 0, 0, -16, 0, 0, 0, 0, 0.001, 0, 32, 32, 0, 1], 'gamma');
+    app.stage.addChild(mesh);
+    return mesh;
+  };
+  make();
+  make();
+  app.stage.addChild(
+    new RenderContainer(() => {
+      inspect();
+      renderer.colorMask.setMask(10);
+      gl.depthFunc(gl.GREATER);
+    }),
+  );
+  const third = make();
+  make();
+  app.stage.addChild(new RenderContainer(inspect));
+  const read = gl.getParameter.bind(gl);
+  let colorQueries = 0;
+  gl.getParameter = (name: number) => {
+    if (name === gl.COLOR_WRITEMASK) colorQueries++;
+    return read(name);
+  };
+  const queries: number[] = [];
+  const render = () => {
+    colorQueries = 0;
+    app.render();
+    queries.push(colorQueries - 2);
+  }; // Two explicit host inspections.
+  try {
+    render();
+    initialMask = 5;
+    render(); // Reused instruction set must read fresh host state.
+    third.visible = false;
+    render(); // A retained run still observes current mesh visibility.
+    third.visible = true;
+    const prepare = third.prepareEnvironment;
+    third.prepareEnvironment = () => {
+      throw new Error('snapshot failure');
+    };
+    try {
+      app.render();
+    } catch (error) {
+      if (!(error instanceof Error) || error.message !== 'snapshot failure') throw error;
+    }
+    third.prepareEnvironment = prepare;
+    restored.length = 6;
+    initialMask = 15;
+    render(); // An interrupted run cannot leak a snapshot into the next render.
+    return { queries, restored, error: gl.getError(), less: gl.LESS, greater: gl.GREATER };
+  } finally {
+    gl.getParameter = read;
+    renderer.colorMask.setMask(15);
+    app.stage.destroy({ children: true });
+    pack.dispose();
+    app.destroy();
+  }
 }

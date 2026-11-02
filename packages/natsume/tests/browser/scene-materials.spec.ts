@@ -78,3 +78,29 @@ test('previews ordinary meshes and isolates animated material/enabled state', as
   });
   expect(errors).toEqual([]);
 });
+
+test('shares queries only across uninterrupted draws and refreshes snapshots after host changes or errors', async ({
+  page,
+}) => {
+  test.skip(!existsSync(sample), 'Local exported geometry is not distributed');
+  await page.goto('/');
+  const result = await page.evaluate(
+    async ({ path, bytes }) => (await import('/@fs' + path)).exerciseMaterialSnapshots(bytes),
+    {
+      path: new URL('./scene-render-fixture.ts', import.meta.url).pathname,
+      bytes: Array.from(readFileSync(sample)),
+    },
+  );
+  expect(result.error).toBe(0);
+  expect(result.queries).toEqual([2, 2, 2, 2]);
+  expect(result.restored).toEqual([
+    { mask: [true, true, true, true], depth: result.less },
+    { mask: [true, false, true, false], depth: result.greater },
+    { mask: [false, true, false, true], depth: result.less },
+    { mask: [true, false, true, false], depth: result.greater },
+    { mask: [false, true, false, true], depth: result.less },
+    { mask: [true, false, true, false], depth: result.greater },
+    { mask: [true, true, true, true], depth: result.less },
+    { mask: [true, false, true, false], depth: result.greater },
+  ]);
+});
