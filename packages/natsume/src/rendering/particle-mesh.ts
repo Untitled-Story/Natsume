@@ -802,8 +802,12 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
         col = frame % cols,
         row = Math.floor(frame / cols);
       const flip = this.definition.flip;
-      const flipX = flip ? random(e.seed, e.serials[i]!, 57) < flip.x : false;
-      const flipY = flip ? random(e.seed, e.serials[i]!, 58) < flip.y : false;
+      const flipX =
+        (flip ? random(e.seed, e.serials[i]!, 57) < flip.x : false) !==
+        (sheet ? random(e.seed, e.serials[i]!, 60) < sheet.flipUProbability : false);
+      const flipY =
+        (flip ? random(e.seed, e.serials[i]!, 58) < flip.y : false) !==
+        (sheet ? random(e.seed, e.serials[i]!, 61) < sheet.flipVProbability : false);
       const custom = this.definition.vertexStreams.some(
         (s) => s.semantic === VertexSemantic.Custom1,
       )
