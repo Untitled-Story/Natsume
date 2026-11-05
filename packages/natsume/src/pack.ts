@@ -1,5 +1,6 @@
 import { check } from './errors.js';
 import { decodePngPixels, type ImagePixels } from './loader/png-pixels.js';
+import { exrImageSize, isOpenExr } from './loader/exr-pixels.js';
 import type { DocumentT } from './format/generated/noa/ir/document.js';
 import type { MeshT } from './format/generated/noa/mesh/mesh.js';
 import { ComponentData } from './format/generated/noa/ir/component-data.js';
@@ -75,11 +76,15 @@ export class EffectPack {
     const bytes = file ? this.#files.get(file.path) : undefined;
     return bytes?.slice();
   }
-  /** @internal Reads validated PNG dimensions without copying or decoding the asset. */
+  /** @internal Reads PNG or retained source OpenEXR dimensions without allocating pixels. */
   getImageSize(id: number): { readonly width: number; readonly height: number } | undefined {
     this.#assertAlive();
-    const file = this.manifest.files.find((file) => file.asset_id === id && file.kind === 'image');
+    const file = this.manifest.files.find(
+      (file) => file.asset_id === id && (file.kind === 'image' || file.kind === 'source_data'),
+    );
     const bytes = file ? this.#files.get(file.path) : undefined;
+    if (file?.kind === 'source_data')
+      return bytes && isOpenExr(bytes) ? exrImageSize(bytes) : undefined;
     if (!bytes || bytes.length < 24) return;
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
     return { width: view.getUint32(16), height: view.getUint32(20) };
