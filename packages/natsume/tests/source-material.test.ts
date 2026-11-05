@@ -3,6 +3,7 @@ import * as I from '../src/format/generated/noa/ir.js';
 import type { EffectPack } from '../src/pack.js';
 import { resolveSourceMaterial } from '../src/rendering/source-material.js';
 import { defaultParticleMips } from '../src/rendering/default-particle.js';
+import { materialSupport, usesGlobalMipBias } from '../src/rendering/material-support.js';
 
 const unlit = '00caeea0345e4a8eed279ee8893d77fa53d37a1626d91fa644012a7a2224e700';
 const lit = 'afc864a0b8f613244f08d7d3ed52bc0fabe38bf5d39ce298d23f6f0038a97b29';
@@ -40,6 +41,83 @@ function fixture(hash = unlit, source: Record<string, unknown> = {}) {
   return { material, pack, references };
 }
 describe('verified source material recipes', () => {
+  it.each([
+    [
+      'f4c3959fbb391fd5e4722820c271a04f3d3ced65bd2029429033936e7ae264f9',
+      I.MaterialModel.ParticleAddAlpha,
+      false,
+    ],
+    [
+      'f07136c5ab507bfcb309c1920a6afce6f1d5653f80c1c2f97e8ec0066ba58ac2',
+      I.MaterialModel.TextureVertexColor,
+      true,
+    ],
+    [
+      '09bc049fd22991be3a180c1550dd85a5f3cbdc1a7b764383cca275b3afbcf236',
+      I.MaterialModel.TextureVertexColor,
+      false,
+    ],
+  ] as const)(
+    'reuses the established recipe for opaque source textures: %s',
+    (hash, model, mip) => {
+      const f = fixture(hash, {
+        m_ValidKeywords: [],
+        m_SavedProperties: {
+          m_Colors: { _BaseColor: { r: 'Infinity' } }, // Not consumed by these programs.
+          m_TexEnvs: {
+            _MainTex: {
+              m_Texture: { fileID: '2800000', guid: 'hdr' },
+              m_Scale: { x: 2, y: 0.25 },
+              m_Offset: { x: -0.5, y: 3 },
+            },
+          },
+        },
+      });
+      f.material.renderState = new I.RenderStateT();
+      f.material.renderState.depthWrite = true;
+      f.material.renderState.srcRgb = I.BlendFactor.DstAlpha;
+      f.material.renderState.colorWriteMask = 7;
+      f.material.textures.push(
+        new I.TextureBindingT('_MainTex', 42, 0, null, null, I.ColorSpace.Linear, new I.SamplerT()),
+      );
+      f.references.push(
+        new I.UnitySourceReferenceT(
+          0,
+          '_MainTex',
+          new I.SourceReferenceT('hdr', 2800000n),
+          I.SourceResolution.Asset,
+          0,
+          42,
+        ),
+      );
+      const r = resolveSourceMaterial(f.pack, f.material);
+      expect(r.issues).toEqual([]);
+      expect(r.drawColor).toBe(true);
+      expect(r.globalMipBias).toBe(mip);
+      expect(usesGlobalMipBias(f.pack, f.material)).toBe(mip);
+      expect(usesGlobalMipBias(f.pack, r.material)).toBe(mip);
+      expect(r.material.model).toBe(model);
+      expect(r.material.renderQueue).toBe(3000);
+      expect(r.material.renderState).toBe(f.material.renderState);
+      expect(r.material.textures[0]).toMatchObject({
+        slot: '_MainTex',
+        imageId: 42,
+        colorSpace: I.ColorSpace.Linear,
+        scale: { x: 2, y: 0.25 },
+        offset: { x: -0.5, y: 3 },
+      });
+      expect(r.material.tint).toMatchObject({ r: 1, g: 1, b: 1, a: 1 });
+      const missingMip = materialSupport(f.material, f.pack).filter(
+        (issue) => issue.field === 'renderEnvironment.globalMipBias',
+      );
+      expect(missingMip).toHaveLength(mip ? 1 : 0);
+      expect(
+        materialSupport(f.material, f.pack, { globalMipBias: 0 }).filter(
+          (issue) => issue.severity === 'error',
+        ),
+      ).toEqual([]);
+    },
+  );
   it('retains the native built-in mip colors instead of averaging level zero', () => {
     const levels = defaultParticleMips();
     expect(levels.map((level) => level.length)).toEqual([16384, 4096, 1024, 256, 64, 16, 4]);

@@ -5,7 +5,9 @@ import type { AnimationT } from '../format/generated/noa/ir/animation.js';
 import type { AnimatorT } from '../format/generated/noa/ir/animator.js';
 import type { BoolKeyT } from '../format/generated/noa/ir/bool-key.js';
 import { AnimationProperty } from '../format/generated/noa/ir/animation-property.js';
+import { ParticleModuleData } from '../format/generated/noa/ir/particle-module-data.js';
 import { SupportChecks, type SupportIssue } from './support-checks.js';
+import { sourceAnimationTarget, sourceAnimationMetadata } from './source-animation.js';
 
 /** Native Animator state time is accumulated in normalized Float32 units. */
 export class AnimationClock {
@@ -46,7 +48,10 @@ export function sampleBool(keys: readonly R<BoolKeyT>[], seconds: number): boole
 }
 
 /** Shared by preflight and execution; schema availability does not imply track support. */
-export function animationSupport(animation: R<AnimationT>): readonly SupportIssue[] {
+export function animationSupport(
+  animation: R<AnimationT>,
+  pack?: EffectPack,
+): readonly SupportIssue[] {
   const rules = new SupportChecks();
   const path = `animations.${animation.id}`;
   const supported = new Set([
@@ -75,7 +80,44 @@ export function animationSupport(animation: R<AnimationT>): readonly SupportIssu
     AnimationProperty.CameraFar,
     AnimationProperty.CameraActive,
   ]);
-  for (const [index, track] of animation.tracks.entries())
+  for (const [index, track] of animation.tracks.entries()) {
+    if (track.binding?.property === AnimationProperty.SourceBinding && pack) {
+      const target = sourceAnimationTarget(pack, track);
+      rules.issues.push(
+        ...target.issues.map((issue) => ({
+          ...issue,
+          field: `${path}.tracks.${index}.${issue.field}`,
+        })),
+      );
+      rules.require(
+        target.kind !== 'script-field',
+        'CAPABILITY',
+        `${path}.tracks.${index}.binding.source`,
+        track.binding.source,
+        'Animated script fields require a declared host binding',
+      );
+      if (target.kind === 'custom-color') {
+        const component = pack.getComponent(target.componentId);
+        const system = component?.data as
+          | R<import('../format/generated/noa/ir/particle-system.js').ParticleSystemT>
+          | undefined;
+        const custom = system?.modules.find(
+          (m) => m.dataType === ParticleModuleData.CustomDataModule,
+        )?.data;
+        const color =
+          custom && 'streams' in custom
+            ? custom.streams.find((s) => s.slot === target.slot)?.color?.colorMax
+            : undefined;
+        rules.require(
+          color || sourceAnimationMetadata(pack, track, target).baseline !== undefined,
+          'CAPABILITY',
+          `${path}.tracks.${index}.binding.source`,
+          track.binding.source,
+          'Source custom color baseline is unavailable',
+        );
+      }
+      continue;
+    }
     rules.require(
       supported.has(track.binding!.property) &&
         (track.binding!.property !== AnimationProperty.NodeActive ||
@@ -85,6 +127,7 @@ export function animationSupport(animation: R<AnimationT>): readonly SupportIssu
       [track.binding?.property, track.dataType],
       'Unsupported animation property',
     );
+  }
   return rules.issues;
 }
 

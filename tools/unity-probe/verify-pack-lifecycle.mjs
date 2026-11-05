@@ -99,6 +99,14 @@ try {
                   },
                   parentLayout: { width: 640, height: 360 },
                   particleEnvironment: {
+                    // Explicit stationary test world; the game supplies its own velocities.
+                    rigidbodyVelocities: Object.fromEntries(
+                      pack.components.flatMap((component) =>
+                        component.dataType === 3 && component.data.main.hostRigidbodyVelocitySlot
+                          ? [[component.data.main.hostRigidbodyVelocitySlot, [0, 0, 0]]]
+                          : [],
+                      ),
+                    ),
                     fixedDeltaSeconds: 0.02,
                     gravity: [0, -9.81, 0],
                     fog: { mode: 'none' },

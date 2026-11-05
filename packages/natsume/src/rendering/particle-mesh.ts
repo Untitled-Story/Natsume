@@ -287,7 +287,7 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
         colorUniforms: {
           uMipBias: { value: 0, type: 'f32' },
           uSourceSurface: {
-            value: source.program ? Number(source.surface === 1) : -1,
+            value: source.program === 'urp-particles-unlit' ? Number(source.surface === 1) : -1,
             type: 'f32',
           },
           uUIAlphaClip: { value: 0, type: 'f32' },

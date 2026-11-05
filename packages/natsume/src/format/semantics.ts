@@ -101,6 +101,7 @@ export const SUPPORTED_FEATURES: Readonly<Record<string, number>> = Object.freez
       'animation.particle',
       'animation.renderer-material',
       'animation.events-typed',
+      'animation.source-binding',
       'particle.main',
       'particle.renderer',
       'particle.renderer-none',

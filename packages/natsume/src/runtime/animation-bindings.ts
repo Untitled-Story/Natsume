@@ -19,6 +19,8 @@ import { ScalarMode } from '../format/generated/noa/ir/scalar-mode.js';
 import { curve } from './parameters.js';
 import { sampleBool } from './animation.js';
 import type { Scene } from './scene.js';
+import { sourceAnimationTarget, sourceAnimationMetadata } from './source-animation.js';
+import { assertSupport } from './support-checks.js';
 
 export interface CompiledBinding {
   readonly key: string;
@@ -39,6 +41,8 @@ export class AnimationBindings {
   readonly systems = new Map<number, ParticleSystemT>();
   readonly materials = new Map<string, MaterialT>();
   readonly spriteColors = new Map<number, import('../format/generated/noa/ir/color.js').ColorT>();
+  readonly imageColors = new Map<number, import('../format/generated/noa/ir/color.js').ColorT>();
+  private readonly dormantColors = new Map<string, number>();
   readonly enabled = new Map<number, boolean>();
   private readonly resets: (() => void)[] = [];
   constructor(
@@ -58,7 +62,27 @@ export class AnimationBindings {
     for (const clip of pack.document.animations)
       for (const track of clip.tracks) {
         const b = track.binding!,
-          c = pack.getComponent(b.targetId);
+          source = b.property === P.SourceBinding ? sourceAnimationTarget(pack, track) : undefined,
+          c = pack.getComponent(source?.componentId || b.targetId);
+        if (source?.kind === 'custom-color') {
+          const key = `${source.componentId}:${source.field}`;
+          const baseline = sourceAnimationMetadata(pack, track, source).baseline;
+          if (baseline !== undefined && !this.dormantColors.has(key)) {
+            this.dormantColors.set(key, baseline);
+            this.resets.push(() => {
+              this.dormantColors.set(key, baseline);
+            });
+          }
+        }
+        if (source?.kind === 'image-color' && c && !this.imageColors.has(c.id)) {
+          const original = (c.data as R<import('../format/generated/noa/ir/uiimage.js').UIImageT>)
+            .color!;
+          const state = structuredClone(
+            original,
+          ) as import('../format/generated/noa/ir/color.js').ColorT;
+          this.imageColors.set(c.id, state);
+          this.resets.push(() => Object.assign(state, original));
+        }
         if (c?.dataType === C.ParticleSystem && !this.systems.has(c.id)) {
           const state = structuredClone(c.data) as ParticleSystemT;
           this.systems.set(c.id, state);
@@ -103,8 +127,13 @@ export class AnimationBindings {
   }
   compile(track: R<TrackT>): CompiledBinding | undefined {
     const b = track.binding!,
-      component = this.pack.getComponent(b.targetId);
-    const n = this.scene.nodes.get(component?.nodeId ?? b.targetId);
+      source = b.property === P.SourceBinding ? sourceAnimationTarget(this.pack, track) : undefined,
+      component = this.pack.getComponent(source?.componentId || b.targetId);
+    if (source) {
+      assertSupport(source.issues);
+      if (source.kind === 'unbound') return undefined;
+    }
+    const n = this.scene.nodes.get(source?.nodeId ?? component?.nodeId ?? b.targetId);
     if (!n) return undefined;
     let read: () => number[], write: (v: readonly number[]) => void;
     const vector = (
@@ -120,9 +149,60 @@ export class AnimationBindings {
         changed();
       };
     };
-    const ps = this.systems.get(b.targetId),
+    const ps = this.systems.get(source?.componentId || b.targetId),
       main = ps?.main;
     switch (b.property) {
+      case P.SourceBinding: {
+        check(source, 'SEMANTIC', 'Missing source animation identity');
+        if (source.kind === 'active') {
+          read = () => [Number(n.active)];
+          write = (v) => {
+            n.active = v[0] !== 0;
+          };
+        } else if (source.kind === 'image-color') {
+          const color = this.imageColors.get(source.componentId),
+            channel = source.channel!;
+          check(color, 'SEMANTIC', 'Missing animated Image color');
+          read = () => [color[channel]];
+          write = (v) => {
+            color[channel] = v[0]!;
+          };
+        } else if (source.kind === 'burst-count') {
+          const emission = ps?.modules.find((m) => m.dataType === M.EmissionModule)?.data;
+          const parameter =
+            emission && 'bursts' in emission ? emission.bursts[source.slot!]?.count : undefined;
+          check(parameter, 'SEMANTIC', 'Missing animated burst count');
+          const field =
+            parameter.mode === ScalarMode.Curve || parameter.mode === ScalarMode.TwoCurves
+              ? 'multiplier'
+              : 'constantMax';
+          read = () => [parameter[field]];
+          write = (v) => {
+            parameter[field] = v[0]!;
+          };
+        } else if (source.kind === 'custom-color') {
+          const custom = ps?.modules.find((m) => m.dataType === M.CustomDataModule)?.data;
+          const color =
+            custom && 'streams' in custom
+              ? custom.streams.find((s) => s.slot === source.slot)?.color?.colorMax
+              : undefined;
+          const channel = source.channel!,
+            key = `${source.componentId}:${source.field}`;
+          check(
+            color || this.dormantColors.has(key),
+            'CAPABILITY',
+            'Source custom color baseline is unavailable',
+          );
+          read = () => [color ? color[channel] : this.dormantColors.get(key)!];
+          write = (v) => {
+            if (color) color[channel] = v[0]!;
+            else this.dormantColors.set(key, v[0]!);
+          };
+        } else {
+          check(false, 'CAPABILITY', 'Source field execution is not implemented');
+        }
+        break;
+      }
       case P.NodeActive:
         read = () => [Number(n.active)];
         write = (v) => {
@@ -368,7 +448,9 @@ export class AnimationBindings {
       return values;
     };
     return {
-      key: `${b.targetId}:${b.property}:${b.parameter}:${b.propertyName}:${b.slotIndex}`,
+      key: source
+        ? `source:${source.nodeId}:${source.componentId}:${source.field}`
+        : `${b.targetId}:${b.property}:${b.parameter}:${b.propertyName}:${b.slotIndex}`,
       writes: bindingWrites(this.pack, track),
       baseline,
       mask: track.dataType === TrackData.BoolTrack ? [true] : samplers.map((s) => !!s),
@@ -426,6 +508,13 @@ export function bindingWrites(pack: EffectPack, track: R<TrackT>): readonly stri
   const b = track.binding!,
     component = pack.getComponent(b.targetId),
     nodeId = component?.nodeId ?? b.targetId;
+  if (b.property === P.SourceBinding) {
+    const source = sourceAnimationTarget(pack, track);
+    if (source.kind === 'unbound') return [];
+    if (source.kind === 'active') return [`node:${source.nodeId}:active`];
+    return [`source:${source.nodeId}:${source.componentId}:${source.field}`];
+  }
+  if (b.property === P.NodeActive) return [`node:${nodeId}:active`];
   if (b.property === P.NodePosition || b.property === P.RectAnchoredPosition)
     return [`node:${nodeId}:position`];
   if (b.property === P.NodeScale || b.property === P.NodeRotation)

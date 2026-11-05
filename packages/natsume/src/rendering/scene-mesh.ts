@@ -180,7 +180,7 @@ export class SceneMesh extends Mesh<Geometry, Shader> {
           uDepth: { value: new Float32Array(4), type: 'vec4<f32>' },
           uModel: { value: code, type: 'f32' },
           uSourceSurface: {
-            value: source.program ? Number(source.surface === 1) : -1,
+            value: source.program === 'urp-particles-unlit' ? Number(source.surface === 1) : -1,
             type: 'f32',
           },
           uUseCustom: { value: vertexStride === 10 ? 1 : 0, type: 'f32' },

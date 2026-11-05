@@ -13,6 +13,9 @@ import { SupportChecks, type SupportIssue } from '../runtime/support-checks.js';
 
 const unlitHash = '00caeea0345e4a8eed279ee8893d77fa53d37a1626d91fa644012a7a2224e700';
 const litHash = 'afc864a0b8f613244f08d7d3ed52bc0fabe38bf5d39ce298d23f6f0038a97b29';
+const addAlphaHash = 'f4c3959fbb391fd5e4722820c271a04f3d3ced65bd2029429033936e7ae264f9';
+const textureHash = '09bc049fd22991be3a180c1550dd85a5f3cbdc1a7b764383cca275b3afbcf236';
+const textureMipHash = 'f07136c5ab507bfcb309c1920a6afce6f1d5653f80c1c2f97e8ec0066ba58ac2';
 const builtinGuid = '0000000000000000f000000000000000';
 const resolved = new WeakMap<EffectPack, WeakMap<object, ResolvedSourceMaterial>>();
 
@@ -35,7 +38,7 @@ function object(value: Value | undefined): ObjectValue {
 }
 
 export interface SourceMaterialPass {
-  readonly name: 'ForwardLit' | 'DepthOnly' | 'DepthNormalsOnly';
+  readonly name: string;
   readonly lightMode: string;
   readonly enabled: boolean;
   readonly renderState: R<RenderStateT>;
@@ -43,9 +46,15 @@ export interface SourceMaterialPass {
 
 export interface ResolvedSourceMaterial {
   readonly material: R<MaterialT>;
-  readonly program: 'urp-particles-unlit' | 'urp-lit-depth-only' | null;
+  readonly program:
+    | 'urp-particles-unlit'
+    | 'urp-lit-depth-only'
+    | 'particle-add-alpha'
+    | 'texture-vertex-color'
+    | null;
   readonly surface: number;
   readonly drawColor: boolean;
+  readonly globalMipBias: boolean;
   readonly passes: readonly SourceMaterialPass[];
   readonly builtinTexture: { readonly guid: string; readonly fileId: bigint } | null;
   readonly issues: readonly SupportIssue[];
@@ -64,6 +73,7 @@ export function resolveSourceMaterial(
     program: null,
     surface: 0,
     drawColor: true,
+    globalMipBias: false,
     passes: [],
     builtinTexture: null,
     issues: checks.issues,
@@ -86,7 +96,8 @@ export function resolveSourceMaterial(
     return result();
   }
   const hash = shader.program_sha256;
-  if (hash !== unlitHash && hash !== litHash) {
+  const knownRecipe = hash === addAlphaHash || hash === textureHash || hash === textureMipHash;
+  if (hash !== unlitHash && hash !== litHash && !knownRecipe) {
     checks.require(
       false,
       'CAPABILITY',
@@ -121,9 +132,11 @@ export function resolveSourceMaterial(
     return value;
   };
   const allowed = new Set(
-    isUnlit
-      ? ['_SURFACE_TYPE_TRANSPARENT', 'INSTANCING_ON', 'PROCEDURAL_INSTANCING_ON']
-      : ['_SURFACE_TYPE_TRANSPARENT', '_ALPHAPREMULTIPLY_ON', 'INSTANCING_ON'],
+    knownRecipe
+      ? []
+      : isUnlit
+        ? ['_SURFACE_TYPE_TRANSPARENT', 'INSTANCING_ON', 'PROCEDURAL_INSTANCING_ON']
+        : ['_SURFACE_TYPE_TRANSPARENT', '_ALPHAPREMULTIPLY_ON', 'INSTANCING_ON'],
   );
   const keywords = source.m_ValidKeywords ?? [];
   checks.require(
@@ -142,7 +155,7 @@ export function resolveSourceMaterial(
     alphaToMask,
     'Source alpha-to-coverage requires an explicit multisample target',
   );
-  const cull = scalar('_Cull', 2);
+  const cull = knownRecipe ? (material.renderState?.cull ?? 0) : scalar('_Cull', 2);
   checks.require(
     Number.isInteger(cull) && cull >= 0 && cull <= 2,
     'CAPABILITY',
@@ -193,35 +206,51 @@ export function resolveSourceMaterial(
   const enabled = (tag: string) =>
     !Array.isArray(disabled) ||
     !disabled.some((name) => typeof name === 'string' && name.toLowerCase() === tag.toLowerCase());
-  const passes: SourceMaterialPass[] = isUnlit
+  const shaderSource = object(shader.source as Value);
+  const subShaders = object(shaderSource.m_ParsedForm).m_SubShaders;
+  const sourcePasses = Array.isArray(subShaders) ? object(subShaders[0]).m_Passes : [];
+  const sourcePass = Array.isArray(sourcePasses) ? object(sourcePasses[0]) : {};
+  const sourceState = object(sourcePass.m_State);
+  const tags = object(object(sourceState.m_Tags).tags);
+  const knownTag = String(tags.LIGHTMODE ?? 'SRPDefaultUnlit');
+  const passes: SourceMaterialPass[] = knownRecipe
     ? [
         {
-          name: 'ForwardLit',
-          lightMode: 'SRPDefaultUnlit',
-          enabled: enabled('SRPDefaultUnlit'),
-          renderState: forward,
-        },
-        {
-          name: 'DepthOnly',
-          lightMode: 'DepthOnly',
-          enabled: enabled('DepthOnly'),
-          renderState: depth,
-        },
-        {
-          name: 'DepthNormalsOnly',
-          lightMode: 'DepthNormalsOnly',
-          enabled: enabled('DepthNormalsOnly'),
-          renderState: normal,
+          name: String(sourceState.m_Name ?? ''),
+          lightMode: knownTag,
+          enabled: enabled(knownTag),
+          renderState: material.renderState!,
         },
       ]
-    : [
-        {
-          name: 'DepthOnly',
-          lightMode: 'DepthOnly',
-          enabled: enabled('DepthOnly'),
-          renderState: depth,
-        },
-      ];
+    : isUnlit
+      ? [
+          {
+            name: 'ForwardLit',
+            lightMode: 'SRPDefaultUnlit',
+            enabled: enabled('SRPDefaultUnlit'),
+            renderState: forward,
+          },
+          {
+            name: 'DepthOnly',
+            lightMode: 'DepthOnly',
+            enabled: enabled('DepthOnly'),
+            renderState: depth,
+          },
+          {
+            name: 'DepthNormalsOnly',
+            lightMode: 'DepthNormalsOnly',
+            enabled: enabled('DepthNormalsOnly'),
+            renderState: normal,
+          },
+        ]
+      : [
+          {
+            name: 'DepthOnly',
+            lightMode: 'DepthOnly',
+            enabled: enabled('DepthOnly'),
+            renderState: depth,
+          },
+        ];
   const tint = isUnlit ? object(colors._BaseColor) : {};
   const channels = ['r', 'g', 'b', 'a'].map((k) => (tint[k] === undefined ? 1 : Number(tint[k])));
   checks.require(
@@ -232,15 +261,21 @@ export function resolveSourceMaterial(
     'Source base color must be finite',
   );
   const effective = Object.assign(new MaterialT(), material, {
-    model: MaterialModel.ParticleUnlit,
+    model: knownRecipe
+      ? hash === addAlphaHash
+        ? MaterialModel.ParticleAddAlpha
+        : MaterialModel.TextureVertexColor
+      : MaterialModel.ParticleUnlit,
     tint: new ColorT(channels[0], channels[1], channels[2], channels[3]),
-    renderState: isUnlit ? forward : depth,
-    renderQueue: material.renderQueue === -1 ? 2000 : material.renderQueue,
+    renderState: knownRecipe ? material.renderState : isUnlit ? forward : depth,
+    renderQueue: material.renderQueue === -1 ? (knownRecipe ? 3000 : 2000) : material.renderQueue,
     textures: [],
   });
   let builtinTexture: ResolvedSourceMaterial['builtinTexture'] = null;
-  if (isUnlit) {
-    const texture = object(object(object(saved.m_TexEnvs)._BaseMap).m_Texture);
+  if (isUnlit || knownRecipe) {
+    const slot = isUnlit ? '_BaseMap' : '_MainTex';
+    const sourceBinding = object(object(saved.m_TexEnvs)[slot]);
+    const texture = object(sourceBinding.m_Texture);
     let fileId = 0n;
     try {
       fileId = BigInt(String(texture.fileID ?? 0));
@@ -248,13 +283,13 @@ export function resolveSourceMaterial(
       checks.require(
         false,
         'CAPABILITY',
-        `${field}._BaseMap.fileID`,
+        `${field}.${slot}.fileID`,
         texture.fileID,
         'Source texture fileID must be an integer',
       );
     }
     const guid = String(texture.guid ?? '');
-    if (fileId !== 0n && guid === builtinGuid && fileId === 10300n)
+    if (isUnlit && fileId !== 0n && guid === builtinGuid && fileId === 10300n)
       builtinTexture = { guid, fileId };
     else if (fileId !== 0n) {
       const reference = pack.document.sourceExport?.references.find(
@@ -266,7 +301,7 @@ export function resolveSourceMaterial(
       checks.require(
         reference,
         'CAPABILITY',
-        `${field}._BaseMap`,
+        `${field}.${slot}`,
         texture,
         'Source base texture has no resolved image asset',
       );
@@ -291,18 +326,33 @@ export function resolveSourceMaterial(
               [0, 1, 2].includes(wrapU) &&
               [0, 1, 2].includes(wrapV)),
           'CAPABILITY',
-          `${field}._BaseMap.importer`,
+          `${field}.${slot}.importer`,
           file?.metadata,
           'Source texture requires explicit encoding and sampler metadata',
         );
         const wrap = (value: number) => (value === 0 ? 1 : value === 1 ? 0 : 2);
+        const st = isUnlit
+          ? [1, 1, 0, 0]
+          : [
+              Number(object(sourceBinding.m_Scale).x ?? 1),
+              Number(object(sourceBinding.m_Scale).y ?? 1),
+              Number(object(sourceBinding.m_Offset).x ?? 0),
+              Number(object(sourceBinding.m_Offset).y ?? 0),
+            ];
+        checks.require(
+          st.every(Number.isFinite),
+          'CAPABILITY',
+          `${field}.${slot}.ST`,
+          sourceBinding,
+          'Source texture scale and offset must be finite',
+        );
         effective.textures.push(
           new TextureBindingT(
-            '_BaseMap',
+            slot,
             reference.targetAssetId,
             0,
-            new Vec2T(1, 1),
-            new Vec2T(0, 0),
+            new Vec2T(st[0], st[1]),
+            new Vec2T(st[2], st[3]),
             existing?.colorSpace ?? (srgb === 1 ? ColorSpace.SRGB : ColorSpace.Linear),
             existing?.sampler
               ? structuredClone(existing.sampler)
@@ -314,9 +364,16 @@ export function resolveSourceMaterial(
   }
   const resolution = result({
     material: effective,
-    program: isUnlit ? 'urp-particles-unlit' : 'urp-lit-depth-only',
+    program: knownRecipe
+      ? hash === addAlphaHash
+        ? 'particle-add-alpha'
+        : 'texture-vertex-color'
+      : isUnlit
+        ? 'urp-particles-unlit'
+        : 'urp-lit-depth-only',
     surface,
-    drawColor: isUnlit && enabled('SRPDefaultUnlit'),
+    drawColor: knownRecipe ? enabled(knownTag) : isUnlit && enabled('SRPDefaultUnlit'),
+    globalMipBias: isUnlit || hash === textureMipHash,
     passes,
     builtinTexture,
   });

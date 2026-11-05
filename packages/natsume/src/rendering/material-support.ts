@@ -7,7 +7,8 @@ import type { RenderEnvironment } from './render-environment.js';
 import { resolveSourceMaterial } from './source-material.js';
 
 export function usesGlobalMipBias(pack: EffectPack, material: R<MaterialT>): boolean {
-  if (resolveSourceMaterial(pack, material).program === 'urp-particles-unlit') return true;
+  const source = resolveSourceMaterial(pack, material);
+  if (source.program) return source.globalMipBias;
   if (material.model !== M.TextureVertexColor) return false;
   const bytes = pack.getAssetBytes(material.shaderDataAssetId);
   return !!bytes && JSON.parse(new TextDecoder().decode(bytes)).global_mip_bias === true;

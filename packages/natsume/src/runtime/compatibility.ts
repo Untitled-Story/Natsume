@@ -34,6 +34,7 @@ import { ActionKind } from '../format/generated/noa/ir/action-kind.js';
 import { AnimationProperty } from '../format/generated/noa/ir/animation-property.js';
 import { ParticleParameter } from '../format/generated/noa/ir/particle-parameter.js';
 import { animationSupport, animatorSupport, rendererCanPlay } from './animation.js';
+import { sourceAnimationTarget } from './source-animation.js';
 import { rendererVertexStride, particleMaterialSlots } from '../rendering/mesh-selection.js';
 import { NatsumeError, type ErrorCode } from '../errors.js';
 import type { EffectPack, DeepReadonly as R } from '../pack.js';
@@ -175,16 +176,6 @@ export function checkCompatibility(
         reference,
         'Source dependency is unresolved; provide the original dependency and recompile',
       );
-  for (const animation of pack.document.animations)
-    for (const [index, track] of animation.tracks.entries())
-      if (track.binding?.property === AnimationProperty.SourceBinding)
-        global.require(
-          false,
-          'CAPABILITY',
-          `animations.${animation.id}.tracks.${index}.binding.source`,
-          track.binding.source,
-          'Unity source animation binding requires an execution adapter',
-        );
   global.require(entry, 'HOST', 'entryId', options.entryId, 'Unknown entry');
   global.require(
     options.maxTrailPoints === undefined ||
@@ -996,14 +987,18 @@ export function checkCompatibility(
     'ImageBitmap decoding is required',
   );
   for (const animation of pack.document.animations)
-    totals.issues.push(...animationSupport(animation));
+    totals.issues.push(...animationSupport(animation, pack));
   const writers = new Map<string, Set<string>>(),
     overlaps = new Set<string>();
   const inspectWriter = (writer: string, clipId: number) => {
     for (const track of pack.document.animations.find((a) => a.id === clipId)?.tracks ?? []) {
       const b = track.binding!,
         c = pack.getComponent(b.targetId);
-      if (!nodeIds.has(c?.nodeId ?? b.targetId)) continue;
+      const nodeId =
+        b.property === AnimationProperty.SourceBinding
+          ? sourceAnimationTarget(pack, track).nodeId
+          : (c?.nodeId ?? b.targetId);
+      if (!nodeIds.has(nodeId)) continue;
       for (const field of bindingWrites(pack, track)) {
         const owners = writers.get(field) ?? new Set<string>();
         for (const owner of owners) if (owner !== writer) overlaps.add(`${owner} / ${writer}`);

@@ -275,7 +275,7 @@ export class Simulation {
         }
       }
     for (const animation of pack.document.animations) {
-      assertSupport(animationSupport(animation));
+      assertSupport(animationSupport(animation, pack));
       this.clips.set(animation.id, animation);
     }
     for (const c of pack.components.filter(

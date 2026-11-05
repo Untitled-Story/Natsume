@@ -241,7 +241,7 @@ export async function createUIRenderers(
         };
         const color = { r: 1, g: 1, b: 1, a: 1 };
         mesh.rendererColor = () => {
-          Object.assign(color, image.color);
+          Object.assign(color, simulation.bindings.imageColors.get(component.id) ?? image.color);
           color.a *= alpha();
           return color;
         };
@@ -251,7 +251,7 @@ export async function createUIRenderers(
           !(
             graphic &&
             (graphic.data as R<CanvasRendererT>).cullTransparentMesh &&
-            alpha() * image.color!.a < 0.001
+            alpha() * (simulation.bindings.imageColors.get(component.id) ?? image.color)!.a < 0.001
           );
         mesh.uiSortGroup = sortCanvas.id;
         mesh.canvasSortingLayerId = sorting.sortingLayerId;

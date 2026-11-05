@@ -326,23 +326,23 @@ export async function loadPack(
         'Invalid PNG header',
         file.path,
       );
-  }
-  for (const material of document.materials) {
-    const expected: Record<number, string> = {
-      2: 'particle-add-alpha',
-      4: 'unity-legacy-particle-additive',
-      5: 'unity-legacy-particle-alpha-blend',
-      6: 'unity-sprites-default',
-      7: 'unity-ui-default',
-      8: 'texture-vertex-color',
-      9: 'unity-source',
-    };
-    if (material.model === 4 || material.model === 5 || material.shaderDataAssetId)
-      check(
-        shaderModels.get(material.shaderDataAssetId) === expected[material.model],
-        'SEMANTIC',
-        'Material and shader recipe models differ',
-      );
+    for (const material of document.materials) {
+      const expected: Record<number, string> = {
+        2: 'particle-add-alpha',
+        4: 'unity-legacy-particle-additive',
+        5: 'unity-legacy-particle-alpha-blend',
+        6: 'unity-sprites-default',
+        7: 'unity-ui-default',
+        8: 'texture-vertex-color',
+        9: 'unity-source',
+      };
+      if (material.model === 4 || material.model === 5 || material.shaderDataAssetId)
+        check(
+          shaderModels.get(material.shaderDataAssetId) === expected[material.model],
+          'SEMANTIC',
+          'Material and shader recipe models differ',
+        );
+    }
   }
   options.signal?.throwIfAborted();
   return new EffectPack(document, manifest, files, meshes);

@@ -149,11 +149,25 @@ try {
             });
             return { id: m.id, program: recipe.program_sha256, sourceShader: m.sourceShader };
           });
+        // This harness models stationary host rigidbodies, not the original game scene.
+        const rigidbodyVelocities = Object.fromEntries(
+          d.components.flatMap((component) =>
+            component.dataType === ComponentData.ParticleSystem &&
+            component.data.main.hostRigidbodyVelocitySlot
+              ? [[component.data.main.hostRigidbodyVelocitySlot, [0, 0, 0]]]
+              : [],
+          ),
+        );
+        row.hostRigidbodyVelocities = rigidbodyVelocities;
         row.entries = d.entries.map((e) => ({
           id: e.id,
           ...checkCompatibility(
             pack,
-            { ...options, entryId: e.id },
+            {
+              ...options,
+              entryId: e.id,
+              particleEnvironment: { ...options.particleEnvironment, rigidbodyVelocities },
+            },
             {
               disposed: false,
               maxTextureSize: 4096,
