@@ -57,6 +57,7 @@ export const SUPPORTED_FEATURES: Readonly<Record<string, number>> = Object.freez
   Object.fromEntries(
     [
       'unity.source-graph',
+      'material.unity-source',
       'host.particle-environment',
       'particle.inherit-velocity',
       'particle.lifetime-by-emitter-speed',

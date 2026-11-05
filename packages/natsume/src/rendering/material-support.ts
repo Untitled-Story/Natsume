@@ -4,8 +4,10 @@ import type { RenderEnvironmentT } from '../format/generated/noa/ir/render-envir
 import { MaterialModel as M } from '../format/generated/noa/ir/material-model.js';
 import { SupportChecks, type SupportIssue } from '../runtime/support-checks.js';
 import type { RenderEnvironment } from './render-environment.js';
+import { resolveSourceMaterial } from './source-material.js';
 
 export function usesGlobalMipBias(pack: EffectPack, material: R<MaterialT>): boolean {
+  if (resolveSourceMaterial(pack, material).program === 'urp-particles-unlit') return true;
   if (material.model !== M.TextureVertexColor) return false;
   const bytes = pack.getAssetBytes(material.shaderDataAssetId);
   return !!bytes && JSON.parse(new TextDecoder().decode(bytes)).global_mip_bias === true;
@@ -19,6 +21,16 @@ export function materialSupport(
   canvasContext = false,
 ): readonly SupportIssue[] {
   const r = new SupportChecks();
+  const source = resolveSourceMaterial(pack, material);
+  r.issues.push(...source.issues);
+  material = source.material;
+  if (source.program && !source.drawColor)
+    r.warn(
+      'SOURCE_SHADER_NO_COLOR_PASS',
+      `materials.${material.id}.passes`,
+      source.passes.map((pass) => pass.name),
+      'The preserved shader has no enabled forward color pass; auxiliary depth passes are not drawn into the host color target.',
+    );
   r.require(
     [
       M.ParticleAddAlpha,
@@ -71,7 +83,7 @@ export function materialSupport(
       'Unsupported UV set',
     );
     r.require(
-      binding.colorSpace !== 0,
+      binding.colorSpace !== 2,
       'CAPABILITY',
       `materials.${material.id}.textures.${i}.colorSpace`,
       binding.colorSpace,

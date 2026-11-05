@@ -52,6 +52,7 @@ pnpm probe:unity --basic-shapes     # 基础 Shape 区域、厚度、初速度�
 pnpm probe:unity --shape-textures   # 纹理 UV、裁剪、颜色与批次边界
 pnpm probe:unity --uv-flips         # 逐粒子 UV 翻转、图集区域、mask 与频率
 pnpm probe:unity --cameras          # 源相机投影、清屏、层裁剪、多相机与 Canvas
+pnpm probe:unity --source-materials # 源程序公式、LightMode、内置纹理与 HDR 采样
 pnpm probe:unity --rotation-prewarm  # 生命周期旋转、预热窗口和首次更新余量
 pnpm probe:unity --rect-layout  # 有符号 RectTransform 布局
 pnpm probe:unity --noise-statistics # Noise 总体统计、三档首步位置、滚动轨迹、旋转与尺寸
@@ -78,6 +79,10 @@ pnpm probe:unity --prefab-layout # 原始 prefab 布局
 ```
 
 脚本将 `project/` 模板复制到仓库的 `data/unity-probe/` 后运行。该目录是专用临时工程，请勿放入业务工程。测量结果和 Editor 日志写入 `data/unity-baselines/`，均由 Git 忽略。部分模式需要图形设备。UI 探针从指定 Editor 安装中复制 UGUI Runtime 到忽略的临时工程；不分发 Unity 源码。
+
+`--source-materials` 将已核对的 Metal 程序公式翻译成 ShaderLab，测量 Gamma / Linear、Surface、混合、HDR 材质色和 LightMode 选择；不直接执行原始编译程序。内置纹理从 Unity 原生资源读取；HDR 另将原始 ASTC 压缩字节直接上传，避免将 EXR 导入器处理混入采样误差。
+
+原始 HDR 对照另设 `NATSUME_SOURCE_HDR` 为恢复的 EXR 绝对路径；EXR 所在目录的上一级放置同名 `.texture.bin` / `.texture.json`，保存原始压缩数据与 Texture2D 元数据。缺少这些输入时探针仍测合成 HALF 纹理，完整源材质浏览器验收则要求原始 ASTC 记录。内置纹理另测 7 级 mip，以及两种颜色空间、三种尺寸和三种 mip bias 的 18 组采样。
 
 `--noise-fit` 需要先准备 `data/unity-baselines/noise-fit-input.json`。`--prefab-layout` 默认使用相邻 Noa 项目的 `data/scenario/effect/kirakira_01_rip/`；可通过 `NATSUME_PREFAB_SOURCE` 指定其他同结构资源目录。
 

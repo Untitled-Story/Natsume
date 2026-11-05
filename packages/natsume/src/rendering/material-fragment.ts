@@ -13,6 +13,7 @@ uniform float uLinear;
 uniform float uTextureSRGB;
 uniform float uVertexSRGB;
 uniform float uModel;
+uniform float uSourceSurface;
 uniform vec4 uTint;
 uniform vec4 uFog;
 uniform vec3 uFogColor;
@@ -38,6 +39,11 @@ void main(){
   bool ui=uModel>4.5 && uModel<5.5;
   if(ui){color.a=floor(color.a*255.0+0.5)/255.0;texel+=uTextureSampleAdd;}
   vec4 c=texel*color;
+  if(uSourceSurface>=0.0){
+    vec4 tint=uTint;if(uLinear>0.5)tint.rgb=mix(toLinear(tint.rgb),pow(max(tint.rgb,vec3(0.0)),vec3(2.2)),greaterThan(tint.rgb,vec3(1.0)));
+    c*=tint;if(uSourceSurface!=1.0)c.a=1.0;
+    finalColor=c;return;
+  }
   if(uModel>3.5){
     if(uModel<5.5){vec4 tint=uTint;if(uLinear>0.5)tint.rgb=toLinear(tint.rgb);c*=tint;}
     if(ui && uUIClip>0.5){

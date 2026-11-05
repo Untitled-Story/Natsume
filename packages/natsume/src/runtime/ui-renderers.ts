@@ -21,6 +21,7 @@ import { imageGeometry } from '../rendering/image-geometry.js';
 import { spriteMaterial } from '../rendering/sprite-material.js';
 import { spriteTextureKey } from '../rendering/sprite-texture.js';
 import { check } from '../errors.js';
+import { resolveSourceMaterial } from '../rendering/source-material.js';
 
 type Acquire = (material: R<MaterialT>, key?: number | string) => Promise<Texture>;
 /** Native Graphic state remains per instance; resource leases belong to the runtime. */
@@ -142,9 +143,11 @@ export async function createUIRenderers(
         m.renderState.depthTestSource = 1;
         m.renderQueue = 3000;
       }
+      const source = resolveSourceMaterial(pack, material);
+      if (!source.drawColor) continue;
       const texture = sprite
         ? await acquire(spriteMaterial(material, sprite), spriteTextureKey(sprite))
-        : material.textures.length
+        : source.material.textures.length || source.builtinTexture
           ? await acquire(material)
           : Texture.WHITE;
       const inheritedGroups = lineage.map((n) => groups.filter((g) => g.nodeId === n.id));

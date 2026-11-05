@@ -1,4 +1,6 @@
 import { SourceResolution } from '../format/generated/noa/ir/source-resolution.js';
+import { AssetKind } from '../format/generated/noa/ir/asset-kind.js';
+import { resolveSourceMaterial } from '../rendering/source-material.js';
 import { copyCameraEnvironment } from '../rendering/camera-environment.js';
 import { MaterialModel as M } from '../format/generated/noa/ir/material-model.js';
 import { canvasSortingRank } from '../rendering/canvas-sorting.js';
@@ -107,6 +109,10 @@ export function checkCompatibility(
   context: CompatibilityContext,
 ): CompatibilityReport {
   const issues: CompatibilityIssue[] = [];
+  const materialById = (id: number) => {
+    const original = pack.document.materials.find((m) => m.id === id);
+    return original && resolveSourceMaterial(pack, original).material;
+  };
   const seen = new Set<string>();
   const entry = pack.document.entries.find(
     (e) => e.id === (options.entryId ?? pack.document.defaultEntryId),
@@ -605,7 +611,7 @@ export function checkCompatibility(
         if (!(error instanceof NatsumeError)) throw error;
         rules.require(false, error.code, 'geometry', undefined, error.message);
       }
-      const material = pack.document.materials.find((m) => m.id === image.materialId);
+      const material = materialById(image.materialId);
       if (material) {
         rules.issues.push(...materialSupport(material, pack, options.renderEnvironment, true));
         if (
@@ -707,7 +713,7 @@ export function checkCompatibility(
         );
       }
       for (const slot of slots) {
-        const material = pack.document.materials.find((m) => m.id === definition.materials[slot]);
+        const material = materialById(definition.materials[slot]!);
         rules.require(
           material,
           'SEMANTIC',
@@ -817,7 +823,7 @@ export function checkCompatibility(
         );
         for (const id of d.materials) {
           if (!id) continue;
-          const m = pack.document.materials.find((m) => m.id === id)!;
+          const m = materialById(id)!;
           rules.issues.push(...materialSupport(m, pack, options.renderEnvironment));
           if (m.model === 4 || m.model === 5)
             rules.require(
@@ -855,9 +861,7 @@ export function checkCompatibility(
       const passes = sceneMaterialPasses(definition, mesh);
       if (passes.length) rules.issues.push(...rendererEnvironmentSupport(definition.environment));
       for (const pass of passes) {
-        const material = pack.document.materials.find(
-          (m) => m.id === definition.materials[pass.slot],
-        );
+        const material = materialById(definition.materials[pass.slot]!);
         if (!material) continue;
         rules.issues.push(...materialSupport(material, pack, options.renderEnvironment));
         if (material.model === 4 || material.model === 5)
@@ -898,6 +902,11 @@ export function checkCompatibility(
     append(rules.issues, c.id);
   }
   const totals = new SupportChecks();
+  const builtinUsed = pack.document.materials.some(
+    (material) =>
+      materials.has(material.id) && resolveSourceMaterial(pack, material).builtinTexture,
+  );
+  if (builtinUsed && !context.cachedMaterialIds.has('builtin:10300')) pixels += 64 * 64;
   const opaqueGroups = new Map<string, Set<number>>();
   for (const c of components) {
     if (
@@ -930,7 +939,7 @@ export function checkCompatibility(
         slots.push(1);
     }
     for (const slot of slots) {
-      const material = pack.document.materials.find((m) => m.id === renderer.materials[slot]);
+      const material = materialById(renderer.materials[slot]!);
       if (!material || material.renderQueue > 2500) continue;
       const key = `${'sortingLayerRank' in renderer ? renderer.sortingLayerRank : renderer.sortingLayerIndex}/${renderer.sortingOrder}/${material.renderQueue}`;
       const group = opaqueGroups.get(key) ?? new Set<number>();
@@ -966,7 +975,21 @@ export function checkCompatibility(
     'Runtime decoded texture budget exceeded',
   );
   totals.require(
-    pixels === 0 || context.imageBitmapAvailable,
+    pixels === 0 ||
+      context.imageBitmapAvailable ||
+      [...materials].every((key) => {
+        if (typeof key !== 'number') return false;
+        const material = materialById(key);
+        return (
+          !!material &&
+          (!!resolveSourceMaterial(pack, material).builtinTexture ||
+            material.textures.every(
+              (binding) =>
+                pack.document.assets.find((asset) => asset.id === binding.imageId)?.kind ===
+                AssetKind.SourceData,
+            ))
+        );
+      }),
     'HOST',
     'createImageBitmap',
     context.imageBitmapAvailable,

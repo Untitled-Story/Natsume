@@ -28,6 +28,7 @@ import type { EffectPack, DeepReadonly as R } from '../pack.js';
 import type { ParticleRendererT } from '../format/generated/noa/ir/particle-renderer.js';
 import type { MaterialT } from '../format/generated/noa/ir/material.js';
 import { MaterialModel } from '../format/generated/noa/ir/material-model.js';
+import { resolveSourceMaterial } from './source-material.js';
 import { RenderMode } from '../format/generated/noa/ir/render-mode.js';
 import { Alignment } from '../format/generated/noa/ir/alignment.js';
 import { ParticleSort } from '../format/generated/noa/ir/particle-sort.js';
@@ -100,6 +101,7 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
   private readonly clipBuffer: Buffer;
   private perspectiveActive = false;
   private readonly needsMipBias: boolean;
+  private readonly sourceDrawColor: boolean;
   get node() {
     return this.emitter.node;
   }
@@ -152,6 +154,8 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
     renderEnvironment?: RenderEnvironment,
     sheetTextures: readonly Texture[] = [],
   ) {
+    const source = resolveSourceMaterial(pack, materialDefinition);
+    materialDefinition = source.material;
     const material = materialDefinition;
     const legacy =
       material.model === MaterialModel.LegacyParticleAdditive ||
@@ -282,6 +286,10 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
         uSceneDepth: Texture.WHITE.source,
         colorUniforms: {
           uMipBias: { value: 0, type: 'f32' },
+          uSourceSurface: {
+            value: source.program ? Number(source.surface === 1) : -1,
+            type: 'f32',
+          },
           uUIAlphaClip: { value: 0, type: 'f32' },
           uMaskCutoff: { value: -1, type: 'f32' },
           uCanvasClip: { value: 0, type: 'f32' },
@@ -336,7 +344,8 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
           },
           uLinear: { value: 0, type: 'f32' },
           uTextureSRGB: {
-            value: material.textures[0]?.colorSpace === ColorSpace.SRGB ? 1 : 0,
+            value:
+              source.builtinTexture || material.textures[0]?.colorSpace === ColorSpace.SRGB ? 1 : 0,
             type: 'f32',
           },
         },
@@ -347,6 +356,8 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
     pixiState.depthMask = state.depthWrite;
     pixiState.cullMode = state.cull === 2 ? 'back' : state.cull === 1 ? 'front' : 'none';
     super({ geometry, shader, state: pixiState, texture });
+    this.materialDefinition = materialDefinition;
+    this.sourceDrawColor = source.drawColor;
     this.needsMipBias = usesGlobalMipBias(pack, material);
     this.renderEnvironment = renderEnvironment;
     this.straightAlpha = straight;
@@ -436,7 +447,8 @@ export class ParticleMesh extends Mesh<Geometry, Shader> {
   sync(matrix: ArrayLike<number>, colorSpace: SourceColorSpace): void {
     const e = this.emitter,
       n = e.count;
-    this.visible = this.animationEnabled() && e.node.activeInHierarchy && n > 0;
+    this.visible =
+      this.sourceDrawColor && this.animationEnabled() && e.node.activeInHierarchy && n > 0;
     if (!this.visible) return;
     const uniforms = this.shader!.resources.colorUniforms.uniforms,
       tintColor = this.materialDefinition.tint;

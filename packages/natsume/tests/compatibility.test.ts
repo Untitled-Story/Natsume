@@ -174,6 +174,22 @@ it('checks dimensions and texture budgets without copying image data', () => {
   ).toBe(true);
 });
 
+it('does not require an image decoder when the texture is already cached', () => {
+  const pack = fixture().pack();
+  try {
+    const uncached = checkCompatibility(pack, {}, { ...context, imageBitmapAvailable: false });
+    expect(uncached.issues.some((issue) => issue.field === 'createImageBitmap')).toBe(true);
+    const cached = checkCompatibility(
+      pack,
+      {},
+      { ...context, imageBitmapAvailable: false, cachedMaterialIds: new Set([5]) },
+    );
+    expect(cached.compatible).toBe(true);
+  } finally {
+    pack.dispose();
+  }
+});
+
 it('scopes component checks to the entry and includes inactive renderers that can become visible', () => {
   const f = fixture();
   f.doc.nodes.push(new NodeT(20, 'other', 0, false, f.doc.nodes[0]!.transform));

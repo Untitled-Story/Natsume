@@ -180,6 +180,10 @@ MeshFilter / MeshRenderer 使用包内真实三角网格，支持可选顶点色
 
 粒子与普通 Mesh 共用混合、ColorMask、深度测试 / 写入、剔除和 stencil 状态。支持已核验的 SpriteDefault 与 TextureVertexColor 材质配方；SpriteRenderer 支持真实网格、源 UV、颜色、翻转、Simple / Sliced / Tiled、Adaptive 平铺、越界 pivot 和动画；支持 Canvas、Image、UI 遮罩及 Sprite Mask；UI / Sprite 遮罩可与宿主 Pixi stencil mask 组合。任意自定义源 stencil 的组合仍需单独验证。
 
+源 Shader 按程序 SHA-256 自动匹配内置配方，支持已核验的 URP/Particles/Unlit 程序；未知程序或变体由 `checkCompatibility` 明确拒绝。配方保留源混合、深度、剔除、队列和 LightMode 开关，要求提供 `renderEnvironment.globalMipBias`。已核验的 URP/Lit 程序只保存 DepthOnly，不向普通颜色目标绘制，也不补造光照 Pass。
+
+支持 Unity 内置 Default-Particle 纹理及其原生 mip 链，以及保留为 SourceData 的单部件、无压缩 RGBA HALF OpenEXR；HDR 以半浮点上传，不裁剪到 8-bit。外部源纹理必须带明确的颜色空间和采样设置；规范 Image 资产仍使用 PNG。Linear 过滤保留已测颜色插值近似，误差见测量文档。源场景组件和动画是否可执行仍分别经过兼容性检查。
+
 Mesh / Sprite Shape 支持静态资产与实例内 Renderer 来源、Vertex / Edge / Triangle 采样、法线偏移、顶点色与扫描；源变换随节点更新，Renderer 启用状态与 Sprite 翻转 / tint 不影响发射。Donut 使用环面采样。Sprite 序列保留源图像与 UV，同图集共享纹理，跨图像按粒子顺序分段绘制。
 
 Shape Texture 支持 RGBA 阈值裁剪、颜色 / Alpha 调制和最近点 / 双线性取色；Mesh / Sprite 使用指定 UV 通道，基本形状使用原生形状映射。CPU 像素按包缓存并在释放包时回收。
@@ -402,6 +406,8 @@ runtime.registerScript(
 速度取样包含重力、Velocity 和 Limit，不包含 Speed Multiplier 与 Noise 位移。零宽区间按 Unity 的端点规则处理。
 
 ### Partial
+
+源材质仅支持按程序哈希核验的内置配方；未知程序、未核验的 keyword 变体和任意自定义 Shader 不支持。DepthOnly 程序保留为无前向颜色绘制，不提供完整 URP 光照管线。
 
 | 模块                         | 已支持                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | 未支持                                                                                                    |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |

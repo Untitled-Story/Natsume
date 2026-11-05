@@ -14,6 +14,7 @@ import { MaterialModel as M } from '../format/generated/noa/ir/material-model.js
 import { meshUV } from '../format/mesh-attributes.js';
 import { materialFragment } from './material-fragment.js';
 import { usesGlobalMipBias } from './material-support.js';
+import { resolveSourceMaterial } from './source-material.js';
 import type { RenderEnvironment } from './render-environment.js';
 import type { SourceColorSpace } from './particle-mesh.js';
 
@@ -86,6 +87,7 @@ export class SceneMesh extends Mesh<Geometry, Shader> {
   sortAtPivot = false;
   private readonly buffers: Buffer[];
   private readonly needsMipBias: boolean;
+  private readonly sourceDrawColor: boolean;
   private boundsCenter: readonly number[];
   geometryProvider: (() => R<MeshT> | undefined) | undefined;
   uiSortGroup: number | undefined;
@@ -111,6 +113,8 @@ export class SceneMesh extends Mesh<Geometry, Shader> {
     pack: EffectPack,
     private readonly vertexStride = 9,
   ) {
+    const source = resolveSourceMaterial(pack, materialDefinition);
+    materialDefinition = source.material;
     const binding = materialDefinition.textures[0];
     const uv = meshUV(mesh, binding?.uvSet ?? 0);
     const data = new Float32Array(mesh.positions.length * vertexStride);
@@ -175,6 +179,10 @@ export class SceneMesh extends Mesh<Geometry, Shader> {
           uTextureST: { value: new Float32Array([1, 1, 0, 0]), type: 'vec4<f32>' },
           uDepth: { value: new Float32Array(4), type: 'vec4<f32>' },
           uModel: { value: code, type: 'f32' },
+          uSourceSurface: {
+            value: source.program ? Number(source.surface === 1) : -1,
+            type: 'f32',
+          },
           uUseCustom: { value: vertexStride === 10 ? 1 : 0, type: 'f32' },
           uMipBias: { value: 0, type: 'f32' },
           uUIAlphaClip: { value: 0, type: 'f32' },
@@ -189,7 +197,10 @@ export class SceneMesh extends Mesh<Geometry, Shader> {
           uTint: { value: new Float32Array([1, 1, 1, 1]), type: 'vec4<f32>' },
           uRendererColor: { value: new Float32Array([1, 1, 1, 1]), type: 'vec4<f32>' },
           uLinear: { value: 0, type: 'f32' },
-          uTextureSRGB: { value: binding?.colorSpace === 1 ? 1 : 0, type: 'f32' },
+          uTextureSRGB: {
+            value: source.builtinTexture || binding?.colorSpace === 1 ? 1 : 0,
+            type: 'f32',
+          },
           uVertexSRGB: { value: 0, type: 'f32' },
           uFog: { value: new Float32Array(4), type: 'vec4<f32>' },
           uFogColor: { value: new Float32Array(3), type: 'vec3<f32>' },
@@ -209,6 +220,8 @@ export class SceneMesh extends Mesh<Geometry, Shader> {
           ? 'back'
           : 'none';
     super({ geometry, shader, state, texture });
+    this.materialDefinition = materialDefinition;
+    this.sourceDrawColor = source.drawColor;
     const min = [Infinity, Infinity, Infinity],
       max = [-Infinity, -Infinity, -Infinity];
     for (const p of mesh.positions)
@@ -322,7 +335,7 @@ export class SceneMesh extends Mesh<Geometry, Shader> {
     (u.uRendererColor as Float32Array).set(r ? [r.r, r.g, r.b, r.a] : [1, 1, 1, 1]);
   }
   sync(matrix: ArrayLike<number>, colorSpace: SourceColorSpace): void {
-    this.visible = this.animationEnabled() && this.node.activeInHierarchy;
+    this.visible = this.sourceDrawColor && this.animationEnabled() && this.node.activeInHierarchy;
     if (!this.visible) return;
     this.beforeSync?.(matrix);
     if (!this.visible) return;

@@ -100,48 +100,51 @@ const cameras = process.argv.includes('--cameras');
 const uvFlips = process.argv.includes('--uv-flips');
 const rendererShapes = process.argv.includes('--renderer-shapes');
 const meshShapes = process.argv.includes('--mesh-shapes');
-const particleProbe = uvFlips
-  ? ['uv-flips', 'NatsumeUVFlipProbe.Run']
-  : cameras
-    ? ['cameras', 'NatsumeCameraProbe.Run']
-    : shapeTextures
-      ? ['shape-textures', 'NatsumeShapeTextureProbe.Run']
-      : rendererShapes
-        ? ['renderer-shapes', 'NatsumeRendererShapeProbe.Run']
-        : meshShapes
-          ? ['mesh-shapes', 'NatsumeMeshShapeProbe.Run']
-          : particleModules
-            ? ['particle-modules', 'NatsumeParticleModulesProbe.Run']
-            : externalForces
-              ? ['external-forces', 'NatsumeExternalForcesProbe.Run']
-              : particleCollisions
-                ? ['particle-collisions', 'NatsumeParticleCollisionProbe.Run']
-                : colliderForcePlayback
-                  ? ['collider-force', 'NatsumeParticleForcePlaybackProbe.Run']
-                  : particleTriggers
-                    ? ['particle-triggers', 'NatsumeParticleTriggerPlaybackProbe.Run']
-                    : particleLights
-                      ? ['particle-lights', 'NatsumeParticleLightsProbe.Run']
-                      : lightDistribution
-                        ? ['light-distribution', 'NatsumeParticleLightDistributionProbe.Run']
-                        : ringBuffer
-                          ? ['ring-buffer', 'NatsumeParticleRingBufferProbe.Run']
-                          : ringPlayback
-                            ? ['ring-playback', 'NatsumeParticleRingPlaybackProbe.Run']
-                            : particleClockPlayback
-                              ? ['particle-clocks', 'NatsumeParticleClockPlaybackProbe.Run']
-                              : particleMainPlayback
-                                ? ['particle-main', 'NatsumeParticleMainPlaybackProbe.Run']
-                                : particleCullingPlayback
-                                  ? [
-                                      cullingValidation
-                                        ? 'particle-culling-validation'
-                                        : cullingRealtime
-                                          ? 'particle-culling-realtime'
-                                          : 'particle-culling',
-                                      'NatsumeParticleCullingPlaybackProbe.Run',
-                                    ]
-                                  : undefined;
+const sourceMaterials = process.argv.includes('--source-materials');
+const particleProbe = sourceMaterials
+  ? ['source-materials', 'NatsumeSourceMaterialProbe.Run']
+  : uvFlips
+    ? ['uv-flips', 'NatsumeUVFlipProbe.Run']
+    : cameras
+      ? ['cameras', 'NatsumeCameraProbe.Run']
+      : shapeTextures
+        ? ['shape-textures', 'NatsumeShapeTextureProbe.Run']
+        : rendererShapes
+          ? ['renderer-shapes', 'NatsumeRendererShapeProbe.Run']
+          : meshShapes
+            ? ['mesh-shapes', 'NatsumeMeshShapeProbe.Run']
+            : particleModules
+              ? ['particle-modules', 'NatsumeParticleModulesProbe.Run']
+              : externalForces
+                ? ['external-forces', 'NatsumeExternalForcesProbe.Run']
+                : particleCollisions
+                  ? ['particle-collisions', 'NatsumeParticleCollisionProbe.Run']
+                  : colliderForcePlayback
+                    ? ['collider-force', 'NatsumeParticleForcePlaybackProbe.Run']
+                    : particleTriggers
+                      ? ['particle-triggers', 'NatsumeParticleTriggerPlaybackProbe.Run']
+                      : particleLights
+                        ? ['particle-lights', 'NatsumeParticleLightsProbe.Run']
+                        : lightDistribution
+                          ? ['light-distribution', 'NatsumeParticleLightDistributionProbe.Run']
+                          : ringBuffer
+                            ? ['ring-buffer', 'NatsumeParticleRingBufferProbe.Run']
+                            : ringPlayback
+                              ? ['ring-playback', 'NatsumeParticleRingPlaybackProbe.Run']
+                              : particleClockPlayback
+                                ? ['particle-clocks', 'NatsumeParticleClockPlaybackProbe.Run']
+                                : particleMainPlayback
+                                  ? ['particle-main', 'NatsumeParticleMainPlaybackProbe.Run']
+                                  : particleCullingPlayback
+                                    ? [
+                                        cullingValidation
+                                          ? 'particle-culling-validation'
+                                          : cullingRealtime
+                                            ? 'particle-culling-realtime'
+                                            : 'particle-culling',
+                                        'NatsumeParticleCullingPlaybackProbe.Run',
+                                      ]
+                                    : undefined;
 const bySpeed = process.argv.includes('--by-speed') || !!particleProbe;
 assert(
   [
@@ -833,6 +836,44 @@ if (events) {
       JSON.stringify(current, null, 2) + '\n',
     );
   console.log('Event measurements: ' + current.cases.length);
+  process.exit(0);
+}
+if (sourceMaterials) {
+  assert.equal(current.cases.length, 36);
+  assert.equal(current.builtins.length, 1);
+  assert.equal(current.builtins[0].fileId, 10300);
+  assert.equal(current.builtins[0].guid, '0000000000000000f000000000000000');
+  assert.equal(current.builtins[0].mips.length, 7);
+  for (const mip of current.builtins[0].mips) {
+    assert.equal(mip.width, Math.max(1, 64 >> mip.level));
+    assert.equal(mip.height, mip.width);
+    assert.equal(mip.pixels.length, mip.width * mip.height * 4);
+  }
+  assert.equal(current.builtinFilters.length, 18);
+  for (const sample of current.builtinFilters)
+    assert.equal(sample.pixels.length, sample.size * sample.size * 4);
+  assert.deepEqual(current.builtins[0].pixels, current.builtins[0].sourcePixels);
+  for (const sample of current.passEnable) {
+    const blocked =
+      (sample.program === 'forward' && sample.key.toLowerCase() === 'srpdefaultunlit') ||
+      (sample.program === 'depth' && sample.key.toLowerCase() === 'depthonly');
+    assert.equal(sample.pixel[0], blocked ? 0 : sample.program === 'forward' ? 255 : 254);
+  }
+  assert(current.hdr.length >= 1);
+  assert(current.hdr[0].max > 1);
+  for (const sample of current.hdr)
+    if (sample.cpuReference) assert(sample.maxGpuDifference <= 0.000001);
+  assert.deepEqual(current.forwardPixel, [255, 0, 0, 255]);
+  assert.deepEqual(current.depthOnlyForwardPixel, [0, 255, 0, 255]);
+  assert(current.depthOnlyExplicitPixel[0] >= 253);
+  assert.equal(current.depthOnlyExplicitPixel[1], 255);
+  for (const c of current.cases) assert.equal(c.pixels.length, 8 * 8 * 4);
+  if (process.argv.includes('--update-fixtures'))
+    await saveJson(
+      resolve(root, 'data/unity-baselines/fixtures/unity-source-materials.json'),
+      JSON.stringify(current, null, 2) + '\n',
+    );
+  console.log('Source material translations: ' + current.cases.length);
   process.exit(0);
 }
 if (bySpeed) {

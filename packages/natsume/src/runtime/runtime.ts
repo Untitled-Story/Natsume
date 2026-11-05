@@ -20,6 +20,9 @@ import type { SpriteRendererT } from '../format/generated/noa/ir/sprite-renderer
 import { SceneMesh, sceneMaterialPasses } from '../rendering/scene-mesh.js';
 import { copyRenderEnvironment, type RenderEnvironment } from '../rendering/render-environment.js';
 import { materialSupport } from '../rendering/material-support.js';
+import { resolveSourceMaterial } from '../rendering/source-material.js';
+import { defaultParticleMips } from '../rendering/default-particle.js';
+import { decodeExrPixels, isOpenExr } from '../loader/exr-pixels.js';
 import { assertSupport } from './support-checks.js';
 import type { MeshRendererT } from '../format/generated/noa/ir/mesh-renderer.js';
 import type { MeshFilterT } from '../format/generated/noa/ir/mesh-filter.js';
@@ -29,7 +32,15 @@ import { rendererCanPlay } from './animation.js';
 import { rendererVertexStride, particleMaterialSlots } from '../rendering/mesh-selection.js';
 import { ensureMaterialPipe } from '../rendering/material-pipe.js';
 import { Alignment } from '../format/generated/noa/ir/alignment.js';
-import { Container, ImageSource, Rectangle, Texture, type WebGLRenderer } from 'pixi.js';
+import {
+  BufferImageSource,
+  CompressedSource,
+  Container,
+  ImageSource,
+  Rectangle,
+  Texture,
+  type WebGLRenderer,
+} from 'pixi.js';
 import { mat4 } from 'gl-matrix';
 import { check } from '../errors.js';
 import type { EffectPack, DeepReadonly as R } from '../pack.js';
@@ -1116,6 +1127,7 @@ export class NatsumeRuntime {
               simulation.bindings.materials.get(`${id}:${slot}`) ??
               pack.document.materials.find((m) => m.id === data.materials[slot]);
             check(material, 'SEMANTIC', 'Missing material');
+            if (!resolveSourceMaterial(pack, material).drawColor) continue;
             const frames = emitter.sheet?.mode === 1 ? emitter.sheet.spriteAssetIds : [];
             const sheetTextures: Texture[] = [];
             for (const frame of frames) {
@@ -1152,6 +1164,7 @@ export class NatsumeRuntime {
             const material =
               simulation.bindings.materials.get(`${id}:1`) ??
               pack.document.materials.find((m) => m.id === trailMaterialId)!;
+            if (!resolveSourceMaterial(pack, material).drawColor) continue;
             const lease = this.acquireTexture(pack, material);
             releases.push(lease.release);
             const texture = await lease.promise;
@@ -1178,6 +1191,7 @@ export class NatsumeRuntime {
             const material =
               simulation.bindings.materials.get(`${component.id}:${pass.slot}`) ??
               pack.document.materials.find((m) => m.id === definition.materials[pass.slot])!;
+            if (!resolveSourceMaterial(pack, material).drawColor) continue;
             const lease = this.acquireTexture(pack, material);
             releases.push(lease.release);
             const texture = await lease.promise;
@@ -1215,6 +1229,7 @@ export class NatsumeRuntime {
             const original =
               simulation.bindings.materials.get(`${component.id}:${slot}`) ??
               pack.document.materials.find((m) => m.id === id)!;
+            if (!resolveSourceMaterial(pack, original).drawColor) continue;
             const material = spriteMaterial(original, sprite);
             const lease = this.acquireTexture(pack, material, spriteTextureKey(sprite));
             releases.push(lease.release);
@@ -1276,7 +1291,10 @@ export class NatsumeRuntime {
     material: R<MaterialT>,
     cacheKey: number | string = material.id,
   ): { promise: Promise<Texture>; release: () => void } {
-    if (material.textures.length === 0)
+    const source = resolveSourceMaterial(pack, material);
+    material = source.material;
+    if (source.builtinTexture) cacheKey = 'builtin:10300';
+    if (material.textures.length === 0 && !source.builtinTexture)
       return { promise: Promise.resolve(Texture.WHITE), release: () => {} };
     let cache = this.textures.get(pack);
     if (!cache) {
@@ -1286,20 +1304,27 @@ export class NatsumeRuntime {
     let lease = cache.get(cacheKey);
     if (!lease) {
       const binding = material.textures[0];
-      check(binding, 'CAPABILITY', 'Material requires a texture');
-      const bytes = pack.getAssetBytes(binding.imageId);
+      const builtin = !!source.builtinTexture;
+      const mipmaps = builtin ? defaultParticleMips() : undefined;
+      check(binding || builtin, 'CAPABILITY', 'Material requires a texture');
+      const bytes = mipmaps?.[0] ?? pack.getAssetBytes(binding!.imageId);
       check(bytes, 'SEMANTIC', 'Missing texture bytes');
-      const header = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength),
-        width = header.getUint32(16),
-        height = header.getUint32(20);
+      const size = builtin ? { width: 64, height: 64 } : pack.getImageSize(binding!.imageId);
+      check(size, 'CAPABILITY', 'Unsupported source texture encoding');
+      const { width, height } = size;
+      const hdr = isOpenExr(bytes);
       const max = this.renderer.gl.getParameter(this.renderer.gl.MAX_TEXTURE_SIZE) as number;
       check(
         width <= max && height <= max && width * height <= 16_777_216,
         'LIMIT',
         'Decoded texture exceeds GPU/pixel limit',
       );
-      check(typeof createImageBitmap === 'function', 'HOST', 'ImageBitmap decoding is required');
-      const s = binding.sampler;
+      check(
+        builtin || hdr || typeof createImageBitmap === 'function',
+        'HOST',
+        'ImageBitmap decoding is required',
+      );
+      const s = binding?.sampler;
 
       const pixels = width * height;
       check(
@@ -1309,31 +1334,51 @@ export class NatsumeRuntime {
       );
       this.retainedPixels += pixels;
       const record: TextureLease = { refs: 0, pixels, promise: Promise.resolve(Texture.EMPTY) };
-      record.promise = createImageBitmap(
-        new Blob([Uint8Array.from(bytes)], { type: 'image/png' }),
-        { premultiplyAlpha: 'none', colorSpaceConversion: 'none' },
-      ).then((bitmap) => {
-        record.bitmap = bitmap;
+      record.promise = (async () => {
+        const half = hdr ? decodeExrPixels(bytes) : undefined;
+        const bitmap =
+          half || builtin
+            ? undefined
+            : await createImageBitmap(new Blob([Uint8Array.from(bytes)], { type: 'image/png' }), {
+                premultiplyAlpha: 'none',
+                colorSpaceConversion: 'none',
+              });
+        if (bitmap) record.bitmap = bitmap;
         const wrap = (mode: AddressMode | undefined) =>
           mode === AddressMode.Repeat
             ? 'repeat'
             : mode === AddressMode.Mirror
               ? 'mirror-repeat'
               : 'clamp-to-edge';
+        const style = {
+          alphaMode: 'no-premultiply-alpha',
+          autoGenerateMipmaps: !builtin && s?.minFilter === FilterMode.Trilinear,
+          mipmapFilter: s?.minFilter === FilterMode.Trilinear ? 'linear' : 'nearest',
+          minFilter: s?.minFilter === FilterMode.Nearest ? 'nearest' : 'linear',
+          magFilter: s?.magFilter === FilterMode.Nearest ? 'nearest' : 'linear',
+          addressModeU: wrap(s?.wrapU),
+          addressModeV: wrap(s?.wrapV),
+        } as const;
         return new Texture({
-          source: new ImageSource({
-            resource: bitmap,
-            alphaMode: 'no-premultiply-alpha',
-            format: 'rgba8unorm',
-            autoGenerateMipmaps: s?.minFilter === FilterMode.Trilinear,
-            mipmapFilter: s?.minFilter === FilterMode.Trilinear ? 'linear' : 'nearest',
-            minFilter: s?.minFilter === FilterMode.Nearest ? 'nearest' : 'linear',
-            magFilter: s?.magFilter === FilterMode.Nearest ? 'nearest' : 'linear',
-            addressModeU: wrap(s?.wrapU),
-            addressModeV: wrap(s?.wrapV),
-          }),
+          source: mipmaps
+            ? new CompressedSource({
+                ...style,
+                resource: mipmaps,
+                width,
+                height,
+                format: 'rgba8unorm',
+              })
+            : half
+              ? new BufferImageSource({
+                  ...style,
+                  resource: half.rgba,
+                  width,
+                  height,
+                  format: 'rgba16float',
+                })
+              : new ImageSource({ ...style, resource: bitmap!, format: 'rgba8unorm' }),
         });
-      });
+      })();
       lease = record;
       cache.set(cacheKey, record);
     }

@@ -605,3 +605,22 @@ Pause 模式冻结年龄，位置继续积分；Loop 模式替换后隐藏粒子
 | 出生颜色 / 粒子数 |          0 |
 
 源 Renderer 的启用状态、Sprite 翻转 / tint / 绘制模式不改变发射几何。销毁来源后退回发射器原点。Custom 来源发射保留原生的世界坐标写入行为。
+
+## 源材质与 HDR 纹理
+
+Unity 2022.3.21f1 / Metal 与 WebGL2。36 组 × 8×8 像素；Gamma / Linear、Surface=0 / 0.5 / 1、覆盖 / Alpha 混合、HDR 材质色与顶点色、纹理 ST。
+
+| 项目 | 最大差 |
+| --- | ---: |
+| 源 Unlit 输出，9,216 通道 | 0/255 |
+| 内置 Default-Particle，64×64、16,384 通道 | 0/255 |
+| 内置纹理缩小 / mip bias，Gamma | 2/255（0.78%） |
+| 内置纹理缩小 / mip bias，Linear | 10/255（3.92%） |
+| 原始 ASTC HDR → HALF EXR → WebGL，6 处 RGBA 采样 | 0 |
+| HALF 纹理原生 CPU / GPU 采样，最大通道值 2 | 0 |
+
+源材质对照使用已核对 Metal 公式的 ShaderLab 翻译，不直接执行原始编译程序。内置纹理和原始 ASTC 字节由 Unity 直接采样；HDR 对照包含 1.046875。EXR 使用恢复的原始像素，不使用会额外处理像素的 Unity EXR 导入结果。
+
+LightMode 开关按大小写无关的标签匹配；Pass 名称不控制该开关。仅有 DepthOnly 的程序不参与普通前向颜色绘制。双实例纹理引用 4→2→0；HDR 半浮点共享与释放、窗口尺寸变化、宿主深度 / ColorMask 恢复和 WebGL 错误检查通过。
+
+缩小采样共 18 组：Gamma / Linear × 64 / 16 / 4 像素 × mip bias −1 / 0 / +1，保留原生 7 级 mip。全部通道 P95 为 Gamma 0、Linear 1/255；单组最大 P95 分别为 2/255、9/255。Linear 剩余差异来自采样后颜色解码与硬件采样前解码的插值顺序。
