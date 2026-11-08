@@ -265,7 +265,7 @@ try {
                     const order = mesh.geometry.indexBuffer?.data;
                     const stride = (attribute.stride || 12) / 4,
                       offset = (attribute.offset || 0) / 4;
-                    const count = mesh.geometry.indexCount ?? order?.length ?? 0;
+                    const count = mesh.geometry.indexCount || order?.length || 0;
                     const matrix = mesh.shader.resources.colorUniforms.uniforms.uDisplayWorld;
                     for (let i = 0; i < count; i++) {
                       const vertex = (order?.[i] ?? i) * stride + offset;
