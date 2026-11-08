@@ -526,6 +526,32 @@ export class Simulation {
     this.sync();
     for (const player of this.animationOrder()) if (!this.dispatchEvents(player, true)) break;
   }
+  /** Explicitly starts a system, independently of its authored automatic-play flag. */
+  playParticleSystem(systemId: number, options: { readonly withChildren?: boolean } = {}): void {
+    const root = this.emitters.get(systemId);
+    check(root, 'HOST', 'Unknown particle system');
+    check(this.state === 'playing', 'HOST', 'Call effect.play() before starting a particle system');
+    check(
+      options.withChildren === undefined || typeof options.withChildren === 'boolean',
+      'HOST',
+      'withChildren must be a boolean',
+    );
+    const targets = [...this.emitters.values()].filter((emitter) => {
+      if (emitter === root) return true;
+      if (options.withChildren === false) return false;
+      for (let parent = emitter.node.parent; parent; parent = parent.parent)
+        if (parent === root.node) return true;
+      return false;
+    });
+    check(
+      targets.every((e) => !e.timelineControlled),
+      'HOST',
+      'Timeline owns the selected particle systems',
+    );
+    this.sync();
+    for (const emitter of targets)
+      if (emitter.enabled && emitter.node.activeInHierarchy) emitter.playExplicit();
+  }
   pause(): void {
     this.revision++;
     if (this.state === 'playing' || this.state === 'draining') {

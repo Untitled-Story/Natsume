@@ -451,6 +451,12 @@ export class EffectInstance {
     this.assertAlive();
     return this.simulation.getParticles(systemId);
   }
+  /** Starts a system and, by default, its descendants after play(); does not enable inactive nodes. */
+  playParticleSystem(systemId: number, options: { readonly withChildren?: boolean } = {}): void {
+    this.assertAlive();
+    this.simulation.playParticleSystem(systemId, options);
+    this.render();
+  }
   /** Triggers a source sub-emitter slot for one live particle, or all live particles when omitted. */
   emitSubEmitter(systemId: number, slot: number, particleId?: number): void {
     this.assertAlive();

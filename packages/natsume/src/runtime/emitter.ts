@@ -216,6 +216,7 @@ export class Emitter {
   private readonly lastEmissionPosition = new Float64Array(3);
   private enabledLast = false;
   private started = false;
+  private pendingManualPlay = false;
   private delayRemaining = 0;
   count = 0;
   emitting = true;
@@ -676,6 +677,7 @@ export class Emitter {
     this.lastVelocityPosition.set(this.lastEmissionPosition);
     this.updateEmitterVelocity(0);
     this.started = false;
+    this.pendingManualPlay = false;
     this.delayRemaining = this.delaySeconds;
     this.distanceStarted = this.delaySeconds > 0;
     this.enabledLast = false;
@@ -719,6 +721,7 @@ export class Emitter {
       this.count = 0;
       this.noiseEvaluator?.reset();
       this.started = false;
+      this.pendingManualPlay = false;
       this.delayRemaining = this.delaySeconds;
       this.distanceStarted = this.delaySeconds > 0;
       this.time = 0;
@@ -764,6 +767,15 @@ export class Emitter {
     if (this.delayRemaining > 0) return;
     if (!this.birthDriven) this.bursts(-Number.EPSILON, 0);
     if (warm) this.prewarm();
+  }
+  /** @internal Explicit Play restarts emission while retaining existing live particles. */
+  playExplicit(): void {
+    this.time = this.rateTime = this.burstTime = this.burstCycle = 0;
+    this.burstRepeats.clear();
+    this.pendingPrewarmTime = 0;
+    this.delayRemaining = this.delaySeconds;
+    this.distanceStarted = this.delaySeconds > 0;
+    this.emitting = this.started = this.pendingManualPlay = true;
   }
   private prewarm(): void {
     if (!this.main.simulationSpeed || !this.prewarmSeconds) return;
@@ -1477,6 +1489,13 @@ export class Emitter {
     return this.advanceStep(delta, catchupStep);
   }
   private advanceStep(delta: number, catchupStep?: number): number {
+    if (this.pendingManualPlay && delta > 0) {
+      this.pendingManualPlay = false;
+      if (this.delayRemaining <= 0) {
+        if (!this.birthDriven) this.bursts(-Number.EPSILON, 0);
+        if (!this.timelineControlled) this.prewarm();
+      }
+    }
     if (this.completed && !this.timelineControlled) {
       this.onAdvanced?.(delta * this.main.simulationSpeed);
       return 0;
