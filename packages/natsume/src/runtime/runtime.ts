@@ -451,7 +451,10 @@ export class EffectInstance {
     this.assertAlive();
     return this.simulation.getParticles(systemId);
   }
-  /** Starts a system and, by default, its descendants after play(); does not enable inactive nodes. */
+  /**
+   * Restarts emission after play(), retaining live particles; includes descendants by default.
+   * Inactive nodes remain inactive. Timeline-controlled systems cannot be started directly.
+   */
   playParticleSystem(systemId: number, options: { readonly withChildren?: boolean } = {}): void {
     this.assertAlive();
     this.simulation.playParticleSystem(systemId, options);

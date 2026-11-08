@@ -182,7 +182,7 @@ MeshFilter / MeshRenderer 使用包内真实三角网格，支持可选顶点色
 
 源 Shader 按程序 SHA-256 自动匹配内置配方，支持已核验的 URP/Particles/Unlit 程序；未知程序或变体由 `checkCompatibility` 明确拒绝。配方保留源混合、深度、剔除、队列和 LightMode 开关，要求提供 `renderEnvironment.globalMipBias`。已核验的 URP/Lit 程序只保存 DepthOnly，不向普通颜色目标绘制，也不补造光照 Pass。
 
-支持 Unity 内置 Default-Particle 纹理及其原生 mip 链，以及保留为 SourceData 的单部件、无压缩 RGBA HALF OpenEXR；HDR 以半浮点上传，不裁剪到 8-bit。外部源纹理必须带明确的颜色空间和采样设置；规范 Image 资产仍使用 PNG。Linear 过滤保留已测颜色插值近似，误差见测量文档。源场景组件和动画是否可执行仍分别经过兼容性检查。
+支持 Unity 内置 Default-Particle 纹理及其原生 mip 链，以及 Image / SourceData 中的单部件、无压缩扫描线 RGBA HALF OpenEXR；HDR 以半浮点上传，不裁剪到 8-bit。外部源纹理必须带明确的颜色空间和采样设置；Image 也支持 PNG，ShapeTexture 的 CPU 采样当前仅支持 PNG。Linear 过滤保留已测颜色插值近似，误差见测量文档。源场景组件和动画是否可执行仍分别经过兼容性检查。
 
 Mesh / Sprite Shape 支持静态资产与实例内 Renderer 来源、Vertex / Edge / Triangle 采样、法线偏移、顶点色与扫描；源变换随节点更新，Renderer 启用状态与 Sprite 翻转 / tint 不影响发射。Donut 使用环面采样。Sprite 序列保留源图像与 UV，同图集共享纹理，跨图像按粒子顺序分段绘制。
 
@@ -349,6 +349,15 @@ Trigger 引用通过 `particleEnvironment.colliders` 绑定。Collider 的 `swee
 
 Unscaled 粒子使用 `effect.update(dt, { unscaledDeltaSeconds })`；缺少所需时钟会报错。宿主用 `effect.setParticleSystemVisible(systemId, visible)` 提供可见性，默认可见，设置跨重播保留。PauseAndCatchup 需要 `particleEnvironment.fixedDeltaSeconds`（Unity 工程通常为 `0.02`）；Unscaled 固定步按本次缩放 / 未缩放时钟比例计算。停止回调用 `effect.onParticleSystemStopped(callback)` 订阅，也会调用同节点 Bridge 的 `onParticleSystemStopped(event)`；事件包含 `systemId` 和 `nodeId`；激活节点上的禁用 Bridge 组件也会收到回调。Disable 停用所属节点，Destroy 销毁该节点及子层级；`restart()` 恢复节点并重建已销毁的 Bridge 行为。
 
+`effect.play()` 遵守包内自动播放设置。手动系统由宿主或 Bridge 显式启动：
+
+```ts
+effect.play();
+effect.playParticleSystem(systemId, { withChildren: true });
+```
+
+`withChildren` 默认 `true`；传 `false` 仅启动指定系统。调用时实例须在播放中，不激活失活节点，也不接管 Timeline 控制的系统。按 Unity 的实际 `Play` 行为重置发射时间，保留已有粒子，下一模拟步开始发射；重播恢复作者设置，需要手动启动的系统须再次调用。预览用“启动粒子”执行此操作。
+
 ## Script Bridge
 
 在实例化前，用包内 MonoBehaviour 的真实身份注册行为。以下示例将该组件所在节点及其子树绘制到父节点原点，保留粒子模拟与深度：
@@ -377,6 +386,23 @@ runtime.registerScript(
 ```
 
 `setRenderOffset()` 使用特效容器局部坐标，父子偏移相加；传 `null` 清除当前节点的偏移。设置立即生效，重播保留。宿主也可以通过 `effect.getNode(id)` 调用此接口；`effect.renderedNodes` 返回含已启用渲染器组件的节点，包括当前失活的节点。
+
+脚本字段被动画驱动时，第三个参数须声明字段类型：
+
+```ts
+runtime.registerScript(
+  { assembly: 'Assembly-CSharp', namespace: 'MyGame', className: 'MaterialSettings' },
+  ({ fields }) => ({
+    onAnimatedField(name, value) {
+      if (name === 'mode') updateMaterialMode(value as number);
+      // fields 始终包含本实例已声明字段的当前值。
+    },
+  }),
+  { animatedFields: { mode: 'int', intensity: 'float', visible: 'bool' } },
+);
+```
+
+字段名必须与序列化字段一致，类型为 `float`、`int` 或 `bool`。预检检查声明、原始值及曲线类型，不执行工厂。`fields` 只读、实例间独立，重播恢复原始值后重新采样；`onAnimatedField` 在一次操作结束、绘制前接收各字段最终的变化值。字段声明不实现原 C# 行为，实际效果由宿主回调处理；未声明的脚本动画字段阻止实例化。回调沿用 `scriptErrors` 策略，回调中改变播放状态或销毁实例会取消本批剩余通知。
 
 ## 模块支持状态
 
@@ -457,6 +483,25 @@ pnpm dev
 ```
 
 打开终端显示的本地地址，选择 `.noap` 文件即可预览。文件在浏览器本地读取。
+
+包需要脚本动画字段时，先用“Bridge 声明”导入 JSON，再选择 `.noap`。例如：
+
+```json
+[
+  {
+    "identity": {
+      "assembly": "Assembly-CSharp",
+      "namespace": "MyGame",
+      "className": "MaterialSettings"
+    },
+    "animatedFields": { "mode": "int" }
+  }
+]
+```
+
+预览只记录字段变化，不执行原游戏逻辑。更换声明需刷新页面；正式行为通过 TypeScript Bridge 注册。预览显式使用静止 Rigidbody、无雾和关闭软粒子的环境。
+
+缺少项目排序层信息时，用“排序层”导入 ID 到排序值的 JSON 映射，例如 `{"-123456": 2}`；不自动猜测未知层的顺序。
 
 ```sh
 pnpm build          # 构建运行库和预览页
