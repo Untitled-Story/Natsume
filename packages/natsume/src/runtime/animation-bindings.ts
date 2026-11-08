@@ -19,8 +19,21 @@ import { ScalarMode } from '../format/generated/noa/ir/scalar-mode.js';
 import { curve } from './parameters.js';
 import { sampleBool } from './animation.js';
 import type { Scene } from './scene.js';
-import { sourceAnimationTarget, sourceAnimationMetadata } from './source-animation.js';
+import {
+  sourceAnimationTarget,
+  sourceAnimationMetadata,
+  sourceFieldBaseline,
+} from './source-animation.js';
+import { ColorT } from '../format/generated/noa/ir/color.js';
 import { assertSupport } from './support-checks.js';
+import {
+  scriptFieldBaseline,
+  validScriptField,
+  animatedScriptFieldValue,
+  type ScriptFieldResolver,
+  type ScriptFieldValue,
+} from './script-fields.js';
+import type { CustomComponentT } from '../format/generated/noa/ir/custom-component.js';
 
 export interface CompiledBinding {
   readonly key: string;
@@ -43,14 +56,30 @@ export class AnimationBindings {
   readonly spriteColors = new Map<number, import('../format/generated/noa/ir/color.js').ColorT>();
   readonly imageColors = new Map<number, import('../format/generated/noa/ir/color.js').ColorT>();
   private readonly dormantColors = new Map<string, number>();
+  readonly scriptFields = new Map<number, Record<string, ScriptFieldValue>>();
+  readonly pendingScriptFields = new Map<number, Map<string, ScriptFieldValue>>();
   readonly enabled = new Map<number, boolean>();
   private readonly resets: (() => void)[] = [];
   constructor(
     readonly pack: EffectPack,
     readonly scene: Scene,
+    private readonly resolveScriptField?: ScriptFieldResolver,
   ) {
     for (const c of pack.components) {
       this.enabled.set(c.id, c.enabled);
+      if (c.dataType === C.CustomComponent) {
+        const component = c.data as R<CustomComponentT>;
+        const fields: Record<string, ScriptFieldValue> = Object.create(null);
+        this.scriptFields.set(c.id, fields);
+        for (const field of component.fields) {
+          const name = String(field.name),
+            type = resolveScriptField?.(component, name);
+          const baseline = scriptFieldBaseline(component, name);
+          if (!validScriptField(type, baseline)) continue;
+          fields[name] = baseline!;
+          this.resets.push(() => this.writeScriptField(c.id, name, baseline!));
+        }
+      }
       if (c.dataType === C.Camera) {
         const state = structuredClone(
           c.data,
@@ -88,6 +117,30 @@ export class AnimationBindings {
           this.systems.set(c.id, state);
           this.resets.push(() => restore(state, c.data!));
         }
+        if (c?.dataType === C.ParticleSystem && b.property === P.ParticleColor) {
+          const color = this.systems.get(c.id)!.main!.color!,
+            endpoint = b.propertyName === 'minColor' ? 'colorMin' : 'colorMax';
+          if (!color[endpoint]) {
+            const channels = ['r', 'g', 'b', 'a'] as const;
+            const values = channels.map((channel) =>
+              sourceFieldBaseline(
+                pack,
+                c.id,
+                `InitialModule.startColor.${b.propertyName}.${channel}`,
+              ),
+            );
+            if (values.every((v) => v !== undefined)) {
+              const baseline = new ColorT(values[0]!, values[1]!, values[2]!, values[3]!);
+              const state = structuredClone(baseline);
+              color[endpoint] = state;
+              // Restore after the source reset, which leaves this dormant endpoint null.
+              this.resets.push(() => {
+                Object.assign(state, baseline);
+                color[endpoint] = state;
+              });
+            }
+          }
+        }
         if (
           c?.dataType === C.SpriteRenderer &&
           b.property === P.SpriteColor &&
@@ -122,8 +175,17 @@ export class AnimationBindings {
       }
   }
   reset(): void {
+    this.pendingScriptFields.clear();
     for (const reset of this.resets) reset();
     for (const c of this.pack.components) this.enabled.set(c.id, c.enabled);
+  }
+  private writeScriptField(id: number, name: string, value: ScriptFieldValue): void {
+    const fields = this.scriptFields.get(id)!;
+    if (Object.is(fields[name], value)) return;
+    fields[name] = value;
+    let pending = this.pendingScriptFields.get(id);
+    if (!pending) this.pendingScriptFields.set(id, (pending = new Map()));
+    pending.set(name, value);
   }
   compile(track: R<TrackT>): CompiledBinding | undefined {
     const b = track.binding!,
@@ -198,6 +260,23 @@ export class AnimationBindings {
             if (color) color[channel] = v[0]!;
             else this.dormantColors.set(key, v[0]!);
           };
+        } else if (source.kind === 'script-field') {
+          const component = this.pack.getComponent(source.componentId)!.data as R<CustomComponentT>;
+          const type = this.resolveScriptField?.(component, source.field);
+          const fields = this.scriptFields.get(source.componentId);
+          check(
+            type && fields && source.field in fields,
+            'HOST',
+            'Missing Bridge field declaration',
+          );
+          const integerBits = sourceAnimationMetadata(this.pack, track, source).isIntCurve === true;
+          read = () => [Number(fields[source.field])];
+          write = (v) =>
+            this.writeScriptField(
+              source.componentId,
+              source.field,
+              animatedScriptFieldValue(type, v[0]!, integerBits),
+            );
         } else {
           check(false, 'CAPABILITY', 'Source field execution is not implemented');
         }
@@ -437,6 +516,10 @@ export class AnimationBindings {
           : ['x', 'y', 'z', 'w'].slice(0, baseline.length);
     const samplers = names.map((k) => channels[k]);
     const values = [...baseline];
+    const intBits =
+      source?.kind === 'script-field' &&
+      sourceAnimationMetadata(this.pack, track, source).isIntCurve;
+    const bits = intBits ? new DataView(new ArrayBuffer(4)) : undefined;
     const evaluate = (seconds: number): readonly number[] => {
       if (track.dataType === TrackData.BoolTrack)
         values[0] = Number(
@@ -445,6 +528,10 @@ export class AnimationBindings {
       else
         for (let i = 0; i < baseline.length; i++)
           values[i] = samplers[i] ? curve(samplers[i], seconds) : baseline[i]!;
+      if (bits) {
+        bits.setFloat32(0, values[0]!, true);
+        values[0] = bits.getInt32(0, true);
+      }
       return values;
     };
     return {

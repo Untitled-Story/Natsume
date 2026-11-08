@@ -84,6 +84,22 @@ export interface SourceAnimationMetadata {
   readonly baseline?: number;
   readonly isIntCurve?: boolean;
 }
+/** @internal Reads a dormant source scalar without changing the active module mode. */
+export function sourceFieldBaseline(
+  pack: EffectPack,
+  componentId: number,
+  path: string,
+): number | undefined {
+  let value = sourceObject(pack, componentId)?.data;
+  for (const part of path.replace(/\.Array\.data\[(\d+)\]/g, '.$1').split('.'))
+    value = /^\d+$/.test(part) ? array(value)[Number(part)] : field(value, part);
+  const raw = scalar(value);
+  return typeof raw === 'number' && Number.isFinite(raw)
+    ? raw
+    : typeof raw === 'bigint' && Number.isSafeInteger(Number(raw))
+      ? Number(raw)
+      : undefined;
+}
 const metadata = new WeakMap<EffectPack, WeakMap<object, SourceAnimationMetadata>>();
 
 /** Reads stored field values and explicit clip binding types; absent evidence stays undefined. */

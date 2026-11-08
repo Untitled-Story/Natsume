@@ -71,9 +71,10 @@ const step = (s: Simulation, n: number) => {
   for (let i = 0; i < n; i++) s.update(1 / 60);
 };
 
-it('samples stepped keys inclusively and preserves a baseline before the first key', () => {
+it('samples stepped keys inclusively and clamps before the first key as Unity does', () => {
   const keys = [new BoolKeyT(0.25, false), new BoolKeyT(0.5, true)];
-  expect(sampleBool(keys, 0)).toBeUndefined();
+  expect(sampleBool(keys, 0)).toBe(false);
+  expect(sampleBool([], 0)).toBeUndefined();
   expect(sampleBool(keys, 0.25)).toBe(false);
   expect(sampleBool(keys, 0.5)).toBe(true);
   expect(sampleBool(keys, 10)).toBe(true);

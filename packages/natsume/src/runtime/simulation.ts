@@ -145,6 +145,7 @@ export class Simulation {
   constructor(
     readonly pack: EffectPack,
     options: SimulationOptions = {},
+    scriptFields?: import('./script-fields.js').ScriptFieldResolver,
   ) {
     check(!pack.disposed, 'DISPOSED', 'Pack has been disposed');
     this.trailPoints = new TrailPointPool(options.maxTrailPoints);
@@ -187,7 +188,7 @@ export class Simulation {
       options.cameraEnvironment,
       entry.cameraComponentId || undefined,
     );
-    this.bindings = new AnimationBindings(pack, this.scene);
+    this.bindings = new AnimationBindings(pack, this.scene, scriptFields);
     this.scene.setCameraDefinitions(this.bindings.cameras);
     this.diagnostics.push({
       code: 'NATSUME_RANDOM_SEQUENCE',
@@ -275,7 +276,7 @@ export class Simulation {
         }
       }
     for (const animation of pack.document.animations) {
-      assertSupport(animationSupport(animation, pack));
+      assertSupport(animationSupport(animation, pack, scriptFields));
       this.clips.set(animation.id, animation);
     }
     for (const c of pack.components.filter(

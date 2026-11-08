@@ -5,6 +5,9 @@ import { EffectPack } from '../src/pack.js';
 import { crc32 } from '../src/loader/zip.js';
 import { loadPack } from '../src/loader/load.js';
 import { sourceAnimationMetadata, sourceAnimationTarget } from '../src/runtime/source-animation.js';
+import { AnimationBindings } from '../src/runtime/animation-bindings.js';
+import { Scene } from '../src/runtime/scene.js';
+import { animationSupport } from '../src/runtime/animation.js';
 import { minimalDocument } from './helpers.js';
 import { constant, particleSource } from './particle-fixtures.js';
 
@@ -96,6 +99,45 @@ function fixture(classId = 1, attribute = 'm_IsActive', guid?: string) {
   const pack = () => new EffectPack(document, { files: [] } as never, new Map(), new Map());
   return { document, graph, source, binding, track, component, setObject, pack };
 }
+
+it('restores dormant particle color from source integers without changing its mode', () => {
+  const f = fixture(198);
+  for (const node of f.document.nodes.slice(1))
+    node.transform = structuredClone(f.document.nodes[0]!.transform);
+  const system = particleSource();
+  system.main!.color = new I.ColorParameterT();
+  system.main!.color.colorMax = new I.ColorT(1, 1, 1, 1);
+  const originalMode = system.main!.color!.mode;
+  f.component.dataType = I.ComponentData.ParticleSystem;
+  f.component.data = system;
+  f.document.components.push(f.component);
+  f.setObject({ InitialModule: { startColor: { minColor: { r: 1n, g: 1n, b: 1n, a: 1n } } } });
+  const binding = new I.BindingT(null, 4, I.AnimationProperty.ParticleColor);
+  binding.propertyName = 'minColor';
+  const curve = new I.ScalarCurveT();
+  curve.keys = [Object.assign(new I.FloatKeyT(), { value: 0.25 })];
+  const track = new I.TrackT(
+    binding,
+    I.TrackData.ColorTrack,
+    new I.ColorTrackT(curve, curve, curve, curve),
+  );
+  f.document.animations = [new I.AnimationT(20, 'color', 1, false, [track])];
+  const pack = f.pack();
+  const a = new AnimationBindings(pack, new Scene(pack, [1]));
+  const b = new AnimationBindings(pack, new Scene(pack, [1]));
+  expect(animationSupport(pack.document.animations[0]!, pack)).toEqual([]);
+  const compiled = a.compile(track)!;
+  expect(compiled.read()).toEqual([1, 1, 1, 1]);
+  compiled.sample(0);
+  expect(compiled.read()).toEqual([0.25, 0.25, 0.25, 0.25]);
+  a.reset();
+  expect(compiled.read()).toEqual([1, 1, 1, 1]);
+  compiled.sample(0);
+  expect(a.systems.get(4)!.main!.color!.colorMin!.r).toBe(0.25);
+  expect(a.systems.get(4)!.main!.color!.mode).toBe(originalMode);
+  expect(b.compile(track)!.read()).toEqual([1, 1, 1, 1]);
+  expect(system.main!.color!.colorMin).toBeNull();
+});
 
 describe('source identities verified with Unity 2022.3', () => {
   it.each([

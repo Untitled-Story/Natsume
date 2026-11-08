@@ -12,6 +12,9 @@ export {
   type ScriptContext,
   type ScriptFactory,
   type ScriptBehavior,
+  type ScriptDeclaration,
+  type ScriptFieldType,
+  type ScriptFieldValue,
 } from './runtime/runtime.js';
 export { type SourceColorSpace } from './rendering/particle-mesh.js';
 export type { CameraEnvironment } from './rendering/camera-environment.js';

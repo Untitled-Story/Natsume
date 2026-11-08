@@ -101,6 +101,7 @@ export interface CompatibilityContext {
   readonly cachedMaterialIds: ReadonlySet<number | string>;
   readonly imageBitmapAvailable: boolean;
   readonly hasScript: (identity: ScriptIdentity) => boolean;
+  readonly scriptFields?: import('./script-fields.js').ScriptFieldResolver;
   readonly disposed: boolean;
 }
 
@@ -998,7 +999,7 @@ export function checkCompatibility(
     'ImageBitmap decoding is required',
   );
   for (const animation of pack.document.animations)
-    totals.issues.push(...animationSupport(animation, pack));
+    totals.issues.push(...animationSupport(animation, pack, context.scriptFields));
   const writers = new Map<string, Set<string>>(),
     overlaps = new Set<string>();
   const inspectWriter = (writer: string, clipId: number) => {

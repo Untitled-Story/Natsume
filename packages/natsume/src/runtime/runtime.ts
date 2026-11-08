@@ -1,4 +1,11 @@
 import { NatsumeAnimator } from './animator-handle.js';
+import type {
+  ScriptDeclaration,
+  ScriptFieldResolver,
+  ScriptFieldType,
+  ScriptFieldValue,
+} from './script-fields.js';
+export type { ScriptDeclaration, ScriptFieldType, ScriptFieldValue } from './script-fields.js';
 import {
   AuthoredCamera,
   copyCameraEnvironment,
@@ -74,6 +81,8 @@ export interface InstanceOptions extends SimulationOptions {
   readonly displayMatrix?: ArrayLike<number>;
 }
 export interface ScriptBehavior {
+  /** Receives the final changed field value after an effect operation, before drawing. */
+  onAnimatedField?(name: string, value: ScriptFieldValue): void;
   /** Timeline ITimeControl lifecycle; callbacks receive clip-local seconds. */
   onControlTimeStart?(): void;
   onControlTime?(seconds: number): void;
@@ -91,6 +100,8 @@ export interface ScriptContext {
   readonly effect: EffectInstance;
   readonly node: NatsumeNode;
   readonly component: R<CustomComponentT>;
+  /** Live per-instance values of declared fields; reset to serialized values on restart. */
+  readonly fields: Readonly<Record<string, ScriptFieldValue>>;
 }
 export type ScriptFactory = (context: ScriptContext) => ScriptBehavior;
 export type ScriptIdentity = Pick<R<ScriptIdentityT>, 'assembly' | 'namespace' | 'className'>;
@@ -195,6 +206,7 @@ export class EffectInstance {
   private updating = false;
   private eventRevision = 0;
   private dispatchingEvent = false;
+  private dispatchingFields = false;
   private disposed = false;
   private destroying = false;
   private colorSpace: SourceColorSpace;
@@ -670,7 +682,7 @@ export class EffectInstance {
   update(seconds: number, clocks?: AnimationUpdateOptions): void {
     this.assertAlive();
     check(
-      !this.updating && !this.dispatchingEvent,
+      !this.updating && !this.dispatchingEvent && !this.dispatchingFields,
       'HOST',
       'Recursive effect update is unsupported',
     );
@@ -758,7 +770,12 @@ export class EffectInstance {
         continue;
       }
       this.invoke(() => {
-        const behavior = factory({ effect: this, node: this.getNode(node.id)!, component });
+        const behavior = factory({
+          effect: this,
+          node: this.getNode(node.id)!,
+          component,
+          fields: this.simulation.bindings.scriptFields.get(c.id)!,
+        });
         check(
           behavior && typeof behavior === 'object',
           'HOST',
@@ -847,6 +864,8 @@ export class EffectInstance {
     this.container.boundsArea = bounds;
   }
   private render(): void {
+    this.dispatchScriptFields();
+    if (this.disposed) return;
     for (const emitter of this.simulation.emitters.values()) emitter.lights?.sync(emitter);
     this.syncLayoutBounds();
     const scene = this.simulation.scene;
@@ -942,6 +961,28 @@ export class EffectInstance {
       if (parent.children[index] !== mesh) parent.setChildIndex(mesh, index);
     }
   }
+  private dispatchScriptFields(): void {
+    if (this.dispatchingFields || this.disposed) return;
+    const pending = this.simulation.bindings.pendingScriptFields;
+    if (!pending.size) return;
+    const batch = [...pending].map(([id, fields]) => [id, [...fields]] as const);
+    pending.clear();
+    const revision = this.eventRevision;
+    this.dispatchingFields = true;
+    try {
+      for (const [id, fields] of batch) {
+        const behavior = this.behaviors.find((b) => b.componentId === id);
+        if (!behavior || behavior.failed || behavior.destroyed) continue;
+        for (const [name, value] of fields) {
+          if (this.disposed || revision !== this.eventRevision) return;
+          behavior.failed = !this.invoke(() => behavior.behavior.onAnimatedField?.(name, value));
+          if (behavior.failed) break;
+        }
+      }
+    } finally {
+      this.dispatchingFields = false;
+    }
+  }
   destroy(): void {
     this.eventRevision++;
     if (this.disposed) return;
@@ -1005,6 +1046,7 @@ export class NatsumeRuntime {
   private readonly instances = new Set<EffectInstance>();
   private readonly textures = new Map<EffectPack, Map<number | string, TextureLease>>();
   private readonly scripts = new Map<string, ScriptFactory>();
+  private readonly scriptDeclarations = new Map<string, ScriptDeclaration>();
   private disposed = false;
   readonly scriptErrors: 'isolate' | 'throw';
   private retainedPixels = 0;
@@ -1020,9 +1062,35 @@ export class NatsumeRuntime {
     this.scriptErrors = options.scriptErrors ?? 'isolate';
     ensureMaterialPipe(renderer);
   }
-  registerScript(identity: ScriptIdentity, factory: ScriptFactory): void {
+  /** Registers host behavior and the exact scalar fields writable by source animation. */
+  registerScript(
+    identity: ScriptIdentity,
+    factory: ScriptFactory,
+    declaration: ScriptDeclaration = {},
+  ): void {
     check(!this.disposed, 'DISPOSED', 'Runtime has been destroyed');
+    check(typeof factory === 'function', 'HOST', 'Script factory must be a function');
+    const fields: Record<string, ScriptFieldType> = Object.create(null);
+    for (const [name, type] of Object.entries(declaration.animatedFields ?? {})) {
+      check(
+        name.length > 0 && ['float', 'int', 'bool'].includes(type),
+        'HOST',
+        'Invalid animated script field declaration',
+      );
+      fields[name] = type;
+    }
+    this.scriptDeclarations.set(
+      scriptKey(identity),
+      Object.freeze({ animatedFields: Object.freeze(fields) }),
+    );
     this.scripts.set(scriptKey(identity), factory);
+  }
+  private scriptFieldResolver(): ScriptFieldResolver {
+    const declarations = new Map(this.scriptDeclarations);
+    return (component, name) =>
+      component.script
+        ? declarations.get(scriptKey(component.script))?.animatedFields?.[name]
+        : undefined;
   }
   /** @internal */ getScriptFactory(identity: ScriptIdentity): ScriptFactory | undefined {
     return this.scripts.get(scriptKey(identity));
@@ -1044,6 +1112,7 @@ export class NatsumeRuntime {
       cachedMaterialIds: new Set(this.textures.get(pack)?.keys()),
       imageBitmapAvailable: typeof createImageBitmap === 'function',
       hasScript: (identity) => !!this.getScriptFactory(identity),
+      scriptFields: this.scriptFieldResolver(),
     });
   }
   /**
@@ -1064,12 +1133,16 @@ export class NatsumeRuntime {
       ...(canvasEnvironment ? { canvasEnvironment } : {}),
       ...(cameraEnvironment ? { cameraEnvironment } : {}),
     };
-    const simulation = new Simulation(pack, {
-        ...options,
-        ...(options.particleEnvironment?.gravity
-          ? { gravity: options.particleEnvironment.gravity }
-          : {}),
-      }),
+    const simulation = new Simulation(
+        pack,
+        {
+          ...options,
+          ...(options.particleEnvironment?.gravity
+            ? { gravity: options.particleEnvironment.gravity }
+            : {}),
+        },
+        this.scriptFieldResolver(),
+      ),
       releases: (() => void)[] = [];
     const instance = new EffectInstance(
       simulation,
@@ -1417,6 +1490,7 @@ export class NatsumeRuntime {
         failure ??= error;
       }
     this.scripts.clear();
+    this.scriptDeclarations.clear();
     if (failure) throw failure;
   }
 }

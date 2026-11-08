@@ -7,7 +7,16 @@ import type { BoolKeyT } from '../format/generated/noa/ir/bool-key.js';
 import { AnimationProperty } from '../format/generated/noa/ir/animation-property.js';
 import { ParticleModuleData } from '../format/generated/noa/ir/particle-module-data.js';
 import { SupportChecks, type SupportIssue } from './support-checks.js';
-import { sourceAnimationTarget, sourceAnimationMetadata } from './source-animation.js';
+import {
+  sourceAnimationTarget,
+  sourceAnimationMetadata,
+  sourceFieldBaseline,
+} from './source-animation.js';
+import {
+  scriptFieldBaseline,
+  validScriptField,
+  type ScriptFieldResolver,
+} from './script-fields.js';
 
 /** Native Animator state time is accumulated in normalized Float32 units. */
 export class AnimationClock {
@@ -35,7 +44,7 @@ export class AnimationClock {
   }
 }
 
-/** Returns no value before the first key, preserving the action's entry baseline. */
+/** Clamps outside the keyed range; an empty track preserves the entry baseline. */
 export function sampleBool(keys: readonly R<BoolKeyT>[], seconds: number): boolean | undefined {
   let lo = 0,
     hi = keys.length;
@@ -44,13 +53,14 @@ export function sampleBool(keys: readonly R<BoolKeyT>[], seconds: number): boole
     if (keys[mid]!.time <= seconds) lo = mid + 1;
     else hi = mid;
   }
-  return lo === 0 ? undefined : keys[lo - 1]!.value;
+  return keys[Math.max(0, lo - 1)]?.value;
 }
 
 /** Shared by preflight and execution; schema availability does not imply track support. */
 export function animationSupport(
   animation: R<AnimationT>,
   pack?: EffectPack,
+  scriptFields?: ScriptFieldResolver,
 ): readonly SupportIssue[] {
   const rules = new SupportChecks();
   const path = `animations.${animation.id}`;
@@ -81,6 +91,28 @@ export function animationSupport(
     AnimationProperty.CameraActive,
   ]);
   for (const [index, track] of animation.tracks.entries()) {
+    if (track.binding?.property === AnimationProperty.ParticleColor && pack) {
+      const component = pack.getComponent(track.binding.targetId);
+      const system = component?.data as
+        | R<import('../format/generated/noa/ir/particle-system.js').ParticleSystemT>
+        | undefined;
+      const endpoint = track.binding.propertyName === 'minColor' ? 'colorMin' : 'colorMax';
+      rules.require(
+        system?.main?.color?.[endpoint] ||
+          ['r', 'g', 'b', 'a'].every(
+            (channel) =>
+              sourceFieldBaseline(
+                pack,
+                track.binding!.targetId,
+                `InitialModule.startColor.${track.binding!.propertyName}.${channel}`,
+              ) !== undefined,
+          ),
+        'CAPABILITY',
+        `${path}.tracks.${index}.binding`,
+        track.binding,
+        'Animated particle color baseline is unavailable',
+      );
+    }
     if (track.binding?.property === AnimationProperty.SourceBinding && pack) {
       const target = sourceAnimationTarget(pack, track);
       rules.issues.push(
@@ -89,13 +121,27 @@ export function animationSupport(
           field: `${path}.tracks.${index}.${issue.field}`,
         })),
       );
-      rules.require(
-        target.kind !== 'script-field',
-        'CAPABILITY',
-        `${path}.tracks.${index}.binding.source`,
-        track.binding.source,
-        'Animated script fields require a declared host binding',
-      );
+      if (target.kind === 'script-field') {
+        const component = pack.getComponent(target.componentId)!.data as R<
+          import('../format/generated/noa/ir/custom-component.js').CustomComponentT
+        >;
+        const type = scriptFields?.(component, target.field);
+        rules.require(
+          validScriptField(type, scriptFieldBaseline(component, target.field)),
+          'HOST',
+          `${path}.tracks.${index}.binding.source`,
+          track.binding.source,
+          'Animated script field requires a matching Bridge field declaration',
+        );
+        rules.require(
+          type === undefined ||
+            sourceAnimationMetadata(pack, track, target).isIntCurve !== undefined,
+          'CAPABILITY',
+          `${path}.tracks.${index}.binding.source.isIntCurve`,
+          track.binding.source,
+          'Source script curve storage type is unavailable or ambiguous',
+        );
+      }
       if (target.kind === 'custom-color') {
         const component = pack.getComponent(target.componentId);
         const system = component?.data as
