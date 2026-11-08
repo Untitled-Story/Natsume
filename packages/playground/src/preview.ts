@@ -4,6 +4,8 @@ import { log } from './console.js';
 import { OverlayView } from './overlay.js';
 import { SceneMesh } from '../../natsume/src/rendering/scene-mesh.js';
 import type { ParticleMesh } from '../../natsume/src/rendering/particle-mesh.js';
+import { registerPreviewBridges } from './bridge.js';
+import { copyRenderEnvironment } from '../../natsume/src/rendering/render-environment.js';
 
 extensions.add(NatsumePlugin);
 
@@ -15,6 +17,15 @@ const controls = document.querySelectorAll<
 const focus = document.getElementById('focus') as HTMLSelectElement;
 const gravityInput = document.getElementById('gravity-y') as HTMLInputElement;
 let gravityY = -9.81;
+let rigidbodyVelocities: Record<string, readonly [number, number, number]> = {};
+let sortingLayers: Readonly<Record<number, number>> = {};
+
+/** Supplies project settings absent from the package; never guesses layer order. */
+export function readPreviewSortingLayers(text: string): void {
+  const environment = copyRenderEnvironment({ globalMipBias: 0, sortingLayers: JSON.parse(text) })!;
+  if (effect && !effect.destroyed) effect.setRenderEnvironment(environment);
+  sortingLayers = environment.sortingLayers!;
+}
 const overlayButton = document.getElementById('overlay')!;
 let overlay: OverlayView | undefined;
 let overlayEnabled = false;
@@ -46,6 +57,7 @@ async function init(): Promise<void> {
         resolution: Math.min(devicePixelRatio, 2),
       });
       runtime = next.natsume;
+      registerPreviewBridges(runtime);
       app = next;
       viewport.prepend(next.canvas);
       observer = new ResizeObserver(() => {
@@ -243,13 +255,22 @@ function canvasEnvironment() {
 export async function showPreview(pack: EffectPack, signal: AbortSignal): Promise<void> {
   await init();
   if (signal.aborted) return;
+  rigidbodyVelocities = Object.fromEntries(
+    pack.components.flatMap((component) => {
+      const data = component.data;
+      return data && 'main' in data && data.main?.hostRigidbodyVelocitySlot
+        ? [[data.main.hostRigidbodyVelocitySlot, [0, 0, 0] as const]]
+        : [];
+    }),
+  );
   const created = await runtime!.instantiate(pack, {
     seed: 12345,
-    renderEnvironment: { globalMipBias: 0 },
+    renderEnvironment: { globalMipBias: 0, sortingLayers },
     canvasEnvironment: canvasEnvironment(),
     cameraEnvironment: { targetDisplay: 0, width: app!.screen.width, height: app!.screen.height },
     parentLayout: { width: app!.screen.width, height: app!.screen.height },
     particleEnvironment: {
+      rigidbodyVelocities,
       fog: { mode: 'none' },
       fixedDeltaSeconds: 0.02,
       viewPosition: [0, 0, -1000],
@@ -291,7 +312,7 @@ export async function showPreview(pack: EffectPack, signal: AbortSignal): Promis
   );
   fit();
   const entry = effect.simulation.entry;
-  log(`预览环境 · 世界重力 (0, ${gravityY}, 0) · 无雾 · 软粒子关闭`);
+  log(`预览环境 · 世界重力 (0, ${gravityY}, 0) · 静止 Rigidbody · 无雾 · 软粒子关闭`);
   log(
     `播放入口 ${entry.name} #${entry.id} · 根节点 ${entry.roots.join(', ')} · 观察节点只调整取景`,
   );
@@ -319,6 +340,17 @@ for (const [id, message, action] of [
   });
 }
 document.getElementById('fit')!.addEventListener('click', fit);
+document.getElementById('start-particles')!.addEventListener('click', () => {
+  if (!effect || effect.destroyed) return;
+  effect.play();
+  let controlled = 0;
+  for (const emitter of effect.simulation.emitters.values())
+    if (emitter.timelineControlled) controlled++;
+    else effect.playParticleSystem(emitter.id, { withChildren: false });
+  log('宿主显式启动粒子；未修改包内自动播放设置');
+  if (controlled) log(`${controlled} 个粒子系统由 Timeline 控制，沿用轨道播放`);
+  stats();
+});
 gravityInput.addEventListener('change', () => {
   const next = gravityInput.valueAsNumber;
   if (!Number.isFinite(next)) {
@@ -327,6 +359,7 @@ gravityInput.addEventListener('change', () => {
     return;
   }
   effect?.setParticleEnvironment({
+    rigidbodyVelocities,
     fog: { mode: 'none' },
     fixedDeltaSeconds: 0.02,
     viewPosition: [0, 0, -1000],

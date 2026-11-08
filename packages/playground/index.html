@@ -11,7 +11,21 @@
       <p id="status" class="sr-only" role="status"></p>
       <div class="controls" role="group" aria-label="预览控制">
         <label class="file-button">选择 .noap<input id="file" type="file" accept=".noap" /></label>
+        <label class="file-button" title="选择 .noap 前导入；仅声明字段，不执行原游戏逻辑"
+          >Bridge 声明<input id="bridge-file" type="file" accept=".json"
+        /></label>
+        <label class="file-button" title="导入 Unity Sorting Layer ID 到排序值的 JSON 映射"
+          >排序层<input id="sorting-file" type="file" accept=".json"
+        /></label>
         <button id="play" data-playback disabled>播放</button>
+        <button
+          id="start-particles"
+          data-playback
+          disabled
+          title="显式启动粒子，包括关闭自动播放的系统"
+        >
+          启动粒子
+        </button>
         <button id="pause" data-playback disabled>暂停</button>
         <button id="restart" data-playback disabled>重播</button>
         <button id="clear" data-playback disabled>停止</button>

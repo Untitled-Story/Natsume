@@ -1,7 +1,8 @@
 import { loadPack, type EffectPack } from 'natsume';
 import './style.css';
-import { showPreview, clearPreview } from './preview.js';
+import { showPreview, clearPreview, readPreviewSortingLayers } from './preview.js';
 import { log } from './console.js';
+import { readBridgeDeclarations } from './bridge.js';
 
 const status = document.getElementById('status')!;
 const name = document.getElementById('pack-name')!;
@@ -52,6 +53,36 @@ file.addEventListener('change', () => {
   const selected = file.files?.[0];
   file.value = '';
   if (selected) void openFile(selected);
+});
+const bridgeFile = document.getElementById('bridge-file') as HTMLInputElement;
+bridgeFile.addEventListener('change', () => {
+  const selected = bridgeFile.files?.[0];
+  bridgeFile.value = '';
+  if (!selected) return;
+  void (async () => {
+    try {
+      if (selected.size > 1024 * 1024) throw new Error('Bridge 声明超过 1 MiB');
+      readBridgeDeclarations(await selected.text());
+      log('Bridge 声明已载入；选择 .noap 生效，仅接收字段，不执行原游戏逻辑', 'warn');
+    } catch (error) {
+      log(error instanceof Error ? error.message : String(error), 'error');
+    }
+  })();
+});
+const sortingFile = document.getElementById('sorting-file') as HTMLInputElement;
+sortingFile.addEventListener('change', () => {
+  const selected = sortingFile.files?.[0];
+  sortingFile.value = '';
+  if (!selected) return;
+  void (async () => {
+    try {
+      if (selected.size > 1024 * 1024) throw new Error('排序层配置超过 1 MiB');
+      readPreviewSortingLayers(await selected.text());
+      log('宿主排序层已更新');
+    } catch (error) {
+      log(error instanceof Error ? error.message : String(error), 'error');
+    }
+  })();
 });
 window.addEventListener('pagehide', () => {
   controller?.abort();
