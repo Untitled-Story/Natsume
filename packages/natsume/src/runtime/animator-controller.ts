@@ -11,7 +11,14 @@ import { AnimatorInterruption as Interruption } from '../format/generated/noa/ir
 import { AnimatorParameters } from './animator-parameters.js';
 import { AnimationBindings, type CompiledBinding } from './animation-bindings.js';
 import { visitAnimationEvents } from './animation-events.js';
-import { poseValue, mixPoses, addPose, writePose, type AnimationPose } from './animation-pose.js';
+import {
+  poseValue,
+  blendValue,
+  mixPoses,
+  addPose,
+  writePose,
+  type AnimationPose,
+} from './animation-pose.js';
 
 /** Immutable state snapshot; normalizedTime retains completed loops. */
 export interface AnimatorStateInfo {
@@ -312,9 +319,21 @@ export class AnimatorController {
   private sample(s: State, layer: Layer): AnimationPose {
     const pose = new Map(s.held);
     if (s.source.writeDefaultValues)
-      for (const [key, b] of layer.defaults) pose.set(key, poseValue(b, b.baseline));
+      for (const [key, b] of layer.defaults)
+        pose.set(
+          key,
+          poseValue(
+            b,
+            b.baseline,
+            b.baseline.map(() => true),
+          ),
+        );
     const seconds = this.phase(s);
-    for (const b of s.bindings) pose.set(b.key, poseValue(b, b.evaluate(seconds)));
+    for (const b of s.bindings) {
+      const value = poseValue(b, b.evaluate(seconds));
+      const defaults = s.source.writeDefaultValues ? pose.get(b.key) : undefined;
+      pose.set(b.key, defaults ? blendValue(defaults, value, 1) : value);
+    }
     return pose;
   }
   private reference(s: State, layer: Layer): AnimationPose {

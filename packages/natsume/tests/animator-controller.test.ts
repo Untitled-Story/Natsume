@@ -120,6 +120,27 @@ function tick(c: AnimatorController, n = 1) {
   }
 }
 
+for (const writeDefaults of [false, true]) {
+  it(`restores missing state channels only with Write Defaults ${writeDefaults}`, () => {
+    const { controller, node } = fixture((animator, clips) => {
+      const first = clips[0]!.tracks[0]!.data as Vector3TrackT;
+      first.y = first.z = null;
+      const second = clips[1]!.tracks[0]!.data as Vector3TrackT;
+      second.x = second.z = null;
+      second.y = curve(20, 20);
+      animator.layers[0]!.states[1]!.writeDefaultValues = writeDefaults;
+    });
+    controller.start();
+    controller.apply();
+    expect(node.localPosition.x).toBe(1);
+    controller.play(2);
+    controller.apply();
+    expect(node.localPosition.x).toBe(writeDefaults ? 7 : 1);
+    expect(node.localPosition.y).toBe(20);
+    expect(node.localPosition.z).toBe(13);
+  });
+}
+
 describe('typed Animator handles', () => {
   it('preserves defaults and rejects wrong names, types and nonrepresentable values', () => {
     const { controller: c } = fixture();
