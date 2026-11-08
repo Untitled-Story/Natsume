@@ -15,6 +15,8 @@ export UNITY_EDITOR=/Applications/Unity/Hub/Editor/2022.3.21f1/Unity.app/Content
 pnpm probe:unity
 ```
 
+Editor 默认许可证通道与 Hub 不一致时，可用 `UNITY_LICENSING_IPC` 指定已运行 Hub 的通道名称；不复制或修改许可证。探针关闭 UPM，避免无关包解析影响测量。
+
 默认测量曲线与 Noise。其他模式每次选择一个：
 
 ```sh
@@ -209,8 +211,38 @@ node tools/unity-probe/verify-pack-lifecycle.mjs path/to/packages
 node tools/unity-probe/verify-pack-lifecycle.mjs path/to/packages path/to/sorting-layers.json
 # 可选第三参数：独立报告路径，便于分批运行
 node tools/unity-probe/verify-pack-lifecycle.mjs path/to/packages path/to/sorting-layers.json data/lifecycle.json
+# 固定清单验收：核对 356 个效果、391 个入口及每包 SHA-256
+node tools/unity-probe/verify-pack-lifecycle.mjs path/to/packages path/to/sorting-layers.json data/playback/report.json \
+  --inventory path/to/compiler-inventory.json --compiler-root path/to/Noa --require-all --capture-frames
+# macOS 可另加 --metal，使用完整 Chromium 的 Metal 后端；报告记录实际 Renderer
 ```
 
 读取目录中的 `.noap`，逐入口检查至少一个非循环发射周期，或两个循环周期，再加寿命窗口；固定步长 1/60 s，每 10 步提交一次 WebGL 绘制。覆盖暂停、停止发射后排空、清空、同种子重播、粒子有限值与容量、WebGL 错误及销毁后的纹理引用释放。单入口检查时长上限 1,000 秒，超出时报错。
 
-宿主明确提供重力 `(0,-9.81,0)`、无雾、视点 `(0,0,-1000)`、`fixedDeltaSeconds: 0.02` 和 640×360 外部布局，不绑定游戏脚本。结果写入 `data/unity-baselines/package-lifecycle.json`；通过表示运行与生命周期检查通过，不代表游戏画面或 Unity 最终像素相同。
+宿主明确提供重力 `(0,-9.81,0)`、无雾、静止 Rigidbody、视点 `(0,0,-1000)`、`fixedDeltaSeconds: 0.02` 和 640×360 显示区域。测试 Bridge 仅声明 `Sekai.Core.Live.ParticleShaderSettings`（含整数字段 `mode`）、`Sekai.ScenarioEffector` 及 `Sekai.ParentRectFitter`，记录动画字段变化；不执行原游戏 C#，后两者没有声明动画字段。其他未声明脚本阻止验收。
+
+检查起始、稳定播放、结束、排空和重播帧的有限几何、实际像素及双实例独立性。无源 Camera/Canvas 的包由宿主缩放完整几何边界以便观察，保留节点相对布局。PNG 使用 WebGL 原始 RGB 叠黑底，报告分别记录 RGB 非零像素和 Alpha 覆盖，避免漏掉 Alpha 为零的加法绘制。报告与截图保存在本地 `data/`；通过表示运行与生命周期检查通过，不代表游戏画面或 Unity 最终像素相同。
+
+## 原始 Prefab 批量采样
+
+固定清单导入原始资源，按 GUID 与 SHA-256 去重；冲突立即停止。恢复的原始 EXR 必须匹配记录的 SHA-256。
+
+```sh
+node tools/unity-probe/capture-native-corpus.mjs \
+  path/to/compiler-inventory.json path/to/Noa \
+  path/to/recovered-exr data/unity-corpus-probe --prepare-only
+# 去掉 --prepare-only 后启动 Editor，输出原生 PNG、节点姿态与粒子状态。
+```
+
+采样时间为 0、1/60、0.25、0.5、1 秒及发射周期加寿命窗口（最长 60 秒），对根粒子系统显式 `Play(true)`。使用实际 Unity UGUI / Timeline 实现；导出游戏脚本保持原始占位定义且禁用，不能代表游戏行为。原平台 Shader 不受当前 Editor 支持时，PNG 不能作为颜色误差参考；Overlay Canvas 同样不纳入相机截图一致性结论。
+
+## 字段转换与显式播放
+
+将 `project/Assets` 同步到本地探针工程后，可直接执行以下方法：
+
+| Editor 方法                    | 输出环境变量                   | 测量                                       |
+| ------------------------------ | ------------------------------ | ------------------------------------------ |
+| `NatsumeScriptFieldProbe.Run`  | `NATSUME_SCRIPT_FIELDS_OUTPUT` | int / bool / 枚举转换，首关键帧前的 active |
+| `NatsumeParticlePlayProbe.Run` | `NATSUME_COMPAT_OUTPUT`        | 自动播放关闭、重复 Play、停止与存活粒子    |
+
+输出变量为本地 JSON 的绝对路径。Editor 使用 `-batchmode -noUpm -projectPath` 和 `-executeMethod` 指定工程及方法；第二项进入实际 Play 模式，按 1/60 s 采样。

@@ -10,6 +10,7 @@ export async function createPlaybackHarness() {
     width: 640,
     height: 360,
     resolution: 1,
+    backgroundAlpha: 0,
     autoStart: false,
   });
   const runtime = new NatsumeRuntime(app.renderer as WebGLRenderer);

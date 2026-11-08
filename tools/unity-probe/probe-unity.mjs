@@ -383,6 +383,7 @@ const child = runEditor(
   [
     '-batchmode',
     '-noUpm',
+    ...(process.env.UNITY_LICENSING_IPC ? ['-licensingIpc', process.env.UNITY_LICENSING_IPC] : []),
     ...(jobWorkers === undefined ? [] : ['-job-worker-count', String(jobWorkers)]),
     ...(trails ||
     spriteMasks ||
