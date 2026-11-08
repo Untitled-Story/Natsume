@@ -15,7 +15,7 @@ async function withAssets(d: I.DocumentT, assets: Record<string, Uint8Array>) {
   for (const [path, bytes] of Object.entries(assets))
     manifest.files.push({
       path,
-      kind: path.endsWith('.bin') ? 'source_data' : 'shader_data',
+      kind: path.endsWith('.bin') ? 'source_data' : path.endsWith('.png') ? 'image' : 'shader_data',
       asset_id: Number(path.match(/assets\/(\d+)/)![1]),
       byte_length: bytes.length,
       sha256: createHash('sha256').update(bytes).digest('hex'),
@@ -223,11 +223,11 @@ it('loads opaque assets through the same length, hash and file-set checks as ima
   pack.dispose();
 });
 
-it('retains source Shader programs and verifies their content identity before adapter selection', async () => {
+it('loads forward shader dependencies after Image assets and verifies their program identity', async () => {
   const d = sourceDocument();
   d.normalization = I.NormalizationStatus.SourcePreserved;
   d.features.push(new I.FeatureRequirementT('material.unity-source'));
-  d.assets = [new I.AssetT(4, I.AssetKind.ShaderData)];
+  d.assets = [new I.AssetT(5, I.AssetKind.Image), new I.AssetT(4, I.AssetKind.ShaderData)];
   const m = new I.MaterialT();
   m.id = 3;
   m.model = I.MaterialModel.UnityShader;
@@ -245,7 +245,12 @@ it('retains source Shader programs and verifies their content identity before ad
       .digest('hex'),
     source: { compressedBlob: '00010203', platforms: 0 },
   };
-  const input = () => withAssets(d, { 'assets/4.shader.json': strToU8(JSON.stringify(recipe)) });
+  const png = new Uint8Array(24);
+  png.set([137, 80, 78, 71, 13, 10, 26, 10]);
+  new DataView(png.buffer).setUint32(16, 1);
+  new DataView(png.buffer).setUint32(20, 1);
+  const input = () =>
+    withAssets(d, { 'assets/5.png': png, 'assets/4.shader.json': strToU8(JSON.stringify(recipe)) });
   const pack = await loadPack(await input());
   expect(pack.document.materials[0]!.model).toBe(I.MaterialModel.UnityShader);
   expect(JSON.parse(new TextDecoder().decode(pack.getAssetBytes(4))).source).toEqual(recipe.source);

@@ -1,4 +1,5 @@
 import { SourceResolution } from '../format/generated/noa/ir/source-resolution.js';
+import { isOpenExr } from '../loader/exr-pixels.js';
 import { AssetKind } from '../format/generated/noa/ir/asset-kind.js';
 import { resolveSourceMaterial } from '../rendering/source-material.js';
 import { copyCameraEnvironment } from '../rendering/camera-environment.js';
@@ -469,6 +470,16 @@ export function checkCompatibility(
       for (const [index, module] of source.modules.entries()) {
         if (module.dataType !== ParticleModuleData.ShapeModule) continue;
         const shape = module.data as R<ShapeModuleT>;
+        if (shape.texture) {
+          const bytes = pack.getAssetBytes(shape.texture.imageAssetId);
+          rules.require(
+            !bytes || !isOpenExr(bytes),
+            'CAPABILITY',
+            `modules.${index}.texture.imageAssetId`,
+            shape.texture.imageAssetId,
+            'OpenEXR CPU shape sampling is unsupported',
+          );
+        }
         if (shape.geometry && 'sourceRendererComponentId' in shape.geometry) {
           const id = shape.geometry.sourceRendererComponentId;
           if (id) {

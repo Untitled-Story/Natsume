@@ -5,7 +5,7 @@
   "sha256": {
     "noir.fbs": "22bacc74b5d6cb3641603af3998f44bbd4fcadc7c62e3f6921390859051a2987",
     "mesh.fbs": "443a6bd49fbc0132ca3aede25812907f97edcae5b83eeef5f98f8aff778b5f9c",
-    "noap.schema.json": "a3f59725fe754b97af6e3b752ec75ae42ab65bae92c695f9a5e937fb67a2df18",
+    "noap.schema.json": "813e35e7944eac5e8fb750da1a59c6e8a4ad1edcc079479bcba46c3e6ccf626b",
     "shader-data.schema.json": "feede3afa356ba7bf12e19da51b6a562d9a33f57605ab2bad13485ec3147898f"
   },
   "source_note": "Working tree schema; file hashes identify the protocol independently of the commit."

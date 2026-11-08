@@ -8,6 +8,7 @@ import { validateDocument, validateMesh } from '../format/semantics.js';
 import { parseJson, parseManifest, record, verifyFiles } from './manifest.js';
 import { DEFAULT_LIMITS, readZip, type LoadLimits } from './zip.js';
 import { AssetKind } from '../format/generated/noa/ir/asset-kind.js';
+import { exrImageSize, isOpenExr } from './exr-pixels.js';
 
 export interface LoadOptions {
   signal?: AbortSignal;
@@ -316,33 +317,38 @@ export async function loadPack(
       meshes.set(asset.id, mesh);
     }
     if (asset.kind === 3) shaderModels.set(asset.id, String(await validateShader(data, file.path)));
-    if (asset.kind === 1)
-      check(
-        data.length >= 24 &&
-          [137, 80, 78, 71, 13, 10, 26, 10].every((byte, i) => data[i] === byte) &&
-          new DataView(data.buffer, data.byteOffset, data.byteLength).getUint32(16) > 0 &&
-          new DataView(data.buffer, data.byteOffset, data.byteLength).getUint32(20) > 0,
-        'SEMANTIC',
-        'Invalid PNG header',
-        file.path,
-      );
-    for (const material of document.materials) {
-      const expected: Record<number, string> = {
-        2: 'particle-add-alpha',
-        4: 'unity-legacy-particle-additive',
-        5: 'unity-legacy-particle-alpha-blend',
-        6: 'unity-sprites-default',
-        7: 'unity-ui-default',
-        8: 'texture-vertex-color',
-        9: 'unity-source',
-      };
-      if (material.model === 4 || material.model === 5 || material.shaderDataAssetId)
+    if (asset.kind === AssetKind.Image) {
+      if (file.path.endsWith('.exr')) {
+        check(isOpenExr(data), 'SEMANTIC', 'Invalid OpenEXR header', file.path);
+        exrImageSize(data);
+      } else
         check(
-          shaderModels.get(material.shaderDataAssetId) === expected[material.model],
+          data.length >= 24 &&
+            [137, 80, 78, 71, 13, 10, 26, 10].every((byte, i) => data[i] === byte) &&
+            new DataView(data.buffer, data.byteOffset, data.byteLength).getUint32(16) > 0 &&
+            new DataView(data.buffer, data.byteOffset, data.byteLength).getUint32(20) > 0,
           'SEMANTIC',
-          'Material and shader recipe models differ',
+          'Invalid PNG header',
+          file.path,
         );
     }
+  }
+  for (const material of document.materials) {
+    const expected: Record<number, string> = {
+      2: 'particle-add-alpha',
+      4: 'unity-legacy-particle-additive',
+      5: 'unity-legacy-particle-alpha-blend',
+      6: 'unity-sprites-default',
+      7: 'unity-ui-default',
+      8: 'texture-vertex-color',
+      9: 'unity-source',
+    };
+    if (material.model === 4 || material.model === 5 || material.shaderDataAssetId)
+      check(
+        shaderModels.get(material.shaderDataAssetId) === expected[material.model],
+        'SEMANTIC',
+        'Material and shader recipe models differ',
+      );
   }
   options.signal?.throwIfAborted();
   return new EffectPack(document, manifest, files, meshes);

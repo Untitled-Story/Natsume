@@ -83,8 +83,8 @@ export class EffectPack {
       (file) => file.asset_id === id && (file.kind === 'image' || file.kind === 'source_data'),
     );
     const bytes = file ? this.#files.get(file.path) : undefined;
-    if (file?.kind === 'source_data')
-      return bytes && isOpenExr(bytes) ? exrImageSize(bytes) : undefined;
+    if (bytes && isOpenExr(bytes)) return exrImageSize(bytes);
+    if (file?.kind === 'source_data') return;
     if (!bytes || bytes.length < 24) return;
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
     return { width: view.getUint32(16), height: view.getUint32(20) };
@@ -102,6 +102,7 @@ export class EffectPack {
       );
       const bytes = this.getAssetBytes(id);
       check(bytes, 'SEMANTIC', 'Missing shape image bytes');
+      check(!isOpenExr(bytes), 'CAPABILITY', 'OpenEXR CPU shape sampling is unsupported');
       image = decodePngPixels(bytes);
       this.#pixels.set(id, image);
       this.#decodedPixelCount += image.width * image.height;

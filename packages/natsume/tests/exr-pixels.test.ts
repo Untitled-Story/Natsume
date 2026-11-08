@@ -1,5 +1,22 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { decodeExrPixels, exrImageSize, isOpenExr } from '../src/loader/exr-pixels.js';
+import { strToU8, zipSync } from 'fflate';
+import { AssetT } from '../src/format/generated/noa/ir/asset.js';
+import { AssetKind } from '../src/format/generated/noa/ir/asset-kind.js';
+import { loadPack } from '../src/loader/load.js';
+import { encode, minimalDocument } from './helpers.js';
+import { EffectPack } from '../src/pack.js';
+import { checkCompatibility } from '../src/runtime/compatibility.js';
+import { particleSource, constant } from './particle-fixtures.js';
+import { ComponentT } from '../src/format/generated/noa/ir/component.js';
+import { ParticleModuleT } from '../src/format/generated/noa/ir/particle-module.js';
+import { ParticleModuleData } from '../src/format/generated/noa/ir/particle-module-data.js';
+import { ShapeModuleT } from '../src/format/generated/noa/ir/shape-module.js';
+import { ShapeTextureT } from '../src/format/generated/noa/ir/shape-texture.js';
+import { ShapeGeometry } from '../src/format/generated/noa/ir/shape-geometry.js';
+import { MeshShapeT } from '../src/format/generated/noa/ir/mesh-shape.js';
+import { MeshT } from '../src/format/generated/noa/mesh/mesh.js';
+import { Vec3T } from '../src/format/generated/noa/mesh/vec3.js';
 
 const text = (s: string) => [...new TextEncoder().encode(s), 0];
 function int(value: number): number[] {
@@ -185,4 +202,123 @@ describe('source HALF OpenEXR', () => {
       decodeExrPixels(image({ width: 1, height: 1, samples: [value, 0, 0, 0] }).bytes),
     ).toThrow('Nonfinite source OpenEXR texel');
   });
+});
+
+async function imagePackage(bytes: Uint8Array, extension = 'exr') {
+  const d = minimalDocument();
+  d.assets = [new AssetT(3, AssetKind.Image)];
+  const files = { 'scene.noir': encode(d), [`assets/3.${extension}`]: bytes };
+  const entries = await Promise.all(
+    Object.entries(files).map(async ([path, data]) => ({
+      path,
+      kind: path === 'scene.noir' ? 'noir' : 'image',
+      ...(path === 'scene.noir' ? {} : { asset_id: 3 }),
+      byte_length: data.length,
+      sha256: Buffer.from(await crypto.subtle.digest('SHA-256', Uint8Array.from(data))).toString(
+        'hex',
+      ),
+    })),
+  );
+  return zipSync(
+    {
+      ...files,
+      'manifest.json': strToU8(
+        JSON.stringify({
+          format: 'noa-package',
+          version: 1,
+          noir_version: [1, 0],
+          document: 'scene.noir',
+          files: entries,
+        }),
+      ),
+    },
+    { level: 0 },
+  );
+}
+
+it('loads OpenEXR as a genuine Image and preserves non-byte/HDR HALF pixels', async () => {
+  const bytes = image({
+    width: 3,
+    height: 2,
+    origin: [-2, 5],
+    samples: [0x3555, 0x3c30, 0x3001, 0x3c00],
+  }).bytes;
+  const pack = await loadPack(await imagePackage(bytes));
+  expect(pack.getImageSize(3)).toEqual({ width: 3, height: 2 });
+  expect(pack.getAssetBytes(3)).toEqual(bytes);
+  expect(decodeExrPixels(pack.getAssetBytes(3)!).rgba).toEqual(decodeExrPixels(bytes).rgba);
+  expect(pack.document.assets[0]!.kind).toBe(AssetKind.Image);
+  pack.dispose();
+});
+
+it('reports EXR shape sampling before decoding CPU pixels', async () => {
+  const loaded = await loadPack(await imagePackage(image().bytes));
+  const doc = minimalDocument();
+  doc.assets = [new AssetT(3, AssetKind.Image)];
+  const source = particleSource();
+  source.modules = [
+    new ParticleModuleT(
+      ParticleModuleData.ShapeModule,
+      new ShapeModuleT(
+        new ShapeTextureT(3),
+        ShapeGeometry.MeshShape,
+        new MeshShapeT(0, 8, 0, 0, false, false, 0, 0, constant(1)),
+        doc.nodes[0]!.transform,
+      ),
+    ),
+  ];
+  doc.components = [new ComponentT(4, 1, true, 3, source)];
+  const mesh = new MeshT();
+  mesh.positions = [new Vec3T()];
+  const pack = new EffectPack(
+    doc,
+    structuredClone(loaded.manifest),
+    new Map([['assets/3.exr', loaded.getAssetBytes(3)!]]),
+    new Map([[8, mesh]]),
+  );
+  const decode = vi.spyOn(pack, 'getImagePixels');
+  try {
+    const report = checkCompatibility(
+      pack,
+      {},
+      {
+        maxTextureSize: 4096,
+        availableTexturePixels: 64 * 1024 * 1024,
+        cachedMaterialIds: new Set(),
+        imageBitmapAvailable: true,
+        hasScript: () => false,
+        disposed: false,
+      },
+    );
+    expect(report.compatible).toBe(false);
+    expect(report.issues).toContainEqual(
+      expect.objectContaining({
+        componentId: 4,
+        field: 'modules.0.texture.imageAssetId',
+        code: 'CAPABILITY',
+        severity: 'error',
+        message: 'OpenEXR CPU shape sampling is unsupported',
+      }),
+    );
+    expect(decode).not.toHaveBeenCalled();
+    expect(() => pack.getImagePixels(3)).toThrow('OpenEXR CPU shape sampling is unsupported');
+  } finally {
+    pack.dispose();
+    loaded.dispose();
+  }
+});
+
+it.each([1, 3])('rejects unverified OpenEXR compression %s at load', async (compression) => {
+  await expect(loadPack(await imagePackage(image({ compression }).bytes))).rejects.toThrow(
+    'Compressed source OpenEXR',
+  );
+});
+
+it('does not accept an EXR extension containing a PNG or arbitrary payload', async () => {
+  await expect(loadPack(await imagePackage(new Uint8Array(32)))).rejects.toThrow(
+    'Invalid OpenEXR header',
+  );
+  await expect(loadPack(await imagePackage(image().bytes, 'png'))).rejects.toThrow(
+    'Invalid PNG header',
+  );
 });

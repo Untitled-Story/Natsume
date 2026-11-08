@@ -207,7 +207,7 @@ export function validateSource(d: DocumentT, required: (name: string) => void): 
         check(
           !r.targetAssetId ||
             (source.guid === '0000000000000000e000000000000000' &&
-              source.fileId === 10210n &&
+              (source.fileId === 10210n || source.fileId === 10202n) &&
               assets.get(r.targetAssetId) === A.Mesh),
           'SEMANTIC',
           'Invalid converted builtin asset',

@@ -87,7 +87,7 @@ export function parseManifest(bytes: Uint8Array): Manifest {
       );
       ids.add(id);
       const extension = {
-        image: 'png',
+        image: file.path === `assets/${id}.exr` ? 'exr' : 'png',
         mesh: 'noms',
         shader_data: 'shader.json',
         source_data: 'bin',

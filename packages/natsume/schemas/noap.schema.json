@@ -41,7 +41,7 @@
         "properties": {
           "path": {
             "type": "string",
-            "pattern": "^(scene\\.noir|assets/[1-9][0-9]*\\.(bin|png|noms|shader\\.json))$"
+            "pattern": "^(scene\\.noir|assets/[1-9][0-9]*\\.(bin|png|exr|noms|shader\\.json))$"
           },
           "kind": {
             "enum": [

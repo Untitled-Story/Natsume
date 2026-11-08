@@ -94,7 +94,9 @@ export function readZip(bytes: Uint8Array, limits: LoadLimits): Map<string, Uint
       check(false, 'ZIP', 'Invalid filename encoding');
     }
     check(
-      /^(manifest\.json|scene\.noir|assets\/[1-9][0-9]*\.(png|noms|shader\.json|bin))$/.test(name),
+      /^(manifest\.json|scene\.noir|assets\/[1-9][0-9]*\.(png|exr|noms|shader\.json|bin))$/.test(
+        name,
+      ),
       'ZIP',
       'Invalid package path',
       name,
