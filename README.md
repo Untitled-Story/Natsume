@@ -360,6 +360,46 @@ effect.playParticleSystem(systemId, { withChildren: true });
 
 `withChildren` 默认 `true`；传 `false` 仅启动指定系统。调用时实例须在播放中，不激活失活节点，也不接管 Timeline 控制的系统。按 Unity 的实际 `Play` 行为重置发射时间，保留已有粒子，下一模拟步开始发射；重播恢复作者设置，需要手动启动的系统须再次调用。预览用“启动粒子”执行此操作。
 
+## 宿主行为
+
+无需包内存在 C# 组件，宿主可直接给实例添加行为。工厂每次添加时执行一次，只接收当前 `effect`，不提供序列化组件或字段：
+
+```ts
+const overlay = effect.addBehavior(({ effect }) => {
+  const node = effect.getNode(groupNodeId)!;
+  const align = () => {
+    const parent = node.parent;
+    if (!parent) return;
+    const world = node.worldMatrix;
+    const origin = parent.worldMatrix;
+    const x = world[12]! - origin[12]!;
+    const y = world[13]! - origin[13]!;
+    const z = world[14]! - origin[14]!;
+    const m = effect.displayMatrix;
+    node.setRenderOffset({
+      x: -(m[0]! * x + m[4]! * y + m[8]! * z),
+      y: -(m[1]! * x + m[5]! * y + m[9]! * z),
+    });
+  };
+  const clear = () => node.setRenderOffset(null);
+  return { onEnable: align, lateUpdate: align, onDisable: clear, destroy: clear };
+});
+
+overlay.setEnabled(false);
+overlay.setEnabled(true);
+overlay.remove();
+```
+
+`groupNodeId` 指要叠加的组根节点；示例抵消该组相对父节点的屏幕平移，保留模拟位置和深度。playground 的 `OverlayView` 将同一计算应用到各最外层可渲染组，已通过 `addBehavior` 的 `lateUpdate` 接入。
+
+行为添加后立即启用，执行 `onEnable`；`setEnabled` 仅在状态改变时执行 `onEnable` / `onDisable`。`remove()` 先禁用再执行 `destroy`，重复移除无效果，之后不能重新启用。实例销毁自动清理行为；`restart()` 保留行为对象和启用状态，不重新执行工厂。暂停、停止不会禁用行为，但不再执行帧回调。`enabled` / `removed` 可读取句柄状态。
+
+播放或排空期间，每帧顺序为：`beforeUpdate` → 动画和粒子模拟 → `update` → 动画字段通知 → `lateUpdate` → 渲染同步。`beforeUpdate` / `lateUpdate` 接收宿主提交的正步长，每帧各执行一次，即使本帧尚未累积到一个模拟固定步。现有 `update` 接收模拟时间实际推进量，仅在推进量大于零时执行；模拟使用固定步并限制积压，因此它与宿主步长可能不同。手动 seek、`evaluate()`、`update(0)` 不执行帧回调。`beforeUpdate` 适合设置本帧输入，`lateUpdate` 适合读取动画后的节点位置并调整显示。
+
+帧回调按添加顺序执行；帧内添加的行为立即启用，从下一帧开始接收帧回调；禁用或移除立即阻止后续回调。回调内暂停、停止、重播或销毁实例会取消当前帧剩余阶段。帧回调不能递归调用 `effect.update()`。
+
+生命周期及帧回调沿用 runtime 的 `scriptErrors`：`isolate` 记录诊断并跳过失败行为后续回调，仍执行销毁清理；`throw` 将异常交给宿主并中断本次操作，宿主可在后续调用中重试。销毁时即使某个清理回调抛错，也会继续清理其他行为。主动调用 `addBehavior` 的工厂错误直接抛出。
+
 ## Script Bridge
 
 在实例化前，用包内 MonoBehaviour 的真实身份注册行为。以下示例将该组件所在节点及其子树绘制到父节点原点，保留粒子模拟与深度：
@@ -382,12 +422,12 @@ runtime.registerScript(
         y: -(m[1]! * x + m[5]! * y + m[9]! * z),
       });
     };
-    return { onEnable: align, update: align, onDisable: () => node.setRenderOffset(null) };
+    return { onEnable: align, lateUpdate: align, onDisable: () => node.setRenderOffset(null) };
   },
 );
 ```
 
-`setRenderOffset()` 使用特效容器局部坐标，父子偏移相加；传 `null` 清除当前节点的偏移。设置立即生效，重播保留。宿主也可以通过 `effect.getNode(id)` 调用此接口；`effect.renderedNodes` 返回含已启用渲染器组件的节点，包括当前失活的节点。
+Bridge 同样支持 `beforeUpdate`、`update`、`lateUpdate`，帧阶段与宿主行为一致；启停仍跟随包内节点及组件状态。`setRenderOffset()` 使用特效容器局部坐标，父子偏移相加；传 `null` 清除当前节点的偏移。设置立即生效，重播保留。宿主也可以通过 `effect.getNode(id)` 调用此接口；`effect.renderedNodes` 返回含已启用渲染器组件的节点，包括当前失活的节点。
 
 脚本字段被动画驱动时，第三个参数须声明字段类型：
 

@@ -1,4 +1,4 @@
-import { ScriptBehaviors } from './script-behaviors.js';
+import { EffectBehaviors } from './effect-behaviors.js';
 import { NatsumeAnimator } from './animator-handle.js';
 import type {
   ScriptDeclaration,
@@ -81,7 +81,28 @@ export interface InstanceOptions extends SimulationOptions {
   /** Column-major affine transform into Pixi local coordinates, including clip-depth Z. */
   readonly displayMatrix?: ArrayLike<number>;
 }
-export interface ScriptBehavior {
+export interface EffectBehavior {
+  onEnable?(): void;
+  onDisable?(): void;
+  /** Before animation and simulation; receives the requested frame delta. */
+  beforeUpdate?(deltaSeconds: number): void;
+  /** After simulation; receives the time actually advanced. */
+  update?(deltaSeconds: number): void;
+  /** After update and field notifications, before rendering; receives the requested frame delta. */
+  lateUpdate?(deltaSeconds: number): void;
+  destroy?(): void;
+}
+export type EffectBehaviorFactory = (context: {
+  readonly effect: EffectInstance;
+}) => EffectBehavior;
+export interface BehaviorHandle {
+  readonly enabled: boolean;
+  readonly removed: boolean;
+  setEnabled(enabled: boolean): void;
+  /** Idempotent; disables and destroys this behavior. */
+  remove(): void;
+}
+export interface ScriptBehavior extends EffectBehavior {
   /** Receives the final changed field value after an effect operation, before drawing. */
   onAnimatedField?(name: string, value: ScriptFieldValue): void;
   /** Timeline ITimeControl lifecycle; callbacks receive clip-local seconds. */
@@ -92,10 +113,6 @@ export interface ScriptBehavior {
   onParticleSystemStopped?(event: import('./particle-stopped.js').ParticleSystemStoppedEvent): void;
   /** Receives source messages from the Animator on this node; return true when handled. */
   onAnimationEvent?: AnimationEventHandler;
-  onEnable?(): void;
-  onDisable?(): void;
-  update?(deltaSeconds: number): void;
-  destroy?(): void;
 }
 export interface ScriptContext {
   readonly effect: EffectInstance;
@@ -184,7 +201,7 @@ export class EffectInstance {
   private readonly materialOrder: Map<number, number>;
   private readonly matrix = mat4.fromValues(1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 0.001, 0, 0, 0, 0, 1);
   private readonly nodeViews = new Map<number, NatsumeNode>();
-  private readonly behaviors: ScriptBehaviors;
+  private readonly behaviors: EffectBehaviors;
   private readonly eventHandlers = new Set<AnimationEventHandler>();
   private readonly collisionHandlers = new Set<
     (event: import('./particle-physics.js').ParticleCollisionEvent) => void
@@ -211,7 +228,7 @@ export class EffectInstance {
     private readonly releaseTextures: () => void,
     options: InstanceOptions,
   ) {
-    this.behaviors = new ScriptBehaviors(
+    this.behaviors = new EffectBehaviors(
       this,
       simulation,
       (identity) => runtime.getScriptFactory(identity),
@@ -462,6 +479,11 @@ export class EffectInstance {
     }
     return view;
   }
+  /** Attaches host logic without requiring a serialized script. Enabled immediately; retained on restart. */
+  addBehavior(factory: EffectBehaviorFactory): BehaviorHandle {
+    this.assertAlive();
+    return this.behaviors.add(factory);
+  }
   /** Sets the node immediately; a playing animation may overwrite it on the next fixed step. */
   setNodeActive(id: number, active: boolean): void {
     this.assertAlive();
@@ -670,18 +692,37 @@ export class EffectInstance {
   update(seconds: number, clocks?: AnimationUpdateOptions): void {
     this.assertAlive();
     check(
+      Number.isFinite(seconds) && seconds >= 0,
+      'HOST',
+      'Delta time must be finite nonnegative seconds',
+    );
+    check(
       !this.updating && !this.dispatchingEvent && !this.behaviors.notifyingFields,
       'HOST',
       'Recursive effect update is unsupported',
     );
     this.updating = true;
     try {
+      const revision = this.eventRevision;
+      const isCurrent = () => !this.disposed && revision === this.eventRevision;
+      const frame = this.behaviors.frame();
+      this.behaviors.syncActivation();
+      if (!isCurrent()) return;
+      const runFrame = seconds > 0 && (this.state === 'playing' || this.state === 'draining');
+      if (runFrame) frame('beforeUpdate', seconds, isCurrent);
+      if (!isCurrent()) return;
       const before = this.simulation.time;
       this.simulation.update(seconds, clocks);
-      if (this.disposed) return;
+      if (!isCurrent()) return;
       const advanced = this.simulation.time - before;
-      if (advanced > 0) this.behaviors.update(advanced);
-      if (this.disposed) return;
+      this.behaviors.syncActivation();
+      if (advanced > 0) frame('update', advanced, isCurrent);
+      if (!isCurrent()) return;
+      this.behaviors.syncActivation();
+      this.behaviors.notifyFields(isCurrent);
+      if (!isCurrent()) return;
+      if (runFrame) frame('lateUpdate', seconds, isCurrent);
+      if (!isCurrent()) return;
       this.behaviors.syncActivation();
       this.render();
     } finally {

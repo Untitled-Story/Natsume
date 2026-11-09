@@ -1,5 +1,11 @@
 import { Application, Mesh, extensions } from 'pixi.js';
-import { NatsumePlugin, type NatsumeRuntime, type EffectPack, type EffectInstance } from 'natsume';
+import {
+  NatsumePlugin,
+  type NatsumeRuntime,
+  type EffectPack,
+  type EffectInstance,
+  type BehaviorHandle,
+} from 'natsume';
 import { log } from './console.js';
 import { OverlayView } from './overlay.js';
 import { SceneMesh } from '../../natsume/src/rendering/scene-mesh.js';
@@ -28,6 +34,7 @@ export function readPreviewSortingLayers(text: string): void {
 }
 const overlayButton = document.getElementById('overlay')!;
 let overlay: OverlayView | undefined;
+let overlayBehavior: BehaviorHandle | undefined;
 let overlayEnabled = false;
 let app: Application | undefined,
   runtime: NatsumeRuntime | undefined,
@@ -82,7 +89,6 @@ async function init(): Promise<void> {
             unscaledDeltaSeconds: ticker.elapsedMS / 1000,
             physicsSteps: Array<number>(count).fill(0.02),
           });
-          overlay?.apply(overlayEnabled);
           if (++frame % 8 === 0) stats();
         } catch (error) {
           effect.pause();
@@ -213,6 +219,7 @@ export function clearPreview(): void {
   effect?.destroy();
   effect = undefined;
   overlay = undefined;
+  overlayBehavior = undefined;
   overlayEnabled = false;
   overlayButton.setAttribute('aria-pressed', 'false');
   reported.clear();
@@ -298,6 +305,14 @@ export async function showPreview(pack: EffectPack, signal: AbortSignal): Promis
   });
   effect.play();
   overlay = new OverlayView(effect);
+  const view = overlay;
+  overlayBehavior = effect.addBehavior(() => ({
+    onEnable: () => view.apply(true),
+    lateUpdate: () => view.apply(true),
+    onDisable: () => view.apply(false),
+    destroy: () => view.apply(false),
+  }));
+  overlayBehavior.setEnabled(false);
   focus.replaceChildren(
     new Option('全景', '0'),
     ...effect.simulation.scene.ordered.map((node) => {
@@ -372,7 +387,7 @@ overlayButton.addEventListener('click', () => {
   if (!effect || effect.destroyed) return;
   overlayEnabled = !overlayEnabled;
   overlayButton.setAttribute('aria-pressed', String(overlayEnabled));
-  overlay?.apply(overlayEnabled);
+  overlayBehavior?.setEnabled(overlayEnabled);
   fit();
   log(
     overlayEnabled

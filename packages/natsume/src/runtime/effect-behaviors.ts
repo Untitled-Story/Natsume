@@ -1,24 +1,32 @@
 import { check } from '../errors.js';
 import type { DeepReadonly as R } from '../pack.js';
 import type { CustomComponentT } from '../format/generated/noa/ir/custom-component.js';
-import type { EffectInstance, ScriptBehavior, ScriptFactory, ScriptIdentity } from './runtime.js';
+import type {
+  BehaviorHandle,
+  EffectBehaviorFactory,
+  EffectInstance,
+  ScriptBehavior,
+  ScriptFactory,
+  ScriptIdentity,
+} from './runtime.js';
 import type { SceneNode } from './scene.js';
 import type { Simulation } from './simulation.js';
 import type { AnimationEventHandler, NatsumeAnimationEvent } from './animation-events.js';
 import type { ParticleSystemStoppedEvent } from './particle-stopped.js';
 
 interface BehaviorRecord {
-  readonly node: SceneNode;
-  readonly componentId: number;
+  readonly node?: SceneNode;
+  readonly componentId?: number;
   readonly behavior: ScriptBehavior;
   active: boolean;
   failed: boolean;
   destroyed: boolean;
   controlDepth: number;
+  enabled: boolean;
 }
 
-/** Owns Bridge instances and their lifecycle; rendering never inspects behavior state. */
-export class ScriptBehaviors {
+/** Owns serialized scripts and host behaviors; rendering never inspects behavior state. */
+export class EffectBehaviors {
   private readonly records: BehaviorRecord[] = [];
   private disposed = false;
   private destroying = false;
@@ -33,6 +41,51 @@ export class ScriptBehaviors {
 
   get notifyingFields(): boolean {
     return this.dispatchingFields;
+  }
+
+  add(factory: EffectBehaviorFactory): BehaviorHandle {
+    check(!this.disposed, 'DISPOSED', 'Effect instance has been destroyed');
+    check(typeof factory === 'function', 'HOST', 'Behavior factory must be a function');
+    const behavior = factory({ effect: this.effect });
+    check(!this.disposed, 'DISPOSED', 'Effect instance has been destroyed');
+    check(
+      behavior && typeof behavior === 'object',
+      'HOST',
+      'Behavior factory must return a behavior object',
+    );
+    const b: BehaviorRecord = {
+      behavior,
+      active: false,
+      failed: false,
+      destroyed: false,
+      controlDepth: 0,
+      enabled: true,
+    };
+    this.records.push(b);
+    const handle: BehaviorHandle = {
+      get enabled() {
+        return b.enabled && !b.destroyed;
+      },
+      get removed() {
+        return b.destroyed;
+      },
+      setEnabled: (enabled) => {
+        check(!b.destroyed, 'DISPOSED', 'Behavior has been removed');
+        b.enabled = enabled;
+        this.syncActivation();
+      },
+      remove: () => {
+        if (b.destroyed) return;
+        try {
+          this.destroyRecord(b);
+        } finally {
+          const index = this.records.indexOf(b);
+          if (index >= 0) this.records.splice(index, 1);
+        }
+      },
+    };
+    this.syncActivation();
+    return handle;
   }
 
   initialize(componentIds?: ReadonlySet<number>): void {
@@ -72,6 +125,7 @@ export class ScriptBehaviors {
           failed: false,
           destroyed: false,
           controlDepth: 0,
+          enabled: true,
         });
       });
     }
@@ -81,8 +135,8 @@ export class ScriptBehaviors {
     const ids = new Set<number>();
     for (let i = this.records.length - 1; i >= 0; i--) {
       const b = this.records[i]!;
-      if (b.destroyed && !b.node.destroyed) {
-        ids.add(b.componentId);
+      if (b.destroyed && b.node && !b.node.destroyed) {
+        ids.add(b.componentId!);
         this.records.splice(i, 1);
       }
     }
@@ -90,19 +144,17 @@ export class ScriptBehaviors {
   }
 
   syncActivation(): void {
-    for (const b of this.records) {
+    for (const b of [...this.records]) {
+      if (this.disposed) return;
       if (b.destroyed) continue;
-      if (b.node.destroyed) {
-        const active = b.active;
-        b.active = false;
-        b.destroyed = true;
-        if (active && !b.failed) this.invoke(() => b.behavior.onDisable?.());
-        this.invoke(() => b.behavior.destroy?.());
+      if (b.node?.destroyed) {
+        this.destroyRecord(b);
         continue;
       }
       if (b.failed) continue;
-      const active =
-        b.node.activeInHierarchy && this.simulation.bindings.enabled.get(b.componentId) === true;
+      const active = b.node
+        ? b.node.activeInHierarchy && this.simulation.bindings.enabled.get(b.componentId!) === true
+        : b.enabled;
       if (active !== b.active) {
         b.active = active;
         b.failed = !this.invoke(() =>
@@ -112,11 +164,20 @@ export class ScriptBehaviors {
     }
   }
 
-  update(seconds: number): void {
-    for (const b of this.records) {
-      if (this.disposed) return;
-      if (b.active && !b.failed) b.failed = !this.invoke(() => b.behavior.update?.(seconds));
-    }
+  /** Snapshot once per frame: additions start updating on the next frame. */
+  frame(): (
+    phase: 'beforeUpdate' | 'update' | 'lateUpdate',
+    seconds: number,
+    isCurrent: () => boolean,
+  ) => void {
+    const batch = [...this.records];
+    return (phase, seconds, isCurrent) => {
+      for (const b of batch) {
+        if (this.disposed || !isCurrent()) return;
+        if (b.active && !b.failed && !b.destroyed)
+          b.failed = !this.invoke(() => b.behavior[phase]?.(seconds));
+      }
+    };
   }
 
   controlTime(
@@ -128,7 +189,7 @@ export class ScriptBehaviors {
     for (const b of this.records) {
       if (phase !== 'stop' && !isCurrent()) return;
       if (this.disposed && !(this.destroying && phase === 'stop')) return;
-      if (b.failed || b.node.id !== nodeId) continue;
+      if (b.failed || b.node?.id !== nodeId) continue;
       if (phase === 'start') b.controlDepth++;
       else if (!b.controlDepth) continue;
       else if (phase === 'stop') b.controlDepth--;
@@ -143,7 +204,7 @@ export class ScriptBehaviors {
   /** Messages use the caller's event error policy, rather than disabling a failed script. */
   *animationReceivers(event: NatsumeAnimationEvent): IterableIterator<AnimationEventHandler> {
     for (const b of this.records)
-      if (b.node.id === event.nodeId && b.active && !b.failed && b.behavior.onAnimationEvent)
+      if (b.node?.id === event.nodeId && b.active && !b.failed && b.behavior.onAnimationEvent)
         yield (e) => b.behavior.onAnimationEvent!(e);
   }
 
@@ -151,9 +212,9 @@ export class ScriptBehaviors {
     event: ParticleSystemStoppedEvent,
   ): readonly ((event: ParticleSystemStoppedEvent) => void)[] {
     return this.records
-      .filter((b) => b.node.id === event.nodeId && b.behavior.onParticleSystemStopped)
+      .filter((b) => b.node?.id === event.nodeId && b.behavior.onParticleSystemStopped)
       .map((b) => (e) => {
-        if (b.node.activeInHierarchy && !b.failed && !b.destroyed)
+        if (b.node?.activeInHierarchy && !b.failed && !b.destroyed)
           b.behavior.onParticleSystemStopped?.(e);
       });
   }
@@ -191,22 +252,34 @@ export class ScriptBehaviors {
     } catch (error) {
       failure = error;
     }
-    for (const b of this.records) {
-      if (b.destroyed) continue;
-      b.destroyed = true;
+    for (const b of [...this.records]) {
       try {
-        if (b.active && !b.failed) this.invoke(() => b.behavior.onDisable?.());
-      } catch (error) {
-        failure ??= error;
-      }
-      try {
-        this.invoke(() => b.behavior.destroy?.());
+        this.destroyRecord(b);
       } catch (error) {
         failure ??= error;
       }
     }
     this.destroying = false;
     this.records.length = 0;
+    if (failure) throw failure;
+  }
+
+  private destroyRecord(b: BehaviorRecord): void {
+    if (b.destroyed) return;
+    b.destroyed = true;
+    const active = b.active;
+    b.active = false;
+    let failure: unknown;
+    try {
+      if (active && !b.failed) this.invoke(() => b.behavior.onDisable?.());
+    } catch (error) {
+      failure = error;
+    }
+    try {
+      this.invoke(() => b.behavior.destroy?.());
+    } catch (error) {
+      failure ??= error;
+    }
     if (failure) throw failure;
   }
 
