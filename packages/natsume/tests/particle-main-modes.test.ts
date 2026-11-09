@@ -87,12 +87,16 @@ it('derives unscaled catchup steps from the host clock ratio and keeps Timeline 
     sim.setParticleSystemVisible(4, true);
     sim.update(1 / 60, { unscaledDeltaSeconds: 2 / 60 });
     expect(sim.emitters.get(4)!.elapsedSeconds).toBeCloseTo(0.12, 6);
-    sim.emitters.get(4)!.timelineControlled = true;
-    sim.subEmitters.stepControlled(1 / 60, new Set([4]));
-    expect(sim.emitters.get(4)!.elapsedSeconds).toBeCloseTo(0.12 + 1 / 60, 6);
-    sim.emitters.get(4)!.timelineControlled = false;
+    const controls = sim.subEmitters.claimTimelineControl(sim.scene.nodes.get(1)!, false, 42);
+    const control = controls.find((c) => c.root.id === 4)!;
+    control.reset();
+    control.step(1 / 60);
+    expect(sim.emitters.get(4)!.elapsedSeconds).toBeCloseTo(1 / 60, 6);
     sim.update(1 / 60, { unscaledDeltaSeconds: 2 / 60 });
-    expect(sim.emitters.get(4)!.elapsedSeconds).toBeCloseTo(0.12 + 3 / 60, 6);
+    expect(sim.emitters.get(4)!.elapsedSeconds).toBeCloseTo(1 / 60, 6);
+    sim.restart();
+    sim.update(1 / 60, { unscaledDeltaSeconds: 2 / 60 });
+    expect(sim.emitters.get(4)!.elapsedSeconds).toBeCloseTo(2 / 60, 6);
   } finally {
     pack.dispose();
   }
@@ -136,9 +140,12 @@ it('applies culling visibility independently, preserves visibility on restart an
     expect(sim.emitters.get(3)!.ages[0]).toBeCloseTo(1 / 60, 6);
     expect(sim.emitters.get(4)!.ages[0]).toBe(0);
     sim.setParticleSystemVisible(3, false);
-    sim.emitters.get(3)!.timelineControlled = true;
-    sim.subEmitters.stepControlled(1 / 60, new Set([3]));
-    expect(sim.emitters.get(3)!.ages[0]).toBeCloseTo(2 / 60, 6);
+    const control = sim.subEmitters
+      .claimTimelineControl(sim.scene.nodes.get(1)!, false, 42)
+      .find((c) => c.root.id === 3)!;
+    control.reset();
+    control.step(1 / 60);
+    expect(sim.emitters.get(3)!.ages[0]).toBeCloseTo(1 / 60, 6);
     expect(() => sim.setParticleSystemVisible(99, true)).toThrow(/Unknown particle/);
     expect(() => sim.setParticleSystemVisible(3, 1 as never)).toThrow(/boolean/);
   } finally {

@@ -1,4 +1,8 @@
 import { expect, it, vi } from 'vitest';
+import {
+  copyEnvironment,
+  type ParticleEnvironment,
+} from '../src/rendering/particle-environment.js';
 import { EffectPack } from '../src/pack.js';
 import {
   checkCompatibility,
@@ -35,6 +39,83 @@ const context: CompatibilityContext = {
   hasScript: () => false,
   disposed: false,
 };
+
+it.each([
+  ['fixedDeltaSeconds', -1],
+  ['gravity2D', [0, NaN]],
+  ['rigidbodyVelocities', { body: [0, Infinity, 0] }],
+  ['forceFields', { field: { layer: 0 } }],
+  ['lights', { light: { create() {}, color: [1, 1, 1], range: -1, intensity: 1 } }],
+  ['physicsWorlds', { world: {} }],
+  ['colliders', { collider: { id: '', layer: 0, overlapSphere() {} } }],
+] as const)('rejects invalid %s even when the entry does not use it', (field, value) => {
+  const pack = new EffectPack(minimalDocument(), { files: [] } as never, new Map(), new Map());
+  const environment = { fog: { mode: 'none' }, [field]: value } as unknown as ParticleEnvironment;
+  try {
+    const report = checkCompatibility(pack, { particleEnvironment: environment }, context);
+    expect(report.compatible).toBe(false);
+    const issue = report.issues.find((issue) => issue.field === `particleEnvironment.${field}`)!;
+    expect(issue).toBeDefined();
+    expect(() => copyEnvironment(environment)).toThrow(issue.message);
+  } finally {
+    pack.dispose();
+  }
+});
+
+it('collects independent environment errors from the shared validation rules', () => {
+  const pack = new EffectPack(minimalDocument(), { files: [] } as never, new Map(), new Map());
+  try {
+    const report = checkCompatibility(
+      pack,
+      {
+        particleEnvironment: {
+          fog: { mode: 'none' },
+          fixedDeltaSeconds: -1,
+          gravity2D: [NaN, 0],
+          rigidbodyVelocities: { body: [Infinity, 0, 0] },
+        },
+      },
+      context,
+    );
+    expect(report.issues.map((issue) => issue.field)).toEqual([
+      'particleEnvironment.fixedDeltaSeconds',
+      'particleEnvironment.gravity2D',
+      'particleEnvironment.rigidbodyVelocities',
+    ]);
+  } finally {
+    pack.dispose();
+  }
+});
+
+it('reports malformed host vectors with particle requirements instead of throwing a TypeError', () => {
+  const f = fixture();
+  f.source.main!.emitterVelocityMode = 1;
+  f.source.main!.hostRigidbodyVelocitySlot = 'body';
+  const pack = f.pack();
+  try {
+    const report = checkCompatibility(
+      pack,
+      {
+        particleEnvironment: {
+          fog: { mode: 'none' },
+          gravity: 'abc',
+          rigidbodyVelocities: { body: 'abc' },
+        } as unknown as ParticleEnvironment,
+      },
+      context,
+    );
+    expect(report.compatible).toBe(false);
+    expect(report.issues.map((issue) => issue.field)).toEqual(
+      expect.arrayContaining([
+        'particleEnvironment.gravity',
+        'particleEnvironment.rigidbodyVelocities',
+        'main.hostRigidbodyVelocitySlot',
+      ]),
+    );
+  } finally {
+    pack.dispose();
+  }
+});
 
 it('accepts known shader-unused streams without requiring wider built-in vertex buffers', () => {
   const f = fixture();

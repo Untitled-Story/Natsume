@@ -8,8 +8,9 @@ import { ComponentData } from '../src/format/generated/noa/ir/component-data.js'
 import { AnimatorT } from '../src/format/generated/noa/ir/animator.js';
 import { AnimatorLayerT } from '../src/format/generated/noa/ir/animator-layer.js';
 import { AnimatorStateT } from '../src/format/generated/noa/ir/animator-state.js';
+import type { DocumentT } from '../src/format/generated/noa/ir/document.js';
 
-export function eventPack() {
+export function eventPack(configure?: (document: DocumentT) => void) {
   const d = minimalDocument();
   const clip = new AnimationT();
   clip.id = 10;
@@ -33,5 +34,6 @@ export function eventPack() {
   animator.layers = [layer];
   d.animations = [clip];
   d.components = [new ComponentT(3, 1, true, ComponentData.Animator, animator)];
+  configure?.(d);
   return new EffectPack(d, { document: 'scene.noir', files: [] } as never, new Map(), new Map());
 }

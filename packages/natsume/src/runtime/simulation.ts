@@ -328,13 +328,7 @@ export class Simulation {
                     directors: this.directors,
                     directorClaims: this.directorClaims,
                     acquireParticles: (node, search, randomSeed) =>
-                      new TimelineParticles(
-                        node,
-                        search,
-                        randomSeed,
-                        this.emitters,
-                        this.subEmitters,
-                      ),
+                      new TimelineParticles(node, search, randomSeed, this.subEmitters),
                     controlTime: (nodeId, phase, seconds) => {
                       const revision = this.revision;
                       const version = director.version;
@@ -584,8 +578,6 @@ export class Simulation {
     this.flushDirectors();
     this.enabledDirectors.clear();
     this.stoppedSystems.clear();
-    this.subEmitters.clear();
-    this.subEmitters.externallyControlled.clear();
     this.time = 0;
     this.accumulator = 0;
     this.unscaledAccumulator = 0;
@@ -601,11 +593,7 @@ export class Simulation {
     this.bindings.reset();
     this.state = 'idle';
     this.scene.reset();
-    for (const e of this.emitters.values()) {
-      e.timelineControlled = false;
-      e.restorePlaybackSeed();
-      e.reset();
-    }
+    this.subEmitters.resetPlayback();
     this.trailPoints.clear();
     this.scene.update();
     this.play();
@@ -1003,7 +991,7 @@ export class Simulation {
         emitter.main.clock === 1 &&
         emitter.enabled &&
         emitter.node.activeInHierarchy &&
-        !this.subEmitters.externallyControlled.has(emitter.id),
+        !emitter.timelineControlled,
     );
     check(
       !hasUnscaledParticles || clocks.unscaledDeltaSeconds !== undefined,

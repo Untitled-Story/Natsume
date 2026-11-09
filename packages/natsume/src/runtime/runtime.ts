@@ -1,3 +1,4 @@
+import { ScriptBehaviors } from './script-behaviors.js';
 import { NatsumeAnimator } from './animator-handle.js';
 import type {
   ScriptDeclaration,
@@ -183,15 +184,7 @@ export class EffectInstance {
   private readonly materialOrder: Map<number, number>;
   private readonly matrix = mat4.fromValues(1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 0.001, 0, 0, 0, 0, 1);
   private readonly nodeViews = new Map<number, NatsumeNode>();
-  private readonly behaviors: {
-    node: SceneNode;
-    behavior: ScriptBehavior;
-    active: boolean;
-    failed: boolean;
-    destroyed?: boolean;
-    controlDepth?: number;
-    componentId?: number;
-  }[] = [];
+  private readonly behaviors: ScriptBehaviors;
   private readonly eventHandlers = new Set<AnimationEventHandler>();
   private readonly collisionHandlers = new Set<
     (event: import('./particle-physics.js').ParticleCollisionEvent) => void
@@ -206,7 +199,6 @@ export class EffectInstance {
   private updating = false;
   private eventRevision = 0;
   private dispatchingEvent = false;
-  private dispatchingFields = false;
   private disposed = false;
   private destroying = false;
   private colorSpace: SourceColorSpace;
@@ -219,6 +211,12 @@ export class EffectInstance {
     private readonly releaseTextures: () => void,
     options: InstanceOptions,
   ) {
+    this.behaviors = new ScriptBehaviors(
+      this,
+      simulation,
+      (identity) => runtime.getScriptFactory(identity),
+      runtime.scriptErrors,
+    );
     simulation.onAnimationEvent = (event) => this.dispatchAnimationEvent(event);
     simulation.onParticleSystemStopped = (event) =>
       this.dispatchParticleEvent(
@@ -226,12 +224,7 @@ export class EffectInstance {
         this.stoppedHandlers,
         event.systemId,
         'PARTICLE_STOP_EVENT_ERROR',
-        this.behaviors
-          .filter((b) => b.node.id === event.nodeId && b.behavior.onParticleSystemStopped)
-          .map((b) => (event) => {
-            if (b.node.activeInHierarchy && !b.failed && !b.destroyed)
-              b.behavior.onParticleSystemStopped?.(event);
-          }),
+        this.behaviors.stoppedReceivers(event),
       );
     simulation.onParticleCollision = (event) =>
       this.dispatchParticleEvent(
@@ -247,21 +240,8 @@ export class EffectInstance {
         event.systemId,
         'PARTICLE_TRIGGER_EVENT_ERROR',
       );
-    simulation.onControlTime = (nodeId, phase, seconds, isCurrent) => {
-      for (const b of this.behaviors) {
-        if (phase !== 'stop' && !isCurrent()) return;
-        if (this.disposed && !(this.destroying && phase === 'stop')) return;
-        if (b.failed || b.node.id !== nodeId) continue;
-        if (phase === 'start') b.controlDepth = (b.controlDepth ?? 0) + 1;
-        else if (!b.controlDepth) continue;
-        else if (phase === 'stop') b.controlDepth--;
-        b.failed = !this.invoke(() => {
-          if (phase === 'start') b.behavior.onControlTimeStart?.();
-          else if (phase === 'stop') b.behavior.onControlTimeStop?.();
-          else b.behavior.onControlTime?.(seconds);
-        });
-      }
-    };
+    simulation.onControlTime = (nodeId, phase, seconds, isCurrent) =>
+      this.behaviors.controlTime(nodeId, phase, seconds, isCurrent);
     this.materialOrder = new Map(simulation.pack.document.materials.map((m, i) => [m.id, i]));
     this.environment = copyEnvironment(options.particleEnvironment);
     this.renderEnvironment = copyRenderEnvironment(options.renderEnvironment);
@@ -486,15 +466,15 @@ export class EffectInstance {
   setNodeActive(id: number, active: boolean): void {
     this.assertAlive();
     this.simulation.setNodeActive(id, active);
-    this.syncBehaviors();
+    this.behaviors.syncActivation();
     this.render();
   }
   play(): void {
     this.assertAlive();
     this.simulation.play();
     if (this.disposed) return;
-    this.restoreDestroyedBehaviors();
-    this.syncBehaviors();
+    this.behaviors.restore();
+    this.behaviors.syncActivation();
     this.render();
   }
   pause(): void {
@@ -513,8 +493,8 @@ export class EffectInstance {
     this.assertAlive();
     this.simulation.restart();
     if (this.disposed) return;
-    this.restoreDestroyedBehaviors();
-    this.syncBehaviors();
+    this.behaviors.restore();
+    this.behaviors.syncActivation();
     this.render();
   }
   /** Restarts a state by ID or name, applying its initial sample and source speed / cycle offset. */
@@ -523,7 +503,7 @@ export class EffectInstance {
     this.assertAlive();
     this.simulation.applyAnimatorState(animatorId, state, true, layer);
     if (this.disposed) return;
-    this.syncBehaviors();
+    this.behaviors.syncActivation();
     this.render();
   }
   /** Returns a typed controller handle for an Animator component ID. */
@@ -549,7 +529,7 @@ export class EffectInstance {
         () => {
           if (this.disposed) return;
           this.simulation.scene.update();
-          this.syncBehaviors();
+          this.behaviors.syncActivation();
           this.render();
         },
       );
@@ -659,15 +639,14 @@ export class EffectInstance {
       }
     };
     try {
-      this.syncBehaviors();
+      this.behaviors.syncActivation();
       for (const handler of [...this.eventHandlers]) {
         if (this.disposed || revision !== this.eventRevision) break;
         if (this.eventHandlers.has(handler)) invoke(handler);
       }
-      for (const b of this.behaviors) {
+      for (const receiver of this.behaviors.animationReceivers(event)) {
         if (this.disposed || revision !== this.eventRevision) break;
-        if (b.node.id === event.nodeId && b.active && !b.failed && b.behavior.onAnimationEvent)
-          invoke((e) => b.behavior.onAnimationEvent!(e));
+        invoke(receiver);
       }
       const key = event.clipId + ':' + event.animatorId + ':' + event.name;
       if (
@@ -691,7 +670,7 @@ export class EffectInstance {
   update(seconds: number, clocks?: AnimationUpdateOptions): void {
     this.assertAlive();
     check(
-      !this.updating && !this.dispatchingEvent && !this.dispatchingFields,
+      !this.updating && !this.dispatchingEvent && !this.behaviors.notifyingFields,
       'HOST',
       'Recursive effect update is unsupported',
     );
@@ -701,98 +680,17 @@ export class EffectInstance {
       this.simulation.update(seconds, clocks);
       if (this.disposed) return;
       const advanced = this.simulation.time - before;
-      if (advanced > 0)
-        for (const b of this.behaviors) {
-          if (this.disposed) return;
-          if (b.active && !b.failed) b.failed = !this.invoke(() => b.behavior.update?.(advanced));
-        }
+      if (advanced > 0) this.behaviors.update(advanced);
       if (this.disposed) return;
-      this.syncBehaviors();
+      this.behaviors.syncActivation();
       this.render();
     } finally {
       this.updating = false;
     }
   }
-  private invoke(action: () => void): boolean {
-    try {
-      action();
-      return true;
-    } catch (error) {
-      if (this.runtime.scriptErrors === 'throw') throw error;
-      this.simulation.diagnostics.push({
-        code: 'SCRIPT_ERROR',
-        message: error instanceof Error ? error.message : String(error),
-      });
-      return false;
-    }
-  }
-  private restoreDestroyedBehaviors(): void {
-    const ids = new Set<number>();
-    for (let i = this.behaviors.length - 1; i >= 0; i--) {
-      const b = this.behaviors[i]!;
-      if (b.destroyed && !b.node.destroyed && b.componentId !== undefined) {
-        ids.add(b.componentId);
-        this.behaviors.splice(i, 1);
-      }
-    }
-    if (ids.size) this.initializeScripts(ids);
-  }
-  private syncBehaviors(): void {
-    for (const b of this.behaviors) {
-      if (b.destroyed) continue;
-      if (b.node.destroyed) {
-        const active = b.active;
-        b.active = false;
-        b.destroyed = true;
-        if (active && !b.failed) this.invoke(() => b.behavior.onDisable?.());
-        this.invoke(() => b.behavior.destroy?.());
-        continue;
-      }
-      if (b.failed) continue;
-      const active =
-        b.node.activeInHierarchy &&
-        (b.componentId === undefined ||
-          this.simulation.bindings.enabled.get(b.componentId) === true);
-      if (active !== b.active) {
-        b.active = active;
-        b.failed = !this.invoke(() =>
-          active ? b.behavior.onEnable?.() : b.behavior.onDisable?.(),
-        );
-      }
-    }
-  }
-  /** @internal */ initializeScripts(componentIds?: ReadonlySet<number>): void {
-    for (const c of this.simulation.pack.customComponents) {
-      if (componentIds && !componentIds.has(c.id)) continue;
-      const node = this.simulation.scene.nodes.get(c.nodeId);
-      if (!node) continue;
-      const component = c.data as R<CustomComponentT>,
-        identity = component.script;
-      const factory = identity ? this.runtime.getScriptFactory(identity) : undefined;
-      if (!factory) {
-        if (!c.enabled) continue;
-        this.simulation.diagnostics.push({
-          code: 'UNKNOWN_SCRIPT',
-          componentId: c.id,
-          message: `No factory for ${identity ? `${identity.namespace}.${identity.className}` : 'unresolved script'}; serialized data retained.`,
-        });
-        continue;
-      }
-      this.invoke(() => {
-        const behavior = factory({
-          effect: this,
-          node: this.getNode(node.id)!,
-          component,
-          fields: this.simulation.bindings.scriptFields.get(c.id)!,
-        });
-        check(
-          behavior && typeof behavior === 'object',
-          'HOST',
-          'Script factory must return a behavior object',
-        );
-        this.behaviors.push({ node, behavior, componentId: c.id, active: false, failed: false });
-      });
-    }
+  /** @internal Called after render resources are ready for host callbacks. */
+  initializeScripts(): void {
+    this.behaviors.initialize();
   }
   /** @internal */ addAuxiliaryMesh(mesh: SceneMesh): void {
     this.auxiliaryMeshes.push(mesh);
@@ -873,7 +771,8 @@ export class EffectInstance {
     this.container.boundsArea = bounds;
   }
   private render(): void {
-    this.dispatchScriptFields();
+    const revision = this.eventRevision;
+    this.behaviors.notifyFields(() => revision === this.eventRevision);
     if (this.disposed) return;
     for (const emitter of this.simulation.emitters.values()) emitter.lights?.sync(emitter);
     this.syncLayoutBounds();
@@ -970,28 +869,6 @@ export class EffectInstance {
       if (parent.children[index] !== mesh) parent.setChildIndex(mesh, index);
     }
   }
-  private dispatchScriptFields(): void {
-    if (this.dispatchingFields || this.disposed) return;
-    const pending = this.simulation.bindings.pendingScriptFields;
-    if (!pending.size) return;
-    const batch = [...pending].map(([id, fields]) => [id, [...fields]] as const);
-    pending.clear();
-    const revision = this.eventRevision;
-    this.dispatchingFields = true;
-    try {
-      for (const [id, fields] of batch) {
-        const behavior = this.behaviors.find((b) => b.componentId === id);
-        if (!behavior || behavior.failed || behavior.destroyed) continue;
-        for (const [name, value] of fields) {
-          if (this.disposed || revision !== this.eventRevision) return;
-          behavior.failed = !this.invoke(() => behavior.behavior.onAnimatedField?.(name, value));
-          if (behavior.failed) break;
-        }
-      }
-    } finally {
-      this.dispatchingFields = false;
-    }
-  }
   destroy(): void {
     this.eventRevision++;
     if (this.disposed) return;
@@ -999,23 +876,9 @@ export class EffectInstance {
     this.destroying = true;
     let failure: unknown;
     try {
-      this.simulation.disposeDirectors();
+      this.behaviors.destroy(() => this.simulation.disposeDirectors());
     } catch (error) {
       failure = error;
-    }
-    for (const b of this.behaviors) {
-      if (b.destroyed) continue;
-      b.destroyed = true;
-      try {
-        if (b.active && !b.failed) this.invoke(() => b.behavior.onDisable?.());
-      } catch (error) {
-        failure ??= error;
-      }
-      try {
-        this.invoke(() => b.behavior.destroy?.());
-      } catch (error) {
-        failure ??= error;
-      }
     }
     this.destroying = false;
     for (const mesh of this.meshes) mesh.destroy();
@@ -1043,7 +906,6 @@ export class EffectInstance {
     this.simulation.onParticleTrigger = undefined;
     this.simulation.onParticleCollision = undefined;
     this.simulation.onAnimationEvent = undefined;
-    this.behaviors.length = 0;
     this.container.destroy();
     this.releaseTextures();
     this.runtime.forget(this);

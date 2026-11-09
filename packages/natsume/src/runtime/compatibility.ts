@@ -48,7 +48,7 @@ import type { CustomComponentT } from '../format/generated/noa/ir/custom-compone
 import { ComponentData as C } from '../format/generated/noa/ir/component-data.js';
 import { CameraPolicy } from '../format/generated/noa/ir/camera-policy.js';
 import { ColorSpace } from '../format/generated/noa/ir/color-space.js';
-import { copyEnvironment } from '../rendering/particle-environment.js';
+import { particleEnvironmentSupport } from '../rendering/particle-environment.js';
 import { rendererSupport, trailRendererSupport } from '../rendering/renderer-support.js';
 import { emitterSupport } from './emitter-support.js';
 import { instancePrewarmWork } from './prewarm.js';
@@ -236,28 +236,7 @@ export function checkCompatibility(
     );
   }
   const env = options.particleEnvironment;
-  if (env)
-    for (const field of [
-      'fog',
-      'gravity',
-      'viewPosition',
-      'viewVelocity',
-      'depth',
-      'softParticles',
-    ] as const) {
-      try {
-        copyEnvironment({ fog: { mode: 'none' }, [field]: env[field] });
-      } catch (error) {
-        if (!(error instanceof NatsumeError)) throw error;
-        global.require(
-          false,
-          error.code,
-          `particleEnvironment.${field}`,
-          field === 'softParticles' ? 'invalid depth texture or UV transform' : env[field],
-          error.message,
-        );
-      }
-    }
+  global.issues.push(...particleEnvironmentSupport(env));
   try {
     copyRenderEnvironment(options.renderEnvironment);
   } catch (error) {
@@ -450,15 +429,6 @@ export function checkCompatibility(
             t.binding!.parameter === ParticleParameter.GravityMultiplier,
         ),
       );
-      rules.require(
-        !animatedGravity ||
-          (source.main!.gravitySource === 1 ? !!env?.gravity2D : !!gravity) ||
-          !!source.main!.gravity,
-        'HOST',
-        'main.gravityMultiplier',
-        source.main!.gravityMultiplier,
-        'Animated gravityMultiplier requires particleEnvironment.gravity',
-      );
       rules.issues.push(
         ...emitterSupport(
           source,
@@ -466,6 +436,7 @@ export function checkCompatibility(
           nodeIds.has(source.main!.customSpaceNodeId),
           env,
           nodeIds,
+          animatedGravity,
         ),
       );
       for (const [index, module] of source.modules.entries()) {

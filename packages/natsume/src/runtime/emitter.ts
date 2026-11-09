@@ -52,6 +52,7 @@ import type { SceneNode } from './scene.js';
 import { maximumLifetime, prewarmDuration } from './prewarm.js';
 export { prewarmDuration } from './prewarm.js';
 import { emitterSupport } from './emitter-support.js';
+import { inspectEmitterEnvironment } from './emitter-environment.js';
 import { assertSupport } from './support-checks.js';
 import type { ParticleSnapshot } from './particle-snapshot.js';
 import { ParticleCollisions } from './particle-collisions.js';
@@ -189,7 +190,20 @@ export class Emitter {
   /** @internal Birth-driven systems emit through parent channels, even after Play(). */
   birthDriven = false;
   /** @internal Timeline owns the clock, and Simulate does not use Play's prewarm. */
-  timelineControlled = false;
+  private controlledByTimeline = false;
+  get timelineControlled(): boolean {
+    return this.controlledByTimeline;
+  }
+  /** @internal Ownership is assigned by the particle graph. */
+  takeTimelineControl(): void {
+    this.controlledByTimeline = true;
+  }
+  /** @internal Restores ordinary playback after all Timeline controls are discarded. */
+  restorePlayback(): void {
+    this.controlledByTimeline = false;
+    this.restorePlaybackSeed();
+    this.reset();
+  }
   onAdvanced: ((seconds: number) => void) | undefined;
   /** @internal A graph defers warming until all participating systems are initialized. */
   onPrewarm: (() => void) | undefined;
@@ -257,7 +271,7 @@ export class Emitter {
         sceneNodes ? new Set(sceneNodes.keys()) : new Set([node.id]),
       ),
     );
-    this.setGravity(this.resolveEnvironment(environment, gravity));
+    this.gravity = this.resolveEnvironment(environment, gravity);
     check(
       main.space !== Space.Custom || customSpaceNode,
       'HOST',
@@ -474,56 +488,19 @@ export class Emitter {
     this.prewarmSeconds = prewarmDuration(this.main, this.source.modules);
     this.maximumBirthLifetime = maximumLifetime(this.main, this.source.modules);
   }
-  setGravity(value: readonly [number, number, number] | undefined): void {
-    this.gravity = this.resolveGravity(value);
-  }
   /** @internal Resolves host inputs before an environment replacement is committed. */
   resolveEnvironment(
     value: ParticleEnvironment | undefined,
     fallbackGravity?: readonly [number, number, number],
   ): readonly [number, number, number] {
-    const velocity = value?.rigidbodyVelocities?.[String(this.main.hostRigidbodyVelocitySlot)];
-    check(
-      this.main.culling !== 1 ||
-        (value?.fixedDeltaSeconds !== undefined &&
-          Number.isFinite(value.fixedDeltaSeconds) &&
-          value.fixedDeltaSeconds > 0),
-      'HOST',
-      'PauseAndCatchup requires particleEnvironment.fixedDeltaSeconds',
+    const result = inspectEmitterEnvironment(
+      this.source,
+      value,
+      fallbackGravity,
+      this.requiresAnimatedGravity,
     );
-    check(
-      this.main.emitterVelocityMode !== EmitterVelocityMode.Rigidbody ||
-        (velocity && velocity.length === 3 && velocity.every(Number.isFinite)),
-      'HOST',
-      `System ${this.id}: missing Rigidbody velocity slot ${this.main.hostRigidbodyVelocitySlot}`,
-    );
-    if (this.externalForces) selectForceFields(this.externalForces, value?.forceFields);
-    const collision = this.collision?.definition;
-    const lightSlot = this.lights?.definition.light?.hostSlot;
-    check(
-      !lightSlot || value?.lights?.[String(lightSlot)],
-      'HOST',
-      `Missing particle light template ${lightSlot}`,
-    );
-    if (this.trigger)
-      for (const reference of this.trigger.definition.colliders)
-        check(
-          !reference.hostSlot || value?.colliders?.[String(reference.hostSlot)]?.sweepSphere,
-          'HOST',
-          `Missing particle collider ${reference.hostSlot}`,
-        );
-    check(
-      !collision ||
-        collision.type === 0 ||
-        value?.physicsWorlds?.[String(collision.hostPhysicsSlot)],
-      'HOST',
-      `System ${this.id}: missing physics world ${collision?.hostPhysicsSlot}`,
-    );
-    return this.resolveGravity(
-      this.main.gravitySource === 1
-        ? value?.gravity2D && [value.gravity2D[0], value.gravity2D[1], 0]
-        : (value?.gravity ?? fallbackGravity),
-    );
+    assertSupport(result.issues);
+    return result.gravity;
   }
   private inheritedVector(offset: number): Float64Array {
     if (this.inheritVelocity!.mode !== 0)
@@ -558,23 +535,6 @@ export class Emitter {
               : 0;
       this.lastVelocityPosition[axis] = m[12 + axis]!;
     }
-  }
-  /** @internal Validates gravity before committing an environment replacement. */
-  resolveGravity(
-    value: readonly [number, number, number] | undefined,
-  ): readonly [number, number, number] {
-    const authored = this.main.gravity;
-    check(
-      (!this.requiresAnimatedGravity && constantZero(this.main.gravityMultiplier)) ||
-        value !== undefined ||
-        authored,
-      'HOST',
-      `System ${this.id}: nonzero gravityMultiplier requires particleEnvironment.gravity`,
-    );
-    const next =
-      value ?? (authored ? ([authored.x, authored.y, authored.z] as const) : ([0, 0, 0] as const));
-    check(next.length === 3 && next.every(Number.isFinite), 'HOST', 'Invalid particle gravity');
-    return next;
   }
   /** Refreshes the coordinate frame without moving particles already stored in that frame. */
   updateSpace(): void {

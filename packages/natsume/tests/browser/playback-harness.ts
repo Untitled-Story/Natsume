@@ -2,7 +2,7 @@ import { Application, type WebGLRenderer } from 'pixi.js';
 import { NatsumeRuntime } from '../../src/runtime/runtime.js';
 
 /** Creates a stopped WebGL2 application for the local package lifecycle runner. */
-export async function createPlaybackHarness() {
+export async function createPlaybackHarness(scriptErrors: 'isolate' | 'throw' = 'isolate') {
   const app = new Application();
   await app.init({
     preference: 'webgl',
@@ -13,6 +13,6 @@ export async function createPlaybackHarness() {
     backgroundAlpha: 0,
     autoStart: false,
   });
-  const runtime = new NatsumeRuntime(app.renderer as WebGLRenderer);
+  const runtime = new NatsumeRuntime(app.renderer as WebGLRenderer, { scriptErrors });
   return { app, runtime };
 }

@@ -311,6 +311,8 @@ effect.setParticleEnvironment({
 
 `viewVelocity` 为视图在 Unity 世界空间中的移动速度，单位为每秒；省略时视图静止。更新显示矩阵时，可同步用 `setParticleEnvironment` 更新它，让 Stretched Billboard 计入视图移动。该方法替换整个环境配置，需要一并保留重力等输入。
 
+预检、实例创建与环境替换使用同一套环境校验规则，包括固定步长、2D 重力、Rigidbody 速度和宿主绑定；即使当前特效暂未使用某个字段，传入的值也必须合法。环境替换会先检查全部输入与当前特效的需求，失败时保留原环境。
+
 `viewPosition` 为视点的 Unity 世界坐标；Facing 对齐和 Freeform Stretch 必须提供，例如 `viewPosition: [0, 0, -10]`。它用于构造粒子的朝向平面与普通 Stretch 的横向，不会自动修改显示矩阵。普通 Stretch 省略该项时使用平行视线近似，并返回诊断。
 
 雾效支持 `none`、`linear`、`exp`、`exp2`。`depth` 也可传 `[a, b, c, d]`，以 Unity 世界坐标计算 `ax + by + cz + d`。当前采用固定 +Z 观察与仿射深度，不提供完整 Unity 相机。

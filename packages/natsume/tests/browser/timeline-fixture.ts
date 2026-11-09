@@ -47,7 +47,30 @@ export async function verifyDirectors() {
 
 export async function verifyControlCancellation() {
   const { app, runtime } = await createPlaybackHarness();
-  const pack = timelinePack((source) => {
+  const calls: string[] = [];
+  const identities = ['first', 'second'].map((name) => {
+    const identity = new ScriptIdentityT('Tests', '', name);
+    runtime.registerScript(identity, ({ effect }) => ({
+      onControlTimeStart() {
+        calls.push(name + ':start');
+        if (name === 'first') effect.getDirector(3).stop();
+      },
+      onControlTime() {
+        calls.push(name + ':sample');
+      },
+      onControlTimeStop() {
+        calls.push(name + ':stop');
+      },
+    }));
+    return identity;
+  });
+  const pack = timelinePack((source, document) => {
+    document.components.push(
+      ...identities.map(
+        (identity, index) =>
+          new ComponentT(20 + index, 4, true, C.CustomComponent, new CustomComponentT(identity)),
+      ),
+    );
     const track = source.timeline!.tracks[0]!;
     track.kind = 3;
     track.target = null;
@@ -67,30 +90,6 @@ export async function verifyControlCancellation() {
   try {
     const effect = await runtime.instantiate(pack);
     const director = effect.getDirector(3);
-    const calls: string[] = [];
-    const internal = effect as unknown as {
-      behaviors: { node: unknown; behavior: unknown; active: boolean; failed: boolean }[];
-    };
-    const sim = (effect as unknown as { simulation: { scene: { nodes: Map<number, unknown> } } })
-      .simulation;
-    for (const name of ['first', 'second'])
-      internal.behaviors.push({
-        node: sim.scene.nodes.get(4),
-        behavior: {
-          onControlTimeStart() {
-            calls.push(name + ':start');
-            if (name === 'first') director.stop();
-          },
-          onControlTime() {
-            calls.push(name + ':sample');
-          },
-          onControlTimeStop() {
-            calls.push(name + ':stop');
-          },
-        },
-        active: true,
-        failed: false,
-      });
     director.setTime(0.5);
     director.evaluate();
     effect.update(0);

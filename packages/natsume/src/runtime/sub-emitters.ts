@@ -5,6 +5,7 @@ import { SubEmitterEvent as Event } from '../format/generated/noa/ir/sub-emitter
 import type { SubEmitterT } from '../format/generated/noa/ir/sub-emitter.js';
 import type { SubEmittersModuleT } from '../format/generated/noa/ir/sub-emitters-module.js';
 import type { Emitter } from './emitter.js';
+import type { SceneNode } from './scene.js';
 import {
   particleInheritanceSnapshot as particleSnapshot,
   type ParticleSnapshot,
@@ -43,10 +44,16 @@ interface PendingBirth {
   readonly warmEvent?: Event;
 }
 
+/** Pools and operations owned by one Timeline particle root. */
+export interface ControlledParticleScope {
+  readonly root: Emitter;
+  readonly systems: readonly Emitter[];
+  reset(): void;
+  step(seconds: number): void;
+}
+
 /** Ordered DAG scheduling; channels share each target's original particle pool. */
 export class SubEmitterGraph {
-  /** @internal Pools driven by a Timeline graph do not also run in the ordinary fixed step. */
-  readonly externallyControlled = new Set<number>();
   readonly order: readonly Emitter[];
   private readonly slots = new Map<number, readonly R<SubEmitterT>[]>();
   private readonly channels: BirthChannel[] = [];
@@ -224,6 +231,56 @@ export class SubEmitterGraph {
       if (id !== systemId && this.emitters.get(id)!.graphPlaying) return true;
     return false;
   }
+
+  /** Claims existing pools; releasing a clip leaves them paused until resetPlayback(). */
+  claimTimelineControl(
+    node: SceneNode,
+    search: boolean,
+    seed: number,
+  ): readonly ControlledParticleScope[] {
+    const onRoot = [...this.emitters.values()].some((e) => e.node === node);
+    const candidates = [...this.emitters.values()].filter((emitter) => {
+      if (!search && !onRoot) return false;
+      for (let parent: SceneNode | undefined = emitter.node; parent; parent = parent.parent)
+        if (parent === node) return true;
+      return false;
+    });
+    const excluded = new Set(
+      candidates.flatMap((e) => (this.slots.get(e.id) ?? []).map((edge) => edge.systemComponentId)),
+    );
+    const roots = candidates.filter((e) => !excluded.has(e.id));
+    const scopes = roots.map((root) => {
+      const scope = this.descendants.get(root.id)!;
+      const systems = this.order.filter((e) => scope.has(e.id));
+      for (const emitter of systems) emitter.takeTimelineControl();
+      return {
+        root,
+        systems,
+        reset: () => {
+          for (const emitter of systems) {
+            emitter.reset();
+            emitter.sync();
+            emitter.start(false);
+          }
+        },
+        step: (seconds: number) => this.stepControlled(seconds, scope),
+      };
+    });
+    const seedSystem = (emitter: Emitter, value: number) => {
+      emitter.setPlaybackSeed(value);
+      emitter.reset();
+      for (const edge of this.slots.get(emitter.id) ?? [])
+        if (edge.systemComponentId) seedSystem(this.emitters.get(edge.systemComponentId)!, ++value);
+    };
+    // Independent roots share the seed; only sub-emitter edges increment it.
+    for (const root of roots) seedSystem(root, Math.max(1, seed));
+    return scopes;
+  }
+
+  resetPlayback(): void {
+    this.clear();
+    for (const emitter of this.emitters.values()) emitter.restorePlayback();
+  }
   beginHostUpdate(scaledDelta: number): void {
     this.hostFrame = ++this.hostSequence;
     this.hostScaledDelta = scaledDelta;
@@ -285,7 +342,7 @@ export class SubEmitterGraph {
     this.orderedDelta = delta;
     try {
       for (const id of order) {
-        if (this.externallyControlled.has(id)) continue;
+        if (this.emitters.get(id)!.timelineControlled) continue;
         const remaining = this.visits.get(id)!;
         if (!remaining) continue;
         this.visits.set(id, remaining - 1);
@@ -396,7 +453,7 @@ export class SubEmitterGraph {
   ): void {
     for (const emitter of this.order) {
       if (scope && !scope.has(emitter.id)) continue;
-      if (!controlled && this.externallyControlled.has(emitter.id)) continue;
+      if (!controlled && emitter.timelineControlled) continue;
       this.flush(this.before, emitter.id);
       this.advancing = emitter;
       this.warmingStep = warming !== undefined;
@@ -421,7 +478,7 @@ export class SubEmitterGraph {
   }
 
   /** @internal Runs an explicit Timeline-owned pool scope, including descendant births. */
-  stepControlled(delta: number, scope: ReadonlySet<number>): void {
+  private stepControlled(delta: number, scope: ReadonlySet<number>): void {
     this.stepScope(delta, scope, undefined, 0, true);
     for (const id of scope) this.flush(this.after, id);
   }

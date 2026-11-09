@@ -77,7 +77,7 @@ it('explicitly starts authored manual systems without enabling nodes or bypassin
   expect(sim.particleCount).toBe(5);
   sim.restart();
   expect(sim.particleCount).toBe(0);
-  sim.emitters.get(5)!.timelineControlled = true;
+  sim.subEmitters.claimTimelineControl(sim.scene.nodes.get(2)!, false, 42);
   expect(() => sim.playParticleSystem(4)).toThrow('Timeline owns');
   expect(sim.particleCount).toBe(0);
   sim.pause();

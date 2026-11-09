@@ -11,11 +11,8 @@ import { constantZero, parameterSupport } from './parameters.js';
 import { prewarmDuration } from './prewarm.js';
 import type { ParticleEnvironment } from '../rendering/particle-environment.js';
 import { SupportChecks, type SupportIssue } from './support-checks.js';
-import type { ExternalForcesModuleT } from '../format/generated/noa/ir/external-forces-module.js';
-import { selectForceFields } from './particle-force-fields.js';
+import { inspectEmitterEnvironment } from './emitter-environment.js';
 import type { CollisionModuleT } from '../format/generated/noa/ir/collision-module.js';
-import type { TriggerModuleT } from '../format/generated/noa/ir/trigger-module.js';
-import type { LightsModuleT } from '../format/generated/noa/ir/lights-module.js';
 
 export function emitterSupport(
   source: R<ParticleSystemT>,
@@ -23,39 +20,14 @@ export function emitterSupport(
   customSpaceAvailable: boolean,
   environment?: ParticleEnvironment,
   sceneNodeIds?: ReadonlySet<number>,
+  animatedGravity = false,
 ): readonly SupportIssue[] {
   const rules = new SupportChecks();
   rules.issues.push(...parameterSupport(source));
+  rules.issues.push(
+    ...inspectEmitterEnvironment(source, environment, gravity, animatedGravity).issues,
+  );
   const main = source.main!;
-  rules.require(
-    main.culling !== 1 ||
-      (environment?.fixedDeltaSeconds !== undefined &&
-        Number.isFinite(environment.fixedDeltaSeconds) &&
-        environment.fixedDeltaSeconds > 0),
-    'HOST',
-    'particleEnvironment.fixedDeltaSeconds',
-    environment?.fixedDeltaSeconds,
-    'PauseAndCatchup requires particleEnvironment.fixedDeltaSeconds',
-  );
-  rules.require(
-    main.emitterVelocityMode !== 1 ||
-      environment?.rigidbodyVelocities?.[String(main.hostRigidbodyVelocitySlot)] !== undefined,
-    'HOST',
-    'main.hostRigidbodyVelocitySlot',
-    main.hostRigidbodyVelocitySlot,
-    'Emitter requires a bound host Rigidbody velocity',
-  );
-  rules.require(
-    constantZero(main.gravityMultiplier) ||
-      (main.gravitySource === 1
-        ? environment?.gravity2D !== undefined
-        : gravity !== undefined || environment?.gravity !== undefined) ||
-      main.gravity,
-    'HOST',
-    'main.gravityMultiplier',
-    main.gravityMultiplier,
-    'Nonzero gravityMultiplier requires particleEnvironment.gravity',
-  );
   rules.require(
     main.space !== Space.Custom || customSpaceAvailable,
     'HOST',
@@ -120,19 +92,6 @@ export function emitterSupport(
       module.dataType,
       'Unsupported particle module',
     );
-    if (module.dataType === M.ExternalForcesModule) {
-      try {
-        selectForceFields(module.data as R<ExternalForcesModuleT>, environment?.forceFields);
-      } catch (error) {
-        rules.require(
-          false,
-          'HOST',
-          `${path}.influences`,
-          module.data,
-          error instanceof Error ? error.message : 'Missing host force fields',
-        );
-      }
-    }
     if (module.dataType === M.CollisionModule) {
       const collision = module.data as R<CollisionModuleT>;
       if (collision.type === 1 && collision.quality !== 0)
@@ -151,32 +110,6 @@ export function emitterSupport(
             id,
             'Collision plane is outside this instance',
           );
-      rules.require(
-        collision.type === 0 || environment?.physicsWorlds?.[String(collision.hostPhysicsSlot)],
-        'HOST',
-        `${path}.hostPhysicsSlot`,
-        collision.hostPhysicsSlot,
-        'Missing host particle physics world',
-      );
-    }
-    if (module.dataType === M.TriggerModule)
-      for (const [slot, reference] of (module.data as R<TriggerModuleT>).colliders.entries())
-        rules.require(
-          !reference.hostSlot || environment?.colliders?.[String(reference.hostSlot)]?.sweepSphere,
-          'HOST',
-          `${path}.colliders.${slot}.hostSlot`,
-          reference.hostSlot,
-          'Missing host particle collider',
-        );
-    if (module.dataType === M.LightsModule) {
-      const slot = (module.data as R<LightsModuleT>).light?.hostSlot;
-      rules.require(
-        !slot || environment?.lights?.[String(slot)],
-        'HOST',
-        `${path}.light.hostSlot`,
-        slot,
-        'Missing host particle light template',
-      );
     }
     if (module.dataType === M.EmissionModule) {
       const emission = module.data as R<EmissionModuleT>;

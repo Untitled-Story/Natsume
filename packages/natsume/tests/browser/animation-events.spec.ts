@@ -1,14 +1,26 @@
-import { existsSync } from 'node:fs';
 import { test, expect } from '@playwright/test';
+
+test('keeps message errors isolated under throw policy and completes all destruction callbacks', async ({
+  page,
+}) => {
+  await page.goto('/');
+  const result = await page.evaluate(
+    async (path) => (await import('/@fs' + path)).verifyThrowingScriptLifecycle(),
+    new URL('./animation-events-fixture.ts', import.meta.url).pathname,
+  );
+  expect(result).toEqual({
+    eventIsolated: true,
+    updateThrown: true,
+    destroyThrown: true,
+    destroyed: [1, 2],
+    disposed: true,
+  });
+});
 
 test('dispatches animation messages with cancellation, error isolation and receiver diagnostics', async ({
   page,
 }) => {
-  const sample = new URL('../../../../data/kirakira.noap', import.meta.url).pathname;
-  test.skip(!existsSync(sample), 'Local sample is absent');
   await page.goto('/');
-  await page.locator('#file').setInputFiles(sample);
-  await expect(page.locator('#status')).toHaveText('预览就绪');
   const result = await page.evaluate(
     async (path) => (await import('/@fs' + path)).verifyAnimationEvents(),
     new URL('./animation-events-fixture.ts', import.meta.url).pathname,

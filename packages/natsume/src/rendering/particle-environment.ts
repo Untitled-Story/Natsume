@@ -1,5 +1,6 @@
 import { Texture } from 'pixi.js';
-import { check } from '../errors.js';
+import { NatsumeError } from '../errors.js';
+import { SupportChecks, assertSupport, type SupportIssue } from '../runtime/support-checks.js';
 import { copyForceFields, type ParticleForceFields } from '../runtime/particle-force-fields.js';
 import type { ParticlePhysicsWorld, ParticleCollider } from '../runtime/particle-physics.js';
 import type { ParticleLightTemplate } from '../runtime/particle-lights.js';
@@ -55,64 +56,71 @@ export interface ParticleEnvironment {
     | undefined;
 }
 
-/** Validates and copies values; the host may update texture contents in place. */
-export function copyEnvironment(
+/** Shared structural checks for preflight, creation and atomic replacement. */
+export function particleEnvironmentSupport(
   value: ParticleEnvironment | undefined,
-): ParticleEnvironment | undefined {
-  if (!value) return;
-  check(
+): readonly SupportIssue[] {
+  if (!value) return [];
+  const rules = new SupportChecks();
+  const checkField = (condition: unknown, field: keyof ParticleEnvironment, message: string) =>
+    rules.require(
+      condition,
+      'HOST',
+      `particleEnvironment.${field}`,
+      field === 'softParticles' ? 'invalid depth texture or UV transform' : value[field],
+      message,
+    );
+  checkField(
     value.fixedDeltaSeconds === undefined ||
       (Number.isFinite(value.fixedDeltaSeconds) && value.fixedDeltaSeconds > 0),
-    'HOST',
+    'fixedDeltaSeconds',
     'Particle fixedDeltaSeconds must be finite and positive',
   );
   const f = value.fog;
-  check(
+  checkField(
     f && ['none', 'linear', 'exp', 'exp2'].includes(f.mode),
-    'HOST',
+    'fog',
     'Invalid particle fog mode',
   );
-  if (f.mode !== 'none') {
-    check(
+  if (f && f.mode !== 'none') {
+    checkField(
       Array.isArray(f.color) &&
         f.color.length === 3 &&
         f.color.every((v) => Number.isFinite(v) && v >= 0),
-      'HOST',
+      'fog',
       'Fog color requires three nonnegative values in source working color space',
     );
     if (f.mode === 'linear')
-      check(
+      checkField(
         Number.isFinite(f.start) && Number.isFinite(f.end) && f.end > f.start,
-        'HOST',
+        'fog',
         'Fog end must exceed start',
       );
-    else check(Number.isFinite(f.density) && f.density >= 0, 'HOST', 'Invalid fog density');
+    else checkField(Number.isFinite(f.density) && f.density >= 0, 'fog', 'Invalid fog density');
   }
   const g = value.gravity;
-  check(
+  checkField(
     g === undefined || (Array.isArray(g) && g.length === 3 && g.every(Number.isFinite)),
-    'HOST',
+    'gravity',
     'Invalid particle gravity',
   );
   const g2 = value.gravity2D;
-  check(
+  checkField(
     g2 === undefined || (Array.isArray(g2) && g2.length === 2 && g2.every(Number.isFinite)),
-    'HOST',
+    'gravity2D',
     'Invalid Physics2D gravity',
   );
-  const velocities: Record<string, readonly [number, number, number]> = Object.create(null);
   if (value.rigidbodyVelocities)
     for (const [slot, v] of Object.entries(value.rigidbodyVelocities)) {
-      check(
+      checkField(
         slot.length > 0 && Array.isArray(v) && v.length === 3 && v.every(Number.isFinite),
-        'HOST',
+        'rigidbodyVelocities',
         'Rigidbody velocity requires three finite world-space components',
       );
-      velocities[slot] = [v[0], v[1], v[2]];
     }
   const d = value.depth;
   for (const [slot, template] of Object.entries(value.lights ?? {}))
-    check(
+    checkField(
       slot.length > 0 &&
         template &&
         typeof template.create === 'function' &&
@@ -123,17 +131,17 @@ export function copyEnvironment(
         template.range >= 0 &&
         Number.isFinite(template.intensity) &&
         template.intensity >= 0,
-      'HOST',
+      'lights',
       'Invalid particle light template',
     );
   for (const [slot, world] of Object.entries(value.physicsWorlds ?? {}))
-    check(
+    checkField(
       slot.length > 0 && world && typeof world.sweepSphere === 'function',
-      'HOST',
+      'physicsWorlds',
       'Invalid particle physics world',
     );
   for (const [slot, collider] of Object.entries(value.colliders ?? {}))
-    check(
+    checkField(
       slot.length > 0 &&
         collider &&
         typeof collider.id === 'string' &&
@@ -144,49 +152,76 @@ export function copyEnvironment(
         typeof collider.overlapSphere === 'function' &&
         (collider.sweepSphere === undefined || typeof collider.sweepSphere === 'function') &&
         (collider.applyForce === undefined || typeof collider.applyForce === 'function'),
-      'HOST',
+      'colliders',
       'Invalid particle collider',
     );
   const velocity = value.viewVelocity;
   const position = value.viewPosition;
-  check(
+  checkField(
     position === undefined ||
       (Array.isArray(position) && position.length === 3 && position.every(Number.isFinite)),
-    'HOST',
+    'viewPosition',
     'View position requires three finite world-space components',
   );
-  check(
+  checkField(
     velocity === undefined ||
       (Array.isArray(velocity) && velocity.length === 3 && velocity.every(Number.isFinite)),
-    'HOST',
+    'viewVelocity',
     'View velocity requires three finite world-space components',
   );
-  check(
+  checkField(
     d === undefined ||
       (typeof d === 'number'
         ? Number.isFinite(d)
         : Array.isArray(d) && d.length === 4 && d.every(Number.isFinite)),
-    'HOST',
+    'depth',
     'Invalid particle depth',
   );
   const soft = value.softParticles;
   if (soft) {
-    check(
+    checkField(
       soft.depthTexture instanceof Texture &&
         !soft.depthTexture.destroyed &&
         soft.depthTexture.source.format !== 'depth24plus',
-      'HOST',
+      'softParticles',
       'Soft particles require a live color texture containing linear depth in R',
     );
-    check(
+    checkField(
       !soft.uvTransform ||
         (Array.isArray(soft.uvTransform) &&
           soft.uvTransform.length === 4 &&
           soft.uvTransform.every(Number.isFinite)),
-      'HOST',
+      'softParticles',
       'Invalid depth UV transform',
     );
   }
+  try {
+    copyForceFields(value.forceFields);
+  } catch (error) {
+    if (!(error instanceof NatsumeError)) throw error;
+    checkField(false, 'forceFields', error.message);
+  }
+  return rules.issues;
+}
+
+/** Validates and copies values; textures and host callbacks stay borrowed. */
+export function copyEnvironment(
+  value: ParticleEnvironment | undefined,
+): ParticleEnvironment | undefined {
+  assertSupport(particleEnvironmentSupport(value));
+  if (!value) return;
+  const {
+    fog: f,
+    gravity: g,
+    gravity2D: g2,
+    viewVelocity: velocity,
+    viewPosition: position,
+    depth: d,
+    softParticles: soft,
+  } = value;
+  const velocities: Record<string, readonly [number, number, number]> = Object.create(null);
+  for (const [slot, v] of Object.entries(value.rigidbodyVelocities ?? {}))
+    velocities[slot] = [v[0], v[1], v[2]];
   return {
     fog: f.mode === 'none' ? { mode: 'none' } : { ...f, color: [...f.color] },
     fixedDeltaSeconds: value.fixedDeltaSeconds,
