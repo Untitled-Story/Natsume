@@ -27,6 +27,7 @@ export default defineConfig({
           text: '基础',
           items: [
             { text: '加载与预检', link: '/guide/loading-packs' },
+            { text: '创建实例', link: '/guide/instantiating' },
             { text: '播放与更新', link: '/guide/playback' },
             { text: '环境配置', link: '/guide/environments' },
             { text: '诊断与错误', link: '/guide/diagnostics' },

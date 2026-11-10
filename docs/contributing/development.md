@@ -100,6 +100,9 @@ pnpm lint
 pnpm format:check
 pnpm test
 pnpm test:browser
+pnpm build && pnpm --filter natsume check:declarations
 ```
+
+最后一条构建运行库，并用严格的库检查对生成的类型声明做类型检查，防止声明引用了已被移除的内部类型。
 
 较慢的原生对照用例在并行运行时可能超过默认的超时，可以单独运行，或用 `--timeout` 加大超时。
