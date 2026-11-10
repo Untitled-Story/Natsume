@@ -3,7 +3,7 @@
 ## 加载资源包
 
 ```ts
-import { loadPack } from 'natsume';
+import { loadPack } from '@untitled-story/natsume';
 
 const pack = await loadPack('/effects/example.noap');
 ```

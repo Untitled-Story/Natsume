@@ -9,16 +9,13 @@
 - 一个由 [Noa](https://github.com/Untitled-Story/Noa) 编译的 `.noap` 资源包。
 - 支持 `crypto.subtle` 的环境。加载时用它校验文件的 SHA-256，浏览器里通常需要 HTTPS 或 localhost。
 
-Natsume 目前是私有 workspace 包，没有发布到 npm。在 workspace 内部使用时，把它声明为依赖：
+## 安装
 
-```json
-{
-  "dependencies": {
-    "natsume": "workspace:*",
-    "pixi.js": "8.22.0"
-  }
-}
+```sh
+npm install @untitled-story/natsume pixi.js
 ```
+
+`pixi.js` 是对等依赖，需要由宿主安装。
 
 ## 加载并播放
 
@@ -30,7 +27,7 @@ import {
   screenCanvasEnvironment,
   screenParticleEnvironment,
   stationaryRigidbodyVelocities,
-} from 'natsume';
+} from '@untitled-story/natsume';
 
 extensions.add(NatsumePlugin); // 必须在 app.init() 之前注册
 

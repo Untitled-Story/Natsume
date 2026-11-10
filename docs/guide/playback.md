@@ -78,7 +78,7 @@ effect.update(deltaSeconds, {
 如果宿主没有现成的物理步，可以用 `FixedStepClock` 把帧时间切成固定的步：
 
 ```ts
-import { FixedStepClock } from 'natsume';
+import { FixedStepClock } from '@untitled-story/natsume';
 
 const physics = new FixedStepClock(0.02, 8); // 步长（秒），每帧最多步数
 effect.update(deltaSeconds, { physicsSteps: physics.advance(deltaSeconds) });

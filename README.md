@@ -10,13 +10,17 @@ Unity Prefab → Noa → NOAP (Noa Package) → Natsume → PixiJS
 
 每个特效实例提供独立的 Pixi 容器，宿主可以自行定位、缩放和裁剪。自定义 MonoBehaviour 的序列化数据通过 Script Bridge 提供给宿主，由宿主实现对应行为。
 
-项目处于早期开发阶段，只支持部分 Unity 特性，目前是私有 workspace 包，尚未发布到 npm。未支持的运行配置会在预检或实例化时报告错误。
+当前是预发布版本（alpha），只支持一部分 Unity 特性，范围见[支持范围](docs/reference/support.md)。未支持的运行配置会在预检或实例化时报告错误。
 
 ## 快速开始
 
+```sh
+npm install @untitled-story/natsume pixi.js
+```
+
 ```ts
 import { Application, extensions } from 'pixi.js';
-import { loadPack, NatsumePlugin } from 'natsume';
+import { loadPack, NatsumePlugin } from '@untitled-story/natsume';
 
 extensions.add(NatsumePlugin);
 

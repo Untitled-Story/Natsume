@@ -26,7 +26,7 @@ Natsume 用三种方式报告问题：抛出错误、预检报告和实例诊断
 | `DISPOSED`   | 访问了已销毁的包、实例或运行时。                      |
 
 ```ts
-import { NatsumeError, NatsumeCompatibilityError } from 'natsume';
+import { NatsumeError, NatsumeCompatibilityError } from '@untitled-story/natsume';
 
 try {
   await runtime.instantiate(pack, options);

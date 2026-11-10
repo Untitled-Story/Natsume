@@ -52,7 +52,7 @@ import {
   screenCanvasEnvironment,
   screenParticleEnvironment,
   stationaryRigidbodyVelocities,
-} from 'natsume';
+} from '@untitled-story/natsume';
 
 const effect = await runtime.instantiate(pack, {
   particleEnvironment: screenParticleEnvironment({

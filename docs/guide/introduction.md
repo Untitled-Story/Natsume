@@ -16,9 +16,8 @@ Natsume 不是 Unity 的完整移植。它不运行 C# 代码，不提供完整�
 
 ## 项目状态
 
-项目处于早期开发阶段，只支持一部分 Unity 特性。
+Natsume 目前以预发布版本（alpha）提供，只支持一部分 Unity 特性，公开 API 在 1.0 正式版之前可能调整。
 
-- 当前是私有 workspace 包，尚未发布到 npm。
 - 已支持的粒子模块、动画和渲染范围见[支持范围](/reference/support)。
 - 未支持的运行配置会在预检或实例化时报告错误，不会静默降级。
 - Noise 等近似行为的适用范围和误差见 [Unity 行为差异](/reference/unity-differences)。
