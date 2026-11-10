@@ -1,4 +1,5 @@
 import { defineConfig } from 'vitepress';
+import typedocSidebar from '../reference/api/typedoc-sidebar.json';
 
 export default defineConfig({
   title: 'Natsume',
@@ -7,9 +8,62 @@ export default defineConfig({
   cleanUrls: true,
   lastUpdated: true,
   themeConfig: {
-    nav: [{ text: '指南', link: '/guide/introduction' }],
+    nav: [
+      { text: '指南', link: '/guide/introduction' },
+      { text: '参考', link: '/reference/support' },
+      { text: '贡献', link: '/contributing/development' },
+    ],
     sidebar: {
-      '/guide/': [{ text: '开始', items: [{ text: '简介', link: '/guide/introduction' }] }],
+      '/guide/': [
+        {
+          text: '开始',
+          items: [
+            { text: '简介', link: '/guide/introduction' },
+            { text: '快速开始', link: '/guide/getting-started' },
+            { text: '核心概念', link: '/guide/concepts' },
+          ],
+        },
+        {
+          text: '基础',
+          items: [
+            { text: '加载与预检', link: '/guide/loading-packs' },
+            { text: '播放与更新', link: '/guide/playback' },
+            { text: '环境配置', link: '/guide/environments' },
+            { text: '诊断与错误', link: '/guide/diagnostics' },
+          ],
+        },
+        {
+          text: '功能',
+          items: [
+            { text: '场景绘制', link: '/guide/rendering' },
+            { text: '粒子系统', link: '/guide/particles' },
+            { text: '动画', link: '/guide/animation' },
+            { text: 'Timeline', link: '/guide/timeline' },
+            { text: '宿主行为与 Script Bridge', link: '/guide/behaviors' },
+          ],
+        },
+      ],
+      '/reference/': [
+        {
+          text: '参考',
+          items: [
+            { text: '支持范围', link: '/reference/support' },
+            { text: 'Unity 行为差异', link: '/reference/unity-differences' },
+            { text: '包格式', link: '/reference/package-format' },
+          ],
+        },
+        { text: 'API 参考', link: '/reference/api/', items: typedocSidebar },
+      ],
+      '/contributing/': [
+        {
+          text: '贡献',
+          items: [
+            { text: '开发环境', link: '/contributing/development' },
+            { text: '架构', link: '/contributing/architecture' },
+            { text: '测试与验证', link: '/contributing/testing' },
+          ],
+        },
+      ],
     },
     socialLinks: [{ icon: 'github', link: 'https://github.com/Untitled-Story/Natsume' }],
     search: {
