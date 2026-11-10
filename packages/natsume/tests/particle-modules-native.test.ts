@@ -5,7 +5,7 @@ import { Emitter } from '../src/runtime/emitter.js';
 import * as I from '../src/format/generated/noa/ir.js';
 import { archive } from './helpers.js';
 import { constant, linear, vector, particleSource, manualParticle } from './particle-fixtures.js';
-import { readNativeFixture } from './native-fixture.js';
+import { readNativeFixture, hasNativeFixture } from './native-fixture.js';
 import { recordError } from './measurement.js';
 
 type V = { x: number; y: number; z: number };
@@ -236,87 +236,90 @@ it('matches native lifetime-by-emitter-speed and Initial/Current inheritance', a
   }
 });
 
-it('matches native independent-axis random force moments and per-frame variance', async () => {
-  const data: {
-    random: {
-      perFrame: boolean;
-      curves: boolean;
-      dt: number;
-      samples: { frame: number; mean: V; variance: V; covariance: V }[];
-    }[];
-  } = JSON.parse(readNativeFixture('unity-particle-modules.json'));
-  const pack = await loadPack(await archive());
-  try {
-    for (const row of data.random ?? []) {
-      const source = particleSource();
-      source.main!.maxParticles = 4096;
-      const f = new I.ForceModuleT(vector());
-      f.randomizePerFrame = row.perFrame;
-      const endpoints = [
-        [0.2, 1.8, 0.6, 2.4],
-        [-0.5, 2.5, 0.1, 3.5],
-        [0.4, 1.2, 0.5, 1.7],
-      ];
-      for (const [axis, key] of (['x', 'y', 'z'] as const).entries()) {
-        const [a, b, c, d] = endpoints[axis]!;
-        const p = constant(0);
-        p.mode = row.curves ? I.ScalarMode.TwoCurves : I.ScalarMode.TwoConstants;
-        p.constantMin = a!;
-        p.constantMax = b!;
-        if (row.curves) {
-          p.curveMin = linear(a!, c!).curveMax;
-          p.curveMax = linear(b!, d!).curveMax;
-        }
-        f.force![key] = p;
-      }
-      source.modules.push(new I.ParticleModuleT(I.ParticleModuleData.ForceModule, f));
-      const e = new Emitter(5, new Scene(pack, [1]).nodes.get(1)!, source, true, 12345, []);
-      e.sync();
-      e.emitting = false;
-      e.count = 4096;
-      e.lifetimes.fill(4);
-      for (let i = 0; i < e.count; i++) e.serials[i] = i;
-      for (let frame = 1; frame <= 12; frame++) {
-        e.step(row.dt);
-        const sample = row.samples.find((s) => s.frame === frame);
-        if (!sample) continue;
-        const mean = [0, 0, 0],
-          square = [0, 0, 0],
-          cross = [0, 0, 0];
-        for (let i = 0; i < e.count; i++)
-          for (let a = 0; a < 3; a++) {
-            const v = e.velocities[i * 3 + a]!;
-            mean[a]! += v / e.count;
-            square[a]! += (v * v) / e.count;
-            cross[a]! += (v * e.velocities[i * 3 + ((a + 1) % 3)]!) / e.count;
+it.skipIf(!hasNativeFixture('unity-particle-modules.json'))(
+  'matches native independent-axis random force moments and per-frame variance',
+  async () => {
+    const data: {
+      random: {
+        perFrame: boolean;
+        curves: boolean;
+        dt: number;
+        samples: { frame: number; mean: V; variance: V; covariance: V }[];
+      }[];
+    } = JSON.parse(readNativeFixture('unity-particle-modules.json'));
+    const pack = await loadPack(await archive());
+    try {
+      for (const row of data.random ?? []) {
+        const source = particleSource();
+        source.main!.maxParticles = 4096;
+        const f = new I.ForceModuleT(vector());
+        f.randomizePerFrame = row.perFrame;
+        const endpoints = [
+          [0.2, 1.8, 0.6, 2.4],
+          [-0.5, 2.5, 0.1, 3.5],
+          [0.4, 1.2, 0.5, 1.7],
+        ];
+        for (const [axis, key] of (['x', 'y', 'z'] as const).entries()) {
+          const [a, b, c, d] = endpoints[axis]!;
+          const p = constant(0);
+          p.mode = row.curves ? I.ScalarMode.TwoCurves : I.ScalarMode.TwoConstants;
+          p.constantMin = a!;
+          p.constantMax = b!;
+          if (row.curves) {
+            p.curveMin = linear(a!, c!).curveMax;
+            p.curveMax = linear(b!, d!).curveMax;
           }
-        const variance = square.map((v, a) => v - mean[a]! ** 2);
-        for (const [a, key] of (['x', 'y', 'z'] as const).entries()) {
-          const meanError =
-            Math.abs(mean[a]! - sample.mean[key]) / Math.max(1e-9, Math.abs(sample.mean[key]));
-          const varianceError =
-            Math.abs(variance[a]! - sample.variance[key]) / Math.max(1e-12, sample.variance[key]);
-          const covariance = cross[a]! - mean[a]! * mean[(a + 1) % 3]!;
-          const covarianceError =
-            Math.abs(covariance - sample.covariance[key]) /
-            Math.sqrt(variance[a]! * variance[(a + 1) % 3]!);
-          for (const [metric, error] of [
-            ['mean-relative', meanError],
-            ['variance-relative', varianceError],
-            ['covariance-normalized', covarianceError],
-          ] as const) {
-            recordError(
-              'particle.force.random.' + metric,
-              error,
-              'ratio',
-              `${row.perFrame}/${row.curves}/${frame}/${key}`,
-            );
-            expect(error).toBeLessThan(0.1);
+          f.force![key] = p;
+        }
+        source.modules.push(new I.ParticleModuleT(I.ParticleModuleData.ForceModule, f));
+        const e = new Emitter(5, new Scene(pack, [1]).nodes.get(1)!, source, true, 12345, []);
+        e.sync();
+        e.emitting = false;
+        e.count = 4096;
+        e.lifetimes.fill(4);
+        for (let i = 0; i < e.count; i++) e.serials[i] = i;
+        for (let frame = 1; frame <= 12; frame++) {
+          e.step(row.dt);
+          const sample = row.samples.find((s) => s.frame === frame);
+          if (!sample) continue;
+          const mean = [0, 0, 0],
+            square = [0, 0, 0],
+            cross = [0, 0, 0];
+          for (let i = 0; i < e.count; i++)
+            for (let a = 0; a < 3; a++) {
+              const v = e.velocities[i * 3 + a]!;
+              mean[a]! += v / e.count;
+              square[a]! += (v * v) / e.count;
+              cross[a]! += (v * e.velocities[i * 3 + ((a + 1) % 3)]!) / e.count;
+            }
+          const variance = square.map((v, a) => v - mean[a]! ** 2);
+          for (const [a, key] of (['x', 'y', 'z'] as const).entries()) {
+            const meanError =
+              Math.abs(mean[a]! - sample.mean[key]) / Math.max(1e-9, Math.abs(sample.mean[key]));
+            const varianceError =
+              Math.abs(variance[a]! - sample.variance[key]) / Math.max(1e-12, sample.variance[key]);
+            const covariance = cross[a]! - mean[a]! * mean[(a + 1) % 3]!;
+            const covarianceError =
+              Math.abs(covariance - sample.covariance[key]) /
+              Math.sqrt(variance[a]! * variance[(a + 1) % 3]!);
+            for (const [metric, error] of [
+              ['mean-relative', meanError],
+              ['variance-relative', varianceError],
+              ['covariance-normalized', covarianceError],
+            ] as const) {
+              recordError(
+                'particle.force.random.' + metric,
+                error,
+                'ratio',
+                `${row.perFrame}/${row.curves}/${frame}/${key}`,
+              );
+              expect(error).toBeLessThan(0.1);
+            }
           }
         }
       }
+    } finally {
+      pack.dispose();
     }
-  } finally {
-    pack.dispose();
-  }
-});
+  },
+);

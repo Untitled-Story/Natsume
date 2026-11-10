@@ -481,27 +481,30 @@ for (const fixture of native.cases.filter(
   });
 }
 
-it('matches native lifetime tiles using simulated ages through death', () => {
-  const source = particleSource();
-  const sheet = Object.assign(new TextureSheetModuleT(), { columns: 4, rows: 2 });
-  sheet.frameOverTime = linear(0, 1);
-  source.modules.push(new ParticleModuleT(M.TextureSheetModule, sheet));
-  const e = new Emitter(3, scene.nodes.get(1)!, source, true, 1, []);
-  manualParticle(e);
-  const fixture = native.cases.find((c) => c.label === 'sheet-zero')!;
-  for (let frame = 0; frame <= 61; frame++) {
-    if (frame) e.step(1 / 60);
-    const sample = fixture.samples.find((s) => s.frame === frame);
-    if (!sample) continue;
-    expect(e.count).toBe(sample.uv.length ? 1 : 0);
-    if (!e.count) continue;
-    const uv = sample.uv[0]!;
-    const expected = Math.round(uv.x * 4) + (2 - Math.round(uv.y * 2)) * 4;
-    const actual = sheetFrame(sheet, e.ages[0]! / e.lifetimes[0]!, 0, 0);
-    recordError('textureSheet.simulatedTile', actual - expected, 'tiles', String(frame));
-    expect(actual).toBe(expected);
-  }
-});
+it.skipIf(!hasNativeFixture('unity-boundaries.json'))(
+  'matches native lifetime tiles using simulated ages through death',
+  () => {
+    const source = particleSource();
+    const sheet = Object.assign(new TextureSheetModuleT(), { columns: 4, rows: 2 });
+    sheet.frameOverTime = linear(0, 1);
+    source.modules.push(new ParticleModuleT(M.TextureSheetModule, sheet));
+    const e = new Emitter(3, scene.nodes.get(1)!, source, true, 1, []);
+    manualParticle(e);
+    const fixture = native.cases.find((c) => c.label === 'sheet-zero')!;
+    for (let frame = 0; frame <= 61; frame++) {
+      if (frame) e.step(1 / 60);
+      const sample = fixture.samples.find((s) => s.frame === frame);
+      if (!sample) continue;
+      expect(e.count).toBe(sample.uv.length ? 1 : 0);
+      if (!e.count) continue;
+      const uv = sample.uv[0]!;
+      const expected = Math.round(uv.x * 4) + (2 - Math.round(uv.y * 2)) * 4;
+      const actual = sheetFrame(sheet, e.ages[0]! / e.lifetimes[0]!, 0, 0);
+      recordError('textureSheet.simulatedTile', actual - expected, 'tiles', String(frame));
+      expect(actual).toBe(expected);
+    }
+  },
+);
 
 it.skipIf(!hasNativeFixture('unity-boundaries.json'))(
   'matches native infinite zero-interval burst counts',

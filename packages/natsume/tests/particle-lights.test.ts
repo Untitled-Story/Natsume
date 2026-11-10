@@ -7,7 +7,7 @@ import { Scene } from '../src/runtime/scene.js';
 import { loadPack } from '../src/loader/load.js';
 import { archive } from './helpers.js';
 import { constant, linear, manualParticle, particleSource } from './particle-fixtures.js';
-import { readNativeFixture } from './native-fixture.js';
+import { readNativeFixture, hasNativeFixture } from './native-fixture.js';
 import { recordError } from './measurement.js';
 
 function definition() {
@@ -135,60 +135,66 @@ it('matches native light colors, size/alpha switches and age curves', async () =
   recordError('particle-light-reference-pixel', maxPixel, 'RGBA8', `${native.cases.length} cases`);
 });
 
-it('matches native deterministic selection, caps and survivor promotion; compares pooled random selection', async () => {
-  const d = definition(),
-    { pack, e, states } = await setup(d);
-  let selected = 0,
-    nativeSelected = 0,
-    births = 0;
-  try {
-    for (const c of distribution.cases) {
-      e.lights!.clear();
-      d.ratio = c.ratio;
-      d.maxLights = c.maximum;
-      d.randomDistribution = c.random;
-      // Fixed seeds use the authored seed directly.
-      e.seed = c.seed;
-      e.count = 64;
-      for (let i = 0; i < 64; i++) {
-        e.serials[i] = i;
-        e.ages[i] = 0;
-        e.lifetimes[i] = 100;
-        e.startSizes.fill(1, i * 3, i * 3 + 3);
-        e.startColors.fill(1, i * 4, i * 4 + 4);
-      }
-      e.lights!.sync(e);
-      if (!c.random) expect([...states.keys()]).toEqual(c.lit);
-      if (c.seed >= 1000) {
-        selected += states.size;
-        nativeSelected += c.lit.length;
-        births += 64;
-      }
-      if (c.mortality) {
-        e.count = 63;
-        e.serials[0] = 63;
-        e.lights!.sync(e);
-        expect([...states.keys()]).toEqual(c.afterDeath);
+it.skipIf(
+  !hasNativeFixture('unity-particle-light-distribution.json') ||
+    !hasNativeFixture('unity-particle-lights.json'),
+)(
+  'matches native deterministic selection, caps and survivor promotion; compares pooled random selection',
+  async () => {
+    const d = definition(),
+      { pack, e, states } = await setup(d);
+    let selected = 0,
+      nativeSelected = 0,
+      births = 0;
+    try {
+      for (const c of distribution.cases) {
+        e.lights!.clear();
+        d.ratio = c.ratio;
+        d.maxLights = c.maximum;
+        d.randomDistribution = c.random;
+        // Fixed seeds use the authored seed directly.
+        e.seed = c.seed;
         e.count = 64;
-        e.serials[63] = 64;
+        for (let i = 0; i < 64; i++) {
+          e.serials[i] = i;
+          e.ages[i] = 0;
+          e.lifetimes[i] = 100;
+          e.startSizes.fill(1, i * 3, i * 3 + 3);
+          e.startColors.fill(1, i * 4, i * 4 + 4);
+        }
         e.lights!.sync(e);
-        // Last birth is at position 0; surviving light remains at position 63.
-        expect([...states.keys()]).toEqual(c.afterBirth);
+        if (!c.random) expect([...states.keys()]).toEqual(c.lit);
+        if (c.seed >= 1000) {
+          selected += states.size;
+          nativeSelected += c.lit.length;
+          births += 64;
+        }
+        if (c.mortality) {
+          e.count = 63;
+          e.serials[0] = 63;
+          e.lights!.sync(e);
+          expect([...states.keys()]).toEqual(c.afterDeath);
+          e.count = 64;
+          e.serials[63] = 64;
+          e.lights!.sync(e);
+          // Last birth is at position 0; surviving light remains at position 63.
+          expect([...states.keys()]).toEqual(c.afterBirth);
+        }
       }
+      const relative = Math.abs(selected - nativeSelected) / nativeSelected;
+      expect(relative).toBeLessThan(0.1);
+      recordError(
+        'particle-light-random-frequency',
+        relative,
+        'relative',
+        `${births} births; native ${nativeSelected}, runtime ${selected}`,
+      );
+    } finally {
+      e.clear();
+      pack.dispose();
     }
-    const relative = Math.abs(selected - nativeSelected) / nativeSelected;
-    expect(relative).toBeLessThan(0.1);
-    recordError(
-      'particle-light-random-frequency',
-      relative,
-      'relative',
-      `${births} births; native ${nativeSelected}, runtime ${selected}`,
-    );
-  } finally {
-    e.clear();
-    pack.dispose();
-  }
-});
+  },
+);
 
 it('reuses owned handles, updates world values, replaces templates and releases on lifecycle changes', async () => {
   const { pack, e, states, template, counters, diagnostics } = await setup();

@@ -13,7 +13,7 @@ import { VelocityModuleT } from '../src/format/generated/noa/ir/velocity-module.
 import { LimitVelocityModuleT } from '../src/format/generated/noa/ir/limit-velocity-module.js';
 import { Vec2T } from '../src/format/generated/noa/ir/vec2.js';
 import { speedSize } from '../src/runtime/speed-modules.js';
-import { readNativeFixture } from './native-fixture.js';
+import { readNativeFixture, hasNativeFixture } from './native-fixture.js';
 import { recordError } from './measurement.js';
 
 type V = { x: number; y: number; z: number };
@@ -120,78 +120,84 @@ for (const holdout of [false, true])
     pack.dispose();
   });
 
-it('matches native random speed distributions and preserves per-particle factors', async () => {
-  const pack = await loadPack(await archive());
-  const { random } = await import('../src/runtime/parameters.js');
-  const { ScalarMode } = await import('../src/format/generated/noa/ir/scalar-mode.js');
-  const errors: number[] = [];
-  for (const mode of [2, 3]) {
-    const unity: number[] = [],
-      runtime: number[] = [];
-    for (const [index, c] of native.cases.entries()) {
-      if (c.mode !== mode || c.combo >= 6) continue;
-      const s = c.samples[0]!;
-      const speed = Math.hypot(...Object.values(s.totalVelocity));
-      const { speedPhase } = await import('../src/runtime/speed-modules.js');
-      const u = speedPhase(speed, new Vec2T(c.range.x, c.range.y));
-      const low = mode === 2 ? 0.4 : 0.1 + 0.7 * u,
-        high = mode === 2 ? 1.6 : 0.25 + 1.5 * u;
-      const lifetime = c.combo === 4 ? 0.7 : 1;
-      unity.push((s.size.x / 2 / lifetime - low) / (high - low));
-      const factor = random(12345, index, 73);
-      runtime.push(factor);
-      if (c.axes) {
-        const y = (s.size.y / 3 / lifetime / 0.7 - low) / (high - low);
-        expect(Math.abs(y - unity.at(-1)!)).toBeLessThan(1e-5);
+it.skipIf(!hasNativeFixture('unity-by-speed.json'))(
+  'matches native random speed distributions and preserves per-particle factors',
+  async () => {
+    const pack = await loadPack(await archive());
+    const { random } = await import('../src/runtime/parameters.js');
+    const { ScalarMode } = await import('../src/format/generated/noa/ir/scalar-mode.js');
+    const errors: number[] = [];
+    for (const mode of [2, 3]) {
+      const unity: number[] = [],
+        runtime: number[] = [];
+      for (const [index, c] of native.cases.entries()) {
+        if (c.mode !== mode || c.combo >= 6) continue;
+        const s = c.samples[0]!;
+        const speed = Math.hypot(...Object.values(s.totalVelocity));
+        const { speedPhase } = await import('../src/runtime/speed-modules.js');
+        const u = speedPhase(speed, new Vec2T(c.range.x, c.range.y));
+        const low = mode === 2 ? 0.4 : 0.1 + 0.7 * u,
+          high = mode === 2 ? 1.6 : 0.25 + 1.5 * u;
+        const lifetime = c.combo === 4 ? 0.7 : 1;
+        unity.push((s.size.x / 2 / lifetime - low) / (high - low));
+        const factor = random(12345, index, 73);
+        runtime.push(factor);
+        if (c.axes) {
+          const y = (s.size.y / 3 / lifetime / 0.7 - low) / (high - low);
+          expect(Math.abs(y - unity.at(-1)!)).toBeLessThan(1e-5);
+        }
+      }
+      const mean = (v: number[]) => v.reduce((s, x) => s + x, 0) / v.length;
+      const variance = (v: number[]) => mean(v.map((x) => (x - mean(v)) ** 2));
+      for (const [metric, error] of [
+        ['mean', mean(unity) - mean(runtime)],
+        ['variance', variance(unity) - variance(runtime)],
+      ] as const) {
+        recordError('speed.random.' + metric, error, 'normalized', String(mode));
+        errors.push(Math.abs(error));
+      }
+      expect(Math.abs(mean(unity) - 0.5)).toBeLessThan(0.05);
+      for (const channel of [73, 74]) {
+        const source = particleSource();
+        const p = linear(0.25, 1.75);
+        p.mode = mode === 2 ? ScalarMode.TwoConstants : ScalarMode.TwoCurves;
+        p.constantMin = 0.4;
+        p.constantMax = 1.6;
+        p.curveMin = linear(0.1, 0.8).curveMax;
+        const v = vector();
+        v.x = v.y = v.z = p;
+        source.modules.push(
+          new ParticleModuleT(
+            M.SizeBySpeedModule,
+            new SizeBySpeedModuleT(v, true, new Vec2T(0, 3)),
+          ),
+          new ParticleModuleT(
+            M.RotationBySpeedModule,
+            new RotationBySpeedModuleT(v, true, new Vec2T(0, 3)),
+          ),
+        );
+        const e = new Emitter(3, new Scene(pack, [1]).nodes.get(1)!, source, true, 12345, []);
+        manualParticle(e);
+        e.lifetimes[0] = 4;
+        const factor = random(e.seed, e.serials[0]!, channel);
+        for (let frame = 0; frame < 5; frame++) {
+          const before = e.rotations[0]!;
+          e.step(1 / 60);
+          const phase = 2 / 3;
+          const expected =
+            mode === 2
+              ? 0.4 + 1.2 * factor
+              : 0.1 + 0.7 * phase + (0.25 + 1.5 * phase - 0.1 - 0.7 * phase) * factor;
+          if (channel === 73)
+            expect(Math.abs(speedSize(e.sizeBySpeed!, 2, factor, 0) - expected)).toBeLessThan(1e-6);
+          else expect(Math.abs((e.rotations[0]! - before) * 60 - expected)).toBeLessThan(1e-5);
+        }
       }
     }
-    const mean = (v: number[]) => v.reduce((s, x) => s + x, 0) / v.length;
-    const variance = (v: number[]) => mean(v.map((x) => (x - mean(v)) ** 2));
-    for (const [metric, error] of [
-      ['mean', mean(unity) - mean(runtime)],
-      ['variance', variance(unity) - variance(runtime)],
-    ] as const) {
-      recordError('speed.random.' + metric, error, 'normalized', String(mode));
-      errors.push(Math.abs(error));
-    }
-    expect(Math.abs(mean(unity) - 0.5)).toBeLessThan(0.05);
-    for (const channel of [73, 74]) {
-      const source = particleSource();
-      const p = linear(0.25, 1.75);
-      p.mode = mode === 2 ? ScalarMode.TwoConstants : ScalarMode.TwoCurves;
-      p.constantMin = 0.4;
-      p.constantMax = 1.6;
-      p.curveMin = linear(0.1, 0.8).curveMax;
-      const v = vector();
-      v.x = v.y = v.z = p;
-      source.modules.push(
-        new ParticleModuleT(M.SizeBySpeedModule, new SizeBySpeedModuleT(v, true, new Vec2T(0, 3))),
-        new ParticleModuleT(
-          M.RotationBySpeedModule,
-          new RotationBySpeedModuleT(v, true, new Vec2T(0, 3)),
-        ),
-      );
-      const e = new Emitter(3, new Scene(pack, [1]).nodes.get(1)!, source, true, 12345, []);
-      manualParticle(e);
-      e.lifetimes[0] = 4;
-      const factor = random(e.seed, e.serials[0]!, channel);
-      for (let frame = 0; frame < 5; frame++) {
-        const before = e.rotations[0]!;
-        e.step(1 / 60);
-        const phase = 2 / 3;
-        const expected =
-          mode === 2
-            ? 0.4 + 1.2 * factor
-            : 0.1 + 0.7 * phase + (0.25 + 1.5 * phase - 0.1 - 0.7 * phase) * factor;
-        if (channel === 73)
-          expect(Math.abs(speedSize(e.sizeBySpeed!, 2, factor, 0) - expected)).toBeLessThan(1e-6);
-        else expect(Math.abs((e.rotations[0]! - before) * 60 - expected)).toBeLessThan(1e-5);
-      }
-    }
-  }
-  expect(Math.max(...errors)).toBeLessThan(0.05);
-  pack.dispose();
-});
+    expect(Math.max(...errors)).toBeLessThan(0.05);
+    pack.dispose();
+  },
+);
 
 it('uses native total velocity before noise displacement for speed-driven sizes', () => {
   for (const c of native.cases.filter((c) => c.mode === 1 && c.combo === 6)) {
