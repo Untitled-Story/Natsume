@@ -90,6 +90,9 @@ export async function checkRuntimeCompatibility() {
       fields: report.issues
         .filter((issue) => issue.severity === 'error')
         .map((issue) => issue.field),
+      defaultGravity: report.issues.some(
+        (issue) => issue.severity === 'warning' && issue.code === 'DEFAULT_GRAVITY',
+      ),
       sameIssues,
       decodes,
       unchanged:
@@ -624,6 +627,7 @@ export function checkEnvironmentReplacement() {
   effect.simulation.emitters.set(second.id, second);
   const meshes = effect.container.children as ParticleMesh[];
   const before = meshes[0]!.environment;
+  b.main!.culling = 1; // PauseAndCatchup requires fixedDeltaSeconds, so this replacement is rejected
   let rejected = false;
   try {
     effect.setParticleEnvironment({ fog: { mode: 'none' }, viewVelocity: [0, 3, 0] });
@@ -634,6 +638,7 @@ export function checkEnvironmentReplacement() {
     meshes.every((mesh) => mesh.environment === before) &&
     first.gravity[1] === -10 &&
     second.gravity[1] === -10;
+  b.main!.culling = 0;
   const definition = structuredClone(meshes[0]!.definition) as ParticleRendererT;
   definition.alignment = Alignment.Facing;
   effect.addMesh(

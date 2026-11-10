@@ -18,16 +18,13 @@ test('shares compatibility issues with instantiation before allocating textures'
   expect(result).toMatchObject({
     valid: true,
     blocked: true,
+    defaultGravity: true,
     sameIssues: true,
     decodes: 0,
     unchanged: true,
   });
   expect(result.fields).toEqual(
-    expect.arrayContaining([
-      'main.gravityMultiplier',
-      'main.durationSeconds',
-      'particleEnvironment.viewPosition',
-    ]),
+    expect.arrayContaining(['main.durationSeconds', 'particleEnvironment.viewPosition']),
   );
 });
 

@@ -82,13 +82,14 @@ for (const diagnostic of effect.diagnostics) {
 
 ### 材质、相机与环境
 
-| 码                            | 说明                                                                              |
-| ----------------------------- | --------------------------------------------------------------------------------- |
-| `SOURCE_SHADER_NO_COLOR_PASS` | 保留的 Shader 没有启用的前向颜色 Pass，辅助的深度 Pass 不绘制到宿主的颜色目标。   |
-| `UNLIT_RENDER_ENVIRONMENT`    | 已知的无光照颜色 Pass 不使用阴影和探针光照，ShadowsOnly 抑制颜色绘制。            |
-| `CAMERA_SKYBOX_BACKGROUND`    | 相机的天空盒资源不在规范化契约里，Skybox 使用源背景色清屏。                       |
-| `CAMERA_HOST_RENDER_TARGET`   | 相机的 HDR、MSAA 和动态分辨率许可由宿主的绘制目标决定，不为每个相机分配独立目标。 |
-| `DEFAULT_COLOR_SPACE`         | 包里没有源项目的色彩空间，默认使用 Gamma，可通过 `setSourceColorSpace` 修改。     |
+| 码                            | 说明                                                                                               |
+| ----------------------------- | -------------------------------------------------------------------------------------------------- |
+| `SOURCE_SHADER_NO_COLOR_PASS` | 保留的 Shader 没有启用的前向颜色 Pass，辅助的深度 Pass 不绘制到宿主的颜色目标。                    |
+| `UNLIT_RENDER_ENVIRONMENT`    | 已知的无光照颜色 Pass 不使用阴影和探针光照，ShadowsOnly 抑制颜色绘制。                             |
+| `CAMERA_SKYBOX_BACKGROUND`    | 相机的天空盒资源不在规范化契约里，Skybox 使用源背景色清屏。                                        |
+| `CAMERA_HOST_RENDER_TARGET`   | 相机的 HDR、MSAA 和动态分辨率许可由宿主的绘制目标决定，不为每个相机分配独立目标。                  |
+| `DEFAULT_GRAVITY`             | 粒子需要重力，但宿主没有提供 `gravity`（2D 重力源则是 `gravity2D`），使用 Unity 的默认值 `-9.81`。 |
+| `DEFAULT_COLOR_SPACE`         | 包里没有源项目的色彩空间，默认使用 Gamma，可通过 `setSourceColorSpace` 修改。                      |
 
 ### 脚本与回调
 

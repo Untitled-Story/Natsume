@@ -1,4 +1,4 @@
-import { expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   copyEnvironment,
   type ParticleEnvironment,
@@ -9,6 +9,7 @@ import {
   NatsumeCompatibilityError,
   type CompatibilityContext,
 } from '../src/runtime/compatibility.js';
+import { inspectEmitterEnvironment } from '../src/runtime/emitter-environment.js';
 import { minimalDocument } from './helpers.js';
 import { constant, particleSource, linear } from './particle-fixtures.js';
 import { ComponentT } from '../src/format/generated/noa/ir/component.js';
@@ -219,16 +220,77 @@ it('reports independent blocking fields and preserves every issue in the thrown 
   expect(
     report.issues.filter((i) => i.severity === 'error').map((i) => [i.componentId, i.field]),
   ).toEqual([
-    [3, 'main.gravityMultiplier'],
     [3, 'main.durationSeconds'],
     [4, 'particleEnvironment.viewPosition'],
     [4, 'materials.2'],
   ]);
   const error = new NatsumeCompatibilityError(report);
-  expect(error.code).toBe('HOST');
+  expect(error.code).toBe('CAPABILITY');
   expect(error.issues).toBe(report.issues);
   expect(error.message).toContain('root / component 3 / main.durationSeconds=0.001');
   expect(error.message).toContain('component 4 / materials.2=99');
+});
+
+describe('default gravity', () => {
+  const warnings = (environment?: ParticleEnvironment) => {
+    const f = fixture();
+    f.source.main!.gravityMultiplier = constant(1);
+    const pack = f.pack();
+    const report = checkCompatibility(
+      pack,
+      environment ? { particleEnvironment: environment } : {},
+      context,
+    );
+    pack.dispose();
+    return report;
+  };
+  const defaults = (report: ReturnType<typeof warnings>) =>
+    report.issues.filter((issue) => issue.code === 'DEFAULT_GRAVITY');
+
+  it('uses Unity gravity with a warning instead of blocking when the host supplies none', () => {
+    for (const report of [warnings(), warnings({ fog: { mode: 'none' } })]) {
+      expect(report.issues.filter((issue) => issue.severity === 'error')).toEqual([]);
+      expect(defaults(report)).toEqual([
+        expect.objectContaining({
+          severity: 'warning',
+          componentId: 3,
+          field: 'particleEnvironment.gravity',
+        }),
+      ]);
+    }
+  });
+
+  it('stays silent when the host supplies gravity', () => {
+    expect(defaults(warnings({ fog: { mode: 'none' }, gravity: [0, -4, 0] }))).toEqual([]);
+  });
+
+  it('applies the default to 2D gravity sources and to animated multipliers', () => {
+    const f = fixture();
+    f.source.main!.gravityMultiplier = constant(1);
+    f.source.main!.gravitySource = 1;
+    const issues = inspectEmitterEnvironment(f.source, undefined);
+    expect(issues.gravity).toEqual([0, -9.81, 0]);
+    expect(issues.issues).toEqual([
+      expect.objectContaining({ code: 'DEFAULT_GRAVITY', field: 'particleEnvironment.gravity2D' }),
+    ]);
+
+    const animated = fixture();
+    animated.source.main!.gravityMultiplier = constant(0);
+    const result = inspectEmitterEnvironment(animated.source, undefined, undefined, true);
+    expect(result.gravity).toEqual([0, -9.81, 0]);
+    expect(result.issues.map((issue) => issue.code)).toEqual(['DEFAULT_GRAVITY']);
+    expect(inspectEmitterEnvironment(animated.source, undefined, undefined, false).issues).toEqual(
+      [],
+    );
+  });
+
+  it('returns an independent vector that never mutates the shared default', () => {
+    const f = fixture();
+    f.source.main!.gravityMultiplier = constant(1);
+    const result = inspectEmitterEnvironment(f.source, undefined);
+    (result.gravity as unknown as number[])[1] = 0;
+    expect(inspectEmitterEnvironment(f.source, undefined).gravity).toEqual([0, -9.81, 0]);
+  });
 });
 
 it('checks dimensions and texture budgets without copying image data', () => {

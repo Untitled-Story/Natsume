@@ -19,14 +19,17 @@ export type ParticleFog =
       readonly density: number;
     };
 
+/** Unity's default Physics.gravity and Physics2D.gravity, in world units per second squared. */
+export const UNITY_DEFAULT_GRAVITY = [0, -9.81, 0] as const;
+
 /** Host gravity, view, fog and depth inputs. Texture ownership stays with the host. */
 export interface ParticleEnvironment {
   readonly fog: ParticleFog;
   /** Unity project fixedDeltaTime in seconds. Required for PauseAndCatchup culling. */
   readonly fixedDeltaSeconds?: number | undefined;
-  /** Acceleration in Unity world units per second squared. */
+  /** Acceleration in Unity world units per second squared. Unity's default is used, with DEFAULT_GRAVITY, when a system needs gravity and none is supplied. */
   readonly gravity?: readonly [number, number, number] | undefined;
-  /** Physics2D acceleration in Unity world units per second squared. */
+  /** Physics2D acceleration in Unity world units per second squared. Defaults like gravity. */
   readonly gravity2D?: readonly [number, number] | undefined;
   /** Borrowed force-field services, indexed by source reference or world-search slot. */
   readonly forceFields?: ParticleForceFields | undefined;

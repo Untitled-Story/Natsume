@@ -5,7 +5,10 @@ import type { CollisionModuleT } from '../format/generated/noa/ir/collision-modu
 import type { TriggerModuleT } from '../format/generated/noa/ir/trigger-module.js';
 import type { LightsModuleT } from '../format/generated/noa/ir/lights-module.js';
 import { ParticleModuleData as M } from '../format/generated/noa/ir/particle-module-data.js';
-import type { ParticleEnvironment } from '../rendering/particle-environment.js';
+import {
+  UNITY_DEFAULT_GRAVITY,
+  type ParticleEnvironment,
+} from '../rendering/particle-environment.js';
 import { selectForceFields } from './particle-force-fields.js';
 import { constantZero } from './parameters.js';
 import { SupportChecks } from './support-checks.js';
@@ -42,17 +45,23 @@ export function inspectEmitterEnvironment(
     main.gravitySource === 1
       ? environment?.gravity2D && ([environment.gravity2D[0], environment.gravity2D[1], 0] as const)
       : (environment?.gravity ?? fallbackGravity);
-  rules.require(
-    (!animatedGravity && constantZero(main.gravityMultiplier)) || suppliedGravity || main.gravity,
-    'HOST',
-    'main.gravityMultiplier',
-    main.gravityMultiplier,
-    `${animatedGravity ? 'Animated' : 'Nonzero'} gravityMultiplier requires particleEnvironment.gravity`,
-  );
+  const needsGravity = animatedGravity || !constantZero(main.gravityMultiplier);
   const authored = main.gravity;
+  const defaulted = needsGravity && !suppliedGravity && !authored;
+  if (defaulted)
+    rules.warn(
+      'DEFAULT_GRAVITY',
+      main.gravitySource === 1 ? 'particleEnvironment.gravity2D' : 'particleEnvironment.gravity',
+      undefined,
+      `Host gravity is absent; Unity's default (0, ${UNITY_DEFAULT_GRAVITY[1]}) is used.`,
+    );
   const gravity =
     suppliedGravity ??
-    (authored ? ([authored.x, authored.y, authored.z] as const) : ([0, 0, 0] as const));
+    (authored
+      ? ([authored.x, authored.y, authored.z] as const)
+      : defaulted
+        ? ([...UNITY_DEFAULT_GRAVITY] as [number, number, number])
+        : ([0, 0, 0] as const));
   rules.require(
     Array.isArray(gravity) && gravity.length === 3 && gravity.every(Number.isFinite),
     'HOST',

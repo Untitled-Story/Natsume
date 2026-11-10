@@ -1,6 +1,9 @@
 import type { EffectPack } from './pack.js';
 import type { CanvasEnvironment } from './rendering/canvas-environment.js';
-import type { ParticleEnvironment } from './rendering/particle-environment.js';
+import {
+  UNITY_DEFAULT_GRAVITY,
+  type ParticleEnvironment,
+} from './rendering/particle-environment.js';
 
 const CAMERA_Z = -1000;
 const NEAR = 0.1;
@@ -49,7 +52,7 @@ export function screenParticleEnvironment(
   return {
     fog: { mode: 'none' },
     fixedDeltaSeconds: 0.02,
-    gravity: [0, -9.81, 0],
+    gravity: [...UNITY_DEFAULT_GRAVITY],
     viewPosition: [0, 0, CAMERA_Z],
     ...overrides,
   };

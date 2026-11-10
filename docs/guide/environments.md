@@ -1,13 +1,13 @@
 # 环境配置
 
-资源包只描述特效本身。重力、雾效、视点、显示尺寸这类信息属于宿主，Natsume 不会替你猜测。宿主通过四组环境输入把它们交给实例。
+资源包只描述特效本身。重力、雾效、视点、显示尺寸这类信息属于宿主，宿主通过四组环境输入把它们交给实例。多数缺少的输入会在预检时被报告为阻塞项，只有重力和色彩空间有 Unity 的默认值，缺少时使用默认值并给出诊断。
 
-| 环境   | 选项名                | 内容                                           | 什么时候需要                                                     |
-| ------ | --------------------- | ---------------------------------------------- | ---------------------------------------------------------------- |
-| 粒子   | `particleEnvironment` | 重力、雾效、视点、深度、软粒子、物理服务、灯光 | 使用 Legacy 材质、重力倍率非零、Facing 对齐、Freeform Stretch 等 |
-| 渲染   | `renderEnvironment`   | 全局 mip 偏移、Sorting Layer 映射              | 材质读取全局 mip 偏移，或包里缺少排序层信息                      |
-| Canvas | `canvasEnvironment`   | 显示尺寸、视图和投影矩阵                       | 包里有屏幕 Canvas，且没有包内 Camera                             |
-| 相机   | `cameraEnvironment`   | 包内 Camera 使用的显示区域                     | 包里有 Camera                                                    |
+| 环境   | 选项名                | 内容                                           | 什么时候需要                                       |
+| ------ | --------------------- | ---------------------------------------------- | -------------------------------------------------- |
+| 粒子   | `particleEnvironment` | 重力、雾效、视点、深度、软粒子、物理服务、灯光 | 使用 Legacy 材质、Facing 对齐、Freeform Stretch 等 |
+| 渲染   | `renderEnvironment`   | 全局 mip 偏移、Sorting Layer 映射              | 材质读取全局 mip 偏移，或包里缺少排序层信息        |
+| Canvas | `canvasEnvironment`   | 显示尺寸、视图和投影矩阵                       | 包里有屏幕 Canvas，且没有包内 Camera               |
+| 相机   | `cameraEnvironment`   | 包内 Camera 使用的显示区域                     | 包里有 Camera                                      |
 
 另外还有显示矩阵 `displayMatrix` 和源色彩空间 `sourceColorSpace` 两项实例选项。
 
@@ -68,7 +68,7 @@ const effect = await runtime.instantiate(pack, {
 | `stationaryRigidbodyVelocities(pack)`                 | 为包里每个粒子系统声明的 Rigidbody 槽提供零速度。                                                                      |
 | `screenCanvasEnvironment(width, height, display = 0)` | 1 个单位对应 1 个 Pixi 逻辑像素的正交视图，相机位于 `z = -1000` 朝向 +Z，近平面 0.1，远平面 2000。                     |
 
-预设中的重力是 Unity 的默认值，不是从包里读取的。需要其他重力时请覆盖。
+预设中的重力是 Unity 的默认值，不是从包里读取的。需要其他重力时请覆盖。不使用预设、也不提供 `gravity` 时，Natsume 在粒子需要重力的情况下使用同一个默认值，并给出 `DEFAULT_GRAVITY` 警告。
 
 ## 粒子环境
 
@@ -86,8 +86,8 @@ const particleEnvironment = {
 | 字段                                                  | 说明                                                                                                                                                                     |
 | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `fog`                                                 | 雾效。`{ mode: 'none' }`，`{ mode: 'linear', color, start, end }`，或 `{ mode: 'exp' \| 'exp2', color, density }`。颜色使用源项目的工作色彩空间。                        |
-| `gravity`                                             | Unity 世界空间的加速度，单位与粒子的位置和速度一致。包里任何粒子系统的 `gravityMultiplier` 非零时必须提供。                                                              |
-| `gravity2D`                                           | Physics2D 的重力。源设置使用 2D 重力时需要。                                                                                                                             |
+| `gravity`                                             | Unity 世界空间的加速度，单位与粒子的位置和速度一致。省略时，需要重力的粒子系统使用 Unity 的默认值 `[0, -9.81, 0]`，并给出 `DEFAULT_GRAVITY`。                            |
+| `gravity2D`                                           | Physics2D 的重力，源设置使用 2D 重力时生效。省略时默认 `[0, -9.81]`，同样给出 `DEFAULT_GRAVITY`。                                                                        |
 | `fixedDeltaSeconds`                                   | Unity 工程的 `fixedDeltaTime`，通常为 `0.02`。PauseAndCatchup 裁剪模式需要，必须是有限的正数。                                                                           |
 | `viewPosition`                                        | 视点的 Unity 世界坐标。Facing 对齐和 Freeform Stretch 必须提供。                                                                                                         |
 | `viewVelocity`                                        | 视图在世界空间的移动速度，每秒。省略表示视图静止。                                                                                                                       |

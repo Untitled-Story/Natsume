@@ -118,7 +118,7 @@ for (const sample of native.cases)
     }
   });
 
-it('accepts explicit zero gravity and rejects missing gravity', () => {
+it("keeps explicit zero gravity and defaults missing gravity to Unity's value", () => {
   const document = minimalDocument();
   const pack = {
     nodes: document.nodes,
@@ -128,6 +128,6 @@ it('accepts explicit zero gravity and rejects missing gravity', () => {
   const node = new Scene(pack, [1]).nodes.get(1)!;
   const source = particleSource();
   source.main!.gravityMultiplier = constant(1);
-  expect(() => new Emitter(3, node, source, true, 1, [])).toThrow('particleEnvironment.gravity');
-  expect(() => new Emitter(3, node, source, true, 1, [], [0, 0, 0])).not.toThrow();
+  expect(new Emitter(3, node, source, true, 1, []).gravity).toEqual([0, -9.81, 0]);
+  expect(new Emitter(3, node, source, true, 1, [], [0, 0, 0]).gravity).toEqual([0, 0, 0]);
 });
