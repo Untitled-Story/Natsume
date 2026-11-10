@@ -1,6 +1,6 @@
 reference/
 data/
-docs/
+docs/.vitepress/cache/
 **/dist/
 **/generated/
 **/node_modules/

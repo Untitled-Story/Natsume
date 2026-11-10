@@ -13,9 +13,12 @@
     "typecheck": "tsc --noEmit && pnpm -r typecheck",
     "test": "pnpm --filter natsume test",
     "test:browser": "playwright test",
-    "lint": "eslint packages tools *.ts *.js",
-    "format": "prettier --write packages tools *.ts *.js *.json pnpm-workspace.yaml",
-    "format:check": "prettier --check packages tools *.ts *.js *.json pnpm-workspace.yaml",
+    "docs:dev": "vitepress dev docs",
+    "docs:build": "vitepress build docs",
+    "docs:preview": "vitepress preview docs",
+    "lint": "eslint packages tools docs *.ts *.js",
+    "format": "prettier --write packages tools docs *.ts *.js *.json pnpm-workspace.yaml",
+    "format:check": "prettier --check packages tools docs *.ts *.js *.json pnpm-workspace.yaml",
     "generate": "pnpm --filter natsume generate",
     "probe:unity": "node tools/unity-probe/probe-unity.mjs",
     "benchmark": "node tools/benchmarks/benchmark-particles.mjs",
@@ -29,6 +32,7 @@
     "prettier": "3.8.3",
     "typescript": "6.0.3",
     "typescript-eslint": "8.67.0",
-    "vite": "8.3.4"
+    "vite": "8.3.4",
+    "vitepress": "1.6.4"
   }
 }
