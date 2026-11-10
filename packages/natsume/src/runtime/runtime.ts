@@ -142,20 +142,25 @@ export interface RenderOffset {
   readonly y: number;
 }
 
+/** A node of an effect instance. Views are cached per instance. */
 export class NatsumeNode {
   constructor(
     private readonly effect: EffectInstance,
     private readonly node: SceneNode,
   ) {}
+  /** Node ID from the package. */
   get id(): number {
     return this.node.id;
   }
+  /** Node name from the package. */
   get name(): string {
     return this.node.name;
   }
+  /** Own active flag. */
   get active(): boolean {
     return this.node.active;
   }
+  /** True when this node and all its ancestors are active. */
   get activeInHierarchy(): boolean {
     return this.node.activeInHierarchy;
   }
@@ -185,11 +190,13 @@ export class NatsumeNode {
   setRenderOffset(offset: RenderOffset | null): void {
     this.effect.setNodeRenderOffset(this.node, offset);
   }
+  /** Sets the node active flag immediately; a playing animation may overwrite it on the next fixed step. */
   setActive(active: boolean): void {
     this.effect.setNodeActive(this.id, active);
   }
 }
 
+/** One playing effect: simulation state, a Pixi container, animation handles and host behaviors. */
 export class EffectInstance {
   private cameraEnvironment: CameraEnvironment | undefined;
   private readonly cameraPasses = new Map<
@@ -230,6 +237,7 @@ export class EffectInstance {
   private environment: ParticleEnvironment | undefined;
   private renderEnvironment: RenderEnvironment | undefined;
   private canvasEnvironment: CanvasEnvironment | undefined;
+  /** @hidden */
   constructor(
     /** @internal */ readonly simulation: Simulation,
     private readonly runtime: NatsumeRuntime,
@@ -314,27 +322,35 @@ export class EffectInstance {
         message: 'Source project color space is absent; Gamma is the editable default.',
       });
   }
+  /** True after destroy(). */
   get destroyed(): boolean {
     return this.disposed;
   }
+  /** Package layout size, or undefined when the entry has none. */
   get layoutSize() {
     return this.simulation.scene.layoutSize;
   }
+  /** Playback state: idle, playing, paused, draining or stopped. */
   get state() {
     return this.simulation.state;
   }
+  /** Number of live particles across all systems. */
   get particleCount(): number {
     return this.simulation.particleCount;
   }
+  /** Copy of the non-fatal diagnostics collected so far, including preflight warnings. */
   get diagnostics() {
     return this.simulation.diagnostics.slice();
   }
+  /** Source project color space; defaults to 'gamma' when the package does not record one. */
   get sourceColorSpace(): SourceColorSpace {
     return this.colorSpace;
   }
+  /** Simulated time in seconds. */
   get time(): number {
     return this.simulation.time;
   }
+  /** Copy of the column-major matrix that maps Unity world coordinates to container coordinates. */
   get displayMatrix(): Float32Array {
     return Float32Array.from(this.matrix);
   }
@@ -376,6 +392,7 @@ export class EffectInstance {
   private assertAlive(): void {
     check(!this.disposed, 'DISPOSED', 'Effect instance has been destroyed');
   }
+  /** Sets the source project color space. */
   setSourceColorSpace(value: SourceColorSpace): void {
     this.assertAlive();
     check(value === 'gamma' || value === 'linear', 'HOST', 'Unknown color space');
@@ -515,6 +532,7 @@ export class EffectInstance {
       y: m[1]! * point[0] + m[5]! * point[1] + m[9]! * point[2] + m[13]!,
     };
   }
+  /** Sets the display matrix: 16 finite column-major values, affine. */
   setDisplayMatrix(matrix: ArrayLike<number>): void {
     this.assertAlive();
     check(
@@ -555,6 +573,7 @@ export class EffectInstance {
     this.assertAlive();
     this.simulation.setSubEmitterUpdateOrder(order);
   }
+  /** Returns the node view for a package node ID, or undefined if it is not part of this instance. */
   getNode(id: number): NatsumeNode | undefined {
     this.assertAlive();
     const node = this.simulation.scene.nodes.get(id);
@@ -578,6 +597,7 @@ export class EffectInstance {
     this.behaviors.syncActivation();
     this.render();
   }
+  /** Starts playback, honoring the package's auto-play settings. */
   play(): void {
     this.assertAlive();
     this.simulation.play();
@@ -586,17 +606,20 @@ export class EffectInstance {
     this.behaviors.syncActivation();
     this.render();
   }
+  /** Freezes simulation and frame callbacks. */
   pause(): void {
     this.eventRevision++;
     this.assertAlive();
     this.simulation.pause();
   }
+  /** Stops emission. 'drain' lets live particles finish; 'clear' removes them immediately. */
   stop(mode: 'drain' | 'clear' = 'drain'): void {
     this.eventRevision++;
     this.assertAlive();
     this.simulation.stop(mode);
     this.render();
   }
+  /** Restores package initial values and starts again; handles and host behaviors are kept. */
   restart(): void {
     this.eventRevision++;
     this.assertAlive();
@@ -776,6 +799,7 @@ export class EffectInstance {
       this.dispatchingEvent = false;
     }
   }
+  /** Advances the instance by a host frame delta in seconds (at most 0.25 s is accepted per call). */
   update(seconds: number, clocks?: AnimationUpdateOptions): void {
     this.assertAlive();
     check(
@@ -997,6 +1021,7 @@ export class EffectInstance {
       if (parent.children[index] !== mesh) parent.setChildIndex(mesh, index);
     }
   }
+  /** Releases the instance's GPU resources and behaviors. Handles become unusable. */
   destroy(): void {
     this.eventRevision++;
     if (this.disposed) return;
@@ -1041,12 +1066,14 @@ export class EffectInstance {
   }
 }
 
+/** Binds a Pixi WebGL2 renderer. Owns shared textures and Script Bridge registrations. */
 export class NatsumeRuntime {
   private readonly instances = new Set<EffectInstance>();
   private readonly textures = new Map<EffectPack, Map<number | string, TextureLease>>();
   private readonly scripts = new Map<string, ScriptFactory>();
   private readonly scriptDeclarations = new Map<string, ScriptDeclaration>();
   private disposed = false;
+  /** How errors thrown by host and Bridge callbacks are handled. */
   readonly scriptErrors: 'isolate' | 'throw';
   private retainedPixels = 0;
   constructor(
@@ -1478,6 +1505,7 @@ export class NatsumeRuntime {
       },
     };
   }
+  /** Destroys every live instance and clears registered scripts. */
   destroy(): void {
     if (this.disposed) return;
     this.disposed = true;

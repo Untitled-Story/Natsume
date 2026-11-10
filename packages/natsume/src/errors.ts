@@ -1,3 +1,4 @@
+/** Failure categories; see the diagnostics guide for what each one means. */
 export type ErrorCode =
   | 'LIMIT'
   | 'ZIP'
@@ -10,6 +11,7 @@ export type ErrorCode =
   | 'HOST'
   | 'DISPOSED';
 
+/** Error raised by Natsume. `code` classifies the failure; `path` locates it when known. */
 export class NatsumeError extends Error {
   constructor(
     public readonly code: ErrorCode,

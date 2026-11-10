@@ -17,19 +17,23 @@ export class NatsumeDirector {
     private readonly assertAlive: () => void,
     private readonly refresh: () => void,
   ) {}
+  /** Current playback state. */
   get state(): 'playing' | 'paused' | 'stopped' {
     this.assertAlive();
     return this.director.state;
   }
+  /** Timeline duration in seconds. */
   get duration(): number {
     this.assertAlive();
     return this.director.duration;
   }
+  /** Starts or resumes playback. */
   play(): void {
     this.assertAlive();
     this.director.play();
     this.refresh();
   }
+  /** Pauses playback and keeps the current activation state. */
   pause(): void {
     this.assertAlive();
     this.director.pause();
@@ -41,6 +45,7 @@ export class NatsumeDirector {
     this.director.stop();
     this.refresh();
   }
+  /** Current time in seconds. */
   getTime(): number {
     this.assertAlive();
     return this.director.time;

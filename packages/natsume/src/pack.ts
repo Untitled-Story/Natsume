@@ -68,7 +68,9 @@ export type PackComponent<K extends ComponentType = ComponentType> = Omit<
 
 /** Immutable inspection data; no renderer, camera, or runtime instance is created. */
 export class EffectPack {
+  /** Raw NOIR document, defined by schemas/noir.fbs. @hidden */
   readonly document: DeepReadonly<DocumentT>;
+  /** Parsed manifest.json. */
   readonly manifest: DeepReadonly<Manifest>;
   #files: Map<string, Uint8Array>;
   #meshes: Map<number, DeepReadonly<MeshT>>;
@@ -87,29 +89,37 @@ export class EffectPack {
     this.#files = files;
     this.#meshes = new Map([...meshes].map(([id, mesh]) => [id, freeze(mesh)]));
   }
+  /** True after dispose(); reading package data then throws DISPOSED. */
   get disposed() {
     return this.#disposed;
   }
+  /** All nodes of the document. */
   get nodes() {
     return this.document.nodes;
   }
+  /** All components of the document; narrow by dataType, or use findComponents. */
   get components() {
     return this.document.components;
   }
+  /** Components that carry a custom script. */
   get customComponents() {
     return this.document.components.filter(
       (component) => component.dataType === ComponentData.CustomComponent,
     );
   }
+  /** Finds a node by ID. */
   getNode(id: number) {
     return this.nodes.find((node) => node.id === id);
   }
+  /** Finds a component by ID. @hidden */
   getComponent(id: number) {
     return this.components.find((component) => component.id === id);
   }
+  /** Lists the components attached to a node. */
   getComponents(nodeId: number) {
     return this.components.filter((component) => component.nodeId === nodeId);
   }
+  /** Lists every node with this exact name. */
   findNodes(name: string) {
     return this.nodes.filter((node) => node.name === name);
   }
@@ -133,10 +143,12 @@ export class EffectPack {
         component.dataType === dataType && (nodeId === undefined || component.nodeId === nodeId),
     ) as readonly PackComponent[] as readonly PackComponent<K>[];
   }
+  /** Returns a decoded NOMS mesh by asset ID. @hidden */
   getMesh(id: number) {
     this.#assertAlive();
     return this.#meshes.get(id);
   }
+  /** Returns a copy of an asset's bytes, or undefined if the ID is unknown. */
   getAssetBytes(id: number): Uint8Array | undefined {
     this.#assertAlive();
     const file = this.manifest.files.find((file) => file.asset_id === id);
@@ -176,6 +188,7 @@ export class EffectPack {
     }
     return image;
   }
+  /** Summarizes counts, component types, scripts and required host inputs. Does not check playability. */
   describe() {
     const counts: Record<string, number> = {};
     const scripts = new Map<
@@ -245,6 +258,7 @@ export class EffectPack {
       playbackReady: false as const,
     });
   }
+  /** Releases cached files, meshes and decoded pixels. Safe to call more than once. */
   dispose(): void {
     this.#disposed = true;
     this.#files.clear();

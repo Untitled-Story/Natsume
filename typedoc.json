@@ -1,0 +1,19 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": ["packages/natsume/src/index.ts"],
+  "tsconfig": "packages/natsume/tsconfig.json",
+  "plugin": ["typedoc-plugin-markdown", "typedoc-vitepress-theme"],
+  "out": "docs/reference/api",
+  "entryFileName": "index",
+  "readme": "none",
+  "excludeInternal": true,
+  "excludePrivate": true,
+  "excludeProtected": true,
+  "hidePageTitle": false,
+  "name": "API \u53c2\u8003",
+  "docsRoot": "./docs",
+  "gitRevision": "main",
+  "validation": {
+    "notExported": false
+  }
+}

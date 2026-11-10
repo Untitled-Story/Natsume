@@ -7,6 +7,7 @@ export default tseslint.config(
       'reference/**',
       'data/**',
       'docs/.vitepress/cache/**',
+      'docs/reference/api/**',
       '**/dist/**',
       '**/generated/**',
       '**/node_modules/**',

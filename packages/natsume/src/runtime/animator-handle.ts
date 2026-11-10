@@ -15,26 +15,32 @@ export class NatsumeAnimator {
     this.assertAlive();
     return this.controller.layerCount;
   }
+  /** Reads a Float parameter; throws if the name or type does not match. */
   getFloat(name: string): number {
     this.assertAlive();
     return this.controller.parameters.getFloat(name);
   }
+  /** Sets a Float parameter. */
   setFloat(name: string, value: number): void {
     this.assertAlive();
     this.controller.parameters.setFloat(name, value);
   }
+  /** Reads an Int parameter. */
   getInt(name: string): number {
     this.assertAlive();
     return this.controller.parameters.getInt(name);
   }
+  /** Sets an Int parameter. */
   setInt(name: string, value: number): void {
     this.assertAlive();
     this.controller.parameters.setInt(name, value);
   }
+  /** Reads a Bool parameter. */
   getBool(name: string): boolean {
     this.assertAlive();
     return this.controller.parameters.getBool(name);
   }
+  /** Sets a Bool parameter. */
   setBool(name: string, value: boolean): void {
     this.assertAlive();
     this.controller.parameters.setBool(name, value);
@@ -44,6 +50,7 @@ export class NatsumeAnimator {
     this.assertAlive();
     this.controller.parameters.setTrigger(name);
   }
+  /** Clears a Trigger parameter that has not been consumed. */
   resetTrigger(name: string): void {
     this.assertAlive();
     this.controller.parameters.resetTrigger(name);
@@ -63,10 +70,12 @@ export class NatsumeAnimator {
     this.assertAlive();
     return this.controller.getCurrentState(layer);
   }
+  /** State a running transition leads to, or undefined when no transition is active. */
   getNextState(layer = 0): AnimatorStateInfo | undefined {
     this.assertAlive();
     return this.controller.getNextState(layer);
   }
+  /** Active transition on the layer, or undefined when none is running. */
   getTransition(layer = 0): AnimatorTransitionInfo | undefined {
     this.assertAlive();
     return this.controller.getTransition(layer);
