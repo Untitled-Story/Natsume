@@ -116,7 +116,7 @@ pnpm build && pnpm --filter @untitled-story/natsume check:declarations
 
 工作流先核对标签与 `version` 一致，然后依次执行类型检查、单元测试、构建和声明检查，通过后发布到 npm，并创建 GitHub Release。
 
-版本号带 `-alpha`、`-beta` 或 `-rc` 后缀时，npm 的 dist-tag 是 `prerelease`，GitHub Release 标记为预发布。其他版本使用 `latest`。所以安装预发布版本需要显式指定：
+版本号带 `-alpha`、`-beta` 或 `-rc` 后缀时，npm 的 dist-tag 是 `prerelease`，GitHub Release 标记为预发布。其他版本使用 `latest`，并且 `prerelease` 也会指向这个版本，这样安装 `@prerelease` 总能得到最新的一个，而不会停在比正式版更旧的预发布版本上。这一步使用 `npm dist-tag`，在 npm 的 Trusted Publisher 配置里需要勾选 Allow npm dist-tag。所以安装预发布版本需要显式指定：
 
 ```sh
 npm install @untitled-story/natsume@prerelease pixi.js

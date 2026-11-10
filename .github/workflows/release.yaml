@@ -38,6 +38,7 @@ jobs:
             echo "Tag ${GITHUB_REF_NAME} does not match package version v${VERSION}"
             exit 1
           fi
+          echo "VERSION=${VERSION}" >> "${GITHUB_ENV}"
 
       - name: Typecheck
         run: pnpm typecheck
@@ -68,6 +69,14 @@ jobs:
         run: |
           echo "Publishing to npm with tag: ${RELEASE_TAG} (ref: ${GITHUB_REF_NAME})"
           npm publish --tag "${RELEASE_TAG}"
+
+      - name: Move the prerelease tag to the stable release
+        if: env.PRERELEASE == 'false'
+        working-directory: packages/natsume
+        run: |
+          NAME="$(node -p "require('./package.json').name")"
+          echo "Pointing the prerelease dist-tag at ${NAME}@${VERSION}"
+          npm dist-tag add "${NAME}@${VERSION}" prerelease
 
       - name: Release
         uses: softprops/action-gh-release@v2
