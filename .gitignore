@@ -1,8 +1,7 @@
 # Local reference sources
 /reference/
 
-# Local design documents
-/docs/
+# Local data and development notes
 /data/
 .DS_Store
 node_modules/
