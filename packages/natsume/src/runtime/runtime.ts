@@ -226,7 +226,7 @@ export class EffectInstance {
   private renderEnvironment: RenderEnvironment | undefined;
   private canvasEnvironment: CanvasEnvironment | undefined;
   constructor(
-    readonly simulation: Simulation,
+    /** @internal */ readonly simulation: Simulation,
     private readonly runtime: NatsumeRuntime,
     private readonly releaseTextures: () => void,
     options: InstanceOptions,
@@ -332,6 +332,33 @@ export class EffectInstance {
   }
   get displayMatrix(): Float32Array {
     return Float32Array.from(this.matrix);
+  }
+  /** Entry point this instance plays: source ID, name and root node IDs. */
+  get entry(): { readonly id: number; readonly name: string; readonly roots: readonly number[] } {
+    this.assertAlive();
+    const { id, name, roots } = this.simulation.entry;
+    return { id, name: String(name ?? ''), roots: [...roots] };
+  }
+  /** Live nodes of the entry hierarchy, parents before children. */
+  get nodes(): readonly NatsumeNode[] {
+    this.assertAlive();
+    return this.simulation.scene.ordered.flatMap((node) => {
+      const view = this.getNode(node.id);
+      return view ? [view] : [];
+    });
+  }
+  /** Particle systems of the entry; Timeline-controlled systems cannot be started with playParticleSystem. */
+  get particleSystems(): readonly {
+    readonly id: number;
+    readonly nodeId: number;
+    readonly timelineControlled: boolean;
+  }[] {
+    this.assertAlive();
+    return [...this.simulation.emitters.values()].map((emitter) => ({
+      id: emitter.id,
+      nodeId: emitter.node.id,
+      timelineControlled: emitter.timelineControlled,
+    }));
   }
   /** Nodes with allocated renderers, including renderers that animations can enable; unique per node. */
   get renderedNodes(): readonly NatsumeNode[] {

@@ -315,7 +315,7 @@ export async function showPreview(pack: EffectPack, signal: AbortSignal): Promis
   overlayBehavior.setEnabled(false);
   focus.replaceChildren(
     new Option('全景', '0'),
-    ...effect.simulation.scene.ordered.map((node) => {
+    ...effect.nodes.map((node) => {
       let depth = 0,
         parent = node.parent;
       while (parent) {
@@ -326,7 +326,7 @@ export async function showPreview(pack: EffectPack, signal: AbortSignal): Promis
     }),
   );
   fit();
-  const entry = effect.simulation.entry;
+  const entry = effect.entry;
   log(`预览环境 · 世界重力 (0, ${gravityY}, 0) · 静止 Rigidbody · 无雾 · 软粒子关闭`);
   log(
     `播放入口 ${entry.name} #${entry.id} · 根节点 ${entry.roots.join(', ')} · 观察节点只调整取景`,
@@ -359,9 +359,9 @@ document.getElementById('start-particles')!.addEventListener('click', () => {
   if (!effect || effect.destroyed) return;
   effect.play();
   let controlled = 0;
-  for (const emitter of effect.simulation.emitters.values())
-    if (emitter.timelineControlled) controlled++;
-    else effect.playParticleSystem(emitter.id, { withChildren: false });
+  for (const system of effect.particleSystems)
+    if (system.timelineControlled) controlled++;
+    else effect.playParticleSystem(system.id, { withChildren: false });
   log('宿主显式启动粒子；未修改包内自动播放设置');
   if (controlled) log(`${controlled} 个粒子系统由 Timeline 控制，沿用轨道播放`);
   stats();

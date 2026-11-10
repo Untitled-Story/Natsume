@@ -50,6 +50,8 @@ effect.getParticles(system.id);
 
 路径从场景根节点开始，以 `/` 连接节点名称，返回全部同名匹配。类型名与 `pack.describe().components` 的键一致，返回组件的 `data` 按类型收窄；省略节点 ID 时查找整个包。
 
+实例也提供只读的运行时清单：`effect.entry`（入口 ID、名称与根节点）、`effect.nodes`（层级顺序的节点）和 `effect.particleSystems`（系统 ID、所在节点及是否由 Timeline 控制）。
+
 当前读取 NOAP v1、NOIR 1.0（`noa.effects/1.0`）和 NOMS 1.0（`noa.mesh/1.0`）；旧包需要用新版 Noa 重新编译。源图、源材质和源动画可读取，缺少执行支持或源依赖时会在兼容性检查中明确报错。Sprite 描述符内联于 NOIR，通过资产 ID 引用图像和网格，没有独立文件。NOMS 保留源顶点属性、UV0–UV7 和三角形顺序，绘制能力仍受下方支持范围限制。
 
 `loadPack` 校验结构与已知契约，可用于检查尚未支持绘制的包；未知必需能力直接报错。已知但未实现的必需能力由 `checkCompatibility` 和实例化明确阻止。
