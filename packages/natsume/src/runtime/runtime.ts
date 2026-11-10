@@ -163,6 +163,11 @@ export class NatsumeNode {
   get worldMatrix(): Float32Array {
     return Float32Array.from(this.node.worldMatrix);
   }
+  /** Origin of the world transform in effect.container local coordinates; excludes render offsets. */
+  get containerPosition(): RenderOffset {
+    const world = this.node.worldMatrix;
+    return this.effect.worldToContainer([world[12]!, world[13]!, world[14]!]);
+  }
   /** Parent within this instance; undefined for an entry root. */
   get parent(): NatsumeNode | undefined {
     return this.node.parent ? this.effect.getNode(this.node.parent.id) : undefined;
@@ -495,6 +500,20 @@ export class EffectInstance {
     this.simulation.scene.setCanvasEnvironment(next);
     this.canvasEnvironment = next;
     this.render();
+  }
+  /** Projects a Unity world point into effect.container local coordinates with the display matrix. */
+  worldToContainer(point: readonly [number, number, number]): RenderOffset {
+    this.assertAlive();
+    check(
+      point?.length === 3 && point.every(Number.isFinite),
+      'HOST',
+      'World point requires three finite coordinates',
+    );
+    const m = this.matrix;
+    return {
+      x: m[0]! * point[0] + m[4]! * point[1] + m[8]! * point[2] + m[12]!,
+      y: m[1]! * point[0] + m[5]! * point[1] + m[9]! * point[2] + m[13]!,
+    };
   }
   setDisplayMatrix(matrix: ArrayLike<number>): void {
     this.assertAlive();

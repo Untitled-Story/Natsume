@@ -6,7 +6,7 @@ import type { EffectInstance, NatsumeNode, RenderOffset } from 'natsume';
  */
 export class OverlayView {
   private readonly groups = new Map<number, NatsumeNode>();
-  constructor(private readonly effect: EffectInstance) {
+  constructor(effect: EffectInstance) {
     const nodes = effect.renderedNodes;
     const rendered = new Set(nodes.map((node) => node.id));
     for (const node of nodes) {
@@ -23,16 +23,9 @@ export class OverlayView {
       if (group) break;
     }
     if (!group?.parent) return { x: 0, y: 0 };
-    const world = group.worldMatrix,
-      parent = group.parent.worldMatrix;
-    const x = world[12]! - parent[12]!,
-      y = world[13]! - parent[13]!,
-      z = world[14]! - parent[14]!;
-    const matrix = this.effect.displayMatrix;
-    return {
-      x: -(matrix[0]! * x + matrix[4]! * y + matrix[8]! * z),
-      y: -(matrix[1]! * x + matrix[5]! * y + matrix[9]! * z),
-    };
+    const position = group.containerPosition,
+      origin = group.parent.containerPosition;
+    return { x: origin.x - position.x, y: origin.y - position.y };
   }
   apply(enabled: boolean): void {
     for (const group of this.groups.values())

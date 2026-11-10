@@ -417,16 +417,9 @@ const overlay = effect.addBehavior(({ effect }) => {
   const align = () => {
     const parent = node.parent;
     if (!parent) return;
-    const world = node.worldMatrix;
-    const origin = parent.worldMatrix;
-    const x = world[12]! - origin[12]!;
-    const y = world[13]! - origin[13]!;
-    const z = world[14]! - origin[14]!;
-    const m = effect.displayMatrix;
-    node.setRenderOffset({
-      x: -(m[0]! * x + m[4]! * y + m[8]! * z),
-      y: -(m[1]! * x + m[5]! * y + m[9]! * z),
-    });
+    const position = node.containerPosition;
+    const origin = parent.containerPosition;
+    node.setRenderOffset({ x: origin.x - position.x, y: origin.y - position.y });
   };
   const clear = () => node.setRenderOffset(null);
   return { onEnable: align, lateUpdate: align, onDisable: clear, destroy: clear };
@@ -454,27 +447,20 @@ overlay.remove();
 ```ts
 runtime.registerScript(
   { assembly: 'Assembly-CSharp', namespace: 'MyGame', className: 'EffectController' },
-  ({ effect, node }) => {
+  ({ node }) => {
     const align = () => {
       const parent = node.parent;
       if (!parent) return;
-      const world = node.worldMatrix,
-        origin = parent.worldMatrix;
-      const x = world[12]! - origin[12]!;
-      const y = world[13]! - origin[13]!;
-      const z = world[14]! - origin[14]!;
-      const m = effect.displayMatrix;
-      node.setRenderOffset({
-        x: -(m[0]! * x + m[4]! * y + m[8]! * z),
-        y: -(m[1]! * x + m[5]! * y + m[9]! * z),
-      });
+      const position = node.containerPosition;
+      const origin = parent.containerPosition;
+      node.setRenderOffset({ x: origin.x - position.x, y: origin.y - position.y });
     };
     return { onEnable: align, lateUpdate: align, onDisable: () => node.setRenderOffset(null) };
   },
 );
 ```
 
-Bridge 同样支持 `beforeUpdate`、`update`、`lateUpdate`，帧阶段与宿主行为一致；启停仍跟随包内节点及组件状态。`setRenderOffset()` 使用特效容器局部坐标，父子偏移相加；传 `null` 清除当前节点的偏移。设置立即生效，重播保留。宿主也可以通过 `effect.getNode(id)` 调用此接口；`effect.renderedNodes` 返回含已启用渲染器组件的节点，包括当前失活的节点。
+Bridge 同样支持 `beforeUpdate`、`update`、`lateUpdate`，帧阶段与宿主行为一致；启停仍跟随包内节点及组件状态。`setRenderOffset()` 使用特效容器局部坐标，父子偏移相加；`node.containerPosition` 和 `effect.worldToContainer([x, y, z])` 通过显示矩阵把 Unity 世界坐标换算到同一坐标系（前者为节点原点，不含渲染偏移），宿主无需自行做矩阵运算；传 `null` 清除当前节点的偏移。设置立即生效，重播保留。宿主也可以通过 `effect.getNode(id)` 调用此接口；`effect.renderedNodes` 返回含已启用渲染器组件的节点，包括当前失活的节点。
 
 脚本字段被动画驱动时，第三个参数须声明字段类型：
 

@@ -178,17 +178,10 @@ function fit(): void {
   if (minX === Infinity) {
     const selected = effect.getNode(Number(focus.value));
     if (selected) {
-      const world = selected.worldMatrix,
-        matrix = effect.displayMatrix;
-      const x = world[12]!,
-        y = world[13]!,
-        z = world[14]!;
-      const w = matrix[3]! * x + matrix[7]! * y + matrix[11]! * z + matrix[15]!;
+      const position = selected.containerPosition;
       const offset = overlayEnabled ? overlay?.offset(selected) : undefined;
-      const projectedX =
-        (matrix[0]! * x + matrix[4]! * y + matrix[8]! * z + matrix[12]!) / w + (offset?.x ?? 0);
-      const projectedY =
-        (matrix[1]! * x + matrix[5]! * y + matrix[9]! * z + matrix[13]!) / w + (offset?.y ?? 0);
+      const projectedX = position.x + (offset?.x ?? 0);
+      const projectedY = position.y + (offset?.y ?? 0);
       minX = projectedX - 0.5;
       maxX = projectedX + 0.5;
       minY = projectedY - 0.5;
