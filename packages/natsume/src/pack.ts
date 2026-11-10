@@ -5,6 +5,7 @@ import type { DocumentT } from './format/generated/noa/ir/document.js';
 import type { MeshT } from './format/generated/noa/mesh/mesh.js';
 import { ComponentData } from './format/generated/noa/ir/component-data.js';
 import type { ComponentT } from './format/generated/noa/ir/component.js';
+import type { NodeT } from './format/generated/noa/ir/node.js';
 import type { AnimatorT } from './format/generated/noa/ir/animator.js';
 import type { CameraT } from './format/generated/noa/ir/camera.js';
 import type { CanvasT } from './format/generated/noa/ir/canvas.js';
@@ -94,37 +95,37 @@ export class EffectPack {
     return this.#disposed;
   }
   /** All nodes of the document. */
-  get nodes() {
+  get nodes(): readonly DeepReadonly<NodeT>[] {
     return this.document.nodes;
   }
   /** All components of the document; narrow by dataType, or use findComponents. */
-  get components() {
+  get components(): readonly DeepReadonly<ComponentT>[] {
     return this.document.components;
   }
   /** Components that carry a custom script. */
-  get customComponents() {
+  get customComponents(): readonly DeepReadonly<ComponentT>[] {
     return this.document.components.filter(
       (component) => component.dataType === ComponentData.CustomComponent,
     );
   }
   /** Finds a node by ID. */
-  getNode(id: number) {
+  getNode(id: number): DeepReadonly<NodeT> | undefined {
     return this.nodes.find((node) => node.id === id);
   }
   /** Finds a component by ID. @hidden */
-  getComponent(id: number) {
+  getComponent(id: number): DeepReadonly<ComponentT> | undefined {
     return this.components.find((component) => component.id === id);
   }
   /** Lists the components attached to a node. */
-  getComponents(nodeId: number) {
+  getComponents(nodeId: number): readonly DeepReadonly<ComponentT>[] {
     return this.components.filter((component) => component.nodeId === nodeId);
   }
   /** Lists every node with this exact name. */
-  findNodes(name: string) {
+  findNodes(name: string): readonly DeepReadonly<NodeT>[] {
     return this.nodes.filter((node) => node.name === name);
   }
   /** Matches slash-separated node names from a scene root, e.g. "Root/Effect/Spark". */
-  findNodesByPath(path: string) {
+  findNodesByPath(path: string): readonly DeepReadonly<NodeT>[] {
     let matches = this.nodes.filter((node) => node.parentId === 0);
     for (const [index, name] of path.split('/').entries()) {
       if (index > 0) {
@@ -144,7 +145,7 @@ export class EffectPack {
     ) as readonly PackComponent[] as readonly PackComponent<K>[];
   }
   /** Returns a decoded NOMS mesh by asset ID. @hidden */
-  getMesh(id: number) {
+  getMesh(id: number): DeepReadonly<MeshT> | undefined {
     this.#assertAlive();
     return this.#meshes.get(id);
   }
