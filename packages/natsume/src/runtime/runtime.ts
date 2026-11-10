@@ -72,6 +72,9 @@ import {
   type CompatibilityReport,
 } from './compatibility.js';
 
+/** Fields to change in a host environment; undefined removes an optional field. */
+export type EnvironmentPatch<T> = { readonly [K in keyof T]?: T[K] | undefined };
+
 export interface InstanceOptions extends SimulationOptions {
   /** Host gravity, view, fog and depth inputs; required for Unity legacy particle materials. */
   readonly particleEnvironment?: ParticleEnvironment;
@@ -359,6 +362,44 @@ export class EffectInstance {
     this.simulation.scene.setCameraEnvironment(copy);
     this.cameraEnvironment = copy;
     this.render();
+  }
+  /** Returns an independent copy of the current camera environment, if one was provided. */
+  getCameraEnvironment(): CameraEnvironment | undefined {
+    this.assertAlive();
+    return copyCameraEnvironment(this.cameraEnvironment);
+  }
+  /** Returns an independent copy of the current particle environment; host objects remain borrowed. */
+  getParticleEnvironment(): ParticleEnvironment | undefined {
+    this.assertAlive();
+    return copyEnvironment(this.environment);
+  }
+  /** Returns an independent copy of the current render environment, if one was provided. */
+  getRenderEnvironment(): RenderEnvironment | undefined {
+    this.assertAlive();
+    return copyRenderEnvironment(this.renderEnvironment);
+  }
+  /** Returns an independent copy of the current canvas environment, if one was provided. */
+  getCanvasEnvironment(): CanvasEnvironment | undefined {
+    this.assertAlive();
+    return copyCanvasEnvironment(this.canvasEnvironment);
+  }
+  /** Merges fields into the current camera environment with the same validation as the setter. */
+  updateCameraEnvironment(patch: EnvironmentPatch<CameraEnvironment>): void {
+    this.setCameraEnvironment({ ...this.getCameraEnvironment(), ...patch } as CameraEnvironment);
+  }
+  /** Merges fields into the current particle environment; undefined removes a field, fog stays required. */
+  updateParticleEnvironment(patch: EnvironmentPatch<ParticleEnvironment>): void {
+    const next = { ...this.getParticleEnvironment(), ...patch };
+    check(next.fog !== undefined, 'HOST', 'particleEnvironment.fog is required');
+    this.setParticleEnvironment(next as ParticleEnvironment);
+  }
+  /** Merges fields into the current render environment, replacing sortingLayers as a whole. */
+  updateRenderEnvironment(patch: EnvironmentPatch<RenderEnvironment>): void {
+    this.setRenderEnvironment({ ...this.getRenderEnvironment(), ...patch } as RenderEnvironment);
+  }
+  /** Merges fields into the current canvas environment, replacing displays as a whole. */
+  updateCanvasEnvironment(patch: EnvironmentPatch<CanvasEnvironment>): void {
+    this.setCanvasEnvironment({ ...this.getCanvasEnvironment(), ...patch } as CanvasEnvironment);
   }
   /** Replaces particle environment inputs. Host depth textures remain borrowed. */
   setParticleEnvironment(value: ParticleEnvironment): void {

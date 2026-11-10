@@ -373,13 +373,7 @@ gravityInput.addEventListener('change', () => {
     log('重力 Y 必须是有限数字', 'error');
     return;
   }
-  effect?.setParticleEnvironment({
-    rigidbodyVelocities,
-    fog: { mode: 'none' },
-    fixedDeltaSeconds: 0.02,
-    viewPosition: [0, 0, -1000],
-    gravity: [0, next, 0],
-  });
+  effect?.updateParticleEnvironment({ gravity: [0, next, 0] });
   gravityY = next;
   log(`预览环境 · 世界重力 (0, ${gravityY}, 0)`);
 });

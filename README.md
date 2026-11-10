@@ -321,6 +321,16 @@ effect.setParticleEnvironment({
 
 `viewVelocity` 为视图在 Unity 世界空间中的移动速度，单位为每秒；省略时视图静止。更新显示矩阵时，可同步用 `setParticleEnvironment` 更新它，让 Stretched Billboard 计入视图移动。该方法替换整个环境配置，需要一并保留重力等输入。
 
+只改部分字段时使用 `update*Environment`，可读取当前值用 `get*Environment`（Particle / Render / Canvas / Camera 各一组）：
+
+```ts
+effect.updateParticleEnvironment({ viewVelocity: [0, 0, 0] }); // 其余字段保持不变
+effect.updateParticleEnvironment({ viewPosition: undefined }); // undefined 移除可选字段
+const current = effect.getParticleEnvironment(); // 独立副本；宿主对象仍为借用
+```
+
+更新是浅合并：`sortingLayers`、`displays`、`rigidbodyVelocities` 等字段按整体替换，校验失败时保留原环境。
+
 预检、实例创建与环境替换使用同一套环境校验规则，包括固定步长、2D 重力、Rigidbody 速度和宿主绑定；即使当前特效暂未使用某个字段，传入的值也必须合法。环境替换会先检查全部输入与当前特效的需求，失败时保留原环境。
 
 `viewPosition` 为视点的 Unity 世界坐标；Facing 对齐和 Freeform Stretch 必须提供，例如 `viewPosition: [0, 0, -10]`。它用于构造粒子的朝向平面与普通 Stretch 的横向，不会自动修改显示矩阵。普通 Stretch 省略该项时使用平行视线近似，并返回诊断。

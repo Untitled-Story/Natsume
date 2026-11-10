@@ -7,6 +7,7 @@ export {
   EffectInstance,
   NatsumeNode,
   type InstanceOptions,
+  type EnvironmentPatch,
   type RenderOffset,
   type ScriptIdentity,
   type ScriptContext,
