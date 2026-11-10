@@ -1,0 +1,75 @@
+name: Release
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  id-token: write
+  contents: write
+
+jobs:
+  Release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          registry-url: 'https://registry.npmjs.org'
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check tag matches package version
+        run: |
+          VERSION="$(node -p "require('./packages/natsume/package.json').version")"
+          if [ "v${VERSION}" != "${GITHUB_REF_NAME}" ]; then
+            echo "Tag ${GITHUB_REF_NAME} does not match package version v${VERSION}"
+            exit 1
+          fi
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build
+        run: pnpm --filter @untitled-story/natsume build
+
+      - name: Check declarations
+        run: pnpm --filter @untitled-story/natsume check:declarations
+
+      - name: Compute release metadata
+        run: |
+          REF="${GITHUB_REF_NAME}"
+          TAG="latest"
+          PRERELEASE="false"
+          if [[ "$REF" =~ -(alpha|beta|rc)([.-][0-9A-Za-z]+)?$ ]]; then
+            TAG="prerelease"
+            PRERELEASE="true"
+          fi
+          echo "RELEASE_TAG=${TAG}" >> "${GITHUB_ENV}"
+          echo "PRERELEASE=${PRERELEASE}" >> "${GITHUB_ENV}"
+
+      - name: Publish to NPM
+        working-directory: packages/natsume
+        run: |
+          echo "Publishing to npm with tag: ${RELEASE_TAG} (ref: ${GITHUB_REF_NAME})"
+          npm publish --tag "${RELEASE_TAG}"
+
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          name: ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
+          prerelease: ${{ env.PRERELEASE == 'true' }}
