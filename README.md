@@ -118,6 +118,15 @@ effect.update(deltaSeconds, {
 animator.setVisible(visible); // 默认 true，控制源 culling mode
 ```
 
+宿主没有现成的物理步时，可用 `FixedStepClock` 把帧时间切成固定步：
+
+```ts
+const physics = new FixedStepClock(0.02, 8); // 步长（秒）、每帧最多步数
+effect.update(deltaSeconds, { physicsSteps: physics.advance(deltaSeconds) });
+```
+
+不足一步的时间留到下一帧，超过每帧上限的步数被丢弃，避免长时间卡顿后连续补算；`reset()` 清空累积时间。
+
 Cull Update Transforms 在不可见时继续推进状态和事件、停止属性写回；Cull Completely 冻结状态。暂停及停止排空冻结全部动画。`setNodeActive` 立即生效，下一次动画求值可覆盖。入口 ApplyClip 只应用起点，PlayClip 持续播放。
 
 旋转支持归一化四元数与 Unity ZXY。缺失通道保留动作入口值；Write Defaults 恢复 Animator 启动时的属性值。关闭组件保留状态；节点失活按源 keep-state / write-defaults 设置处理。restart 恢复包初值、参数默认值及源层权重。粒子参数保持源模式，材质覆盖按 Renderer 和实例隔离。
@@ -232,6 +241,8 @@ const effect = await runtime.instantiate(pack, { canvasEnvironment });
 effect.setCanvasEnvironment(canvasEnvironment); // 整体替换；非法输入不改变当前环境
 ```
 
+二维宿主可直接使用预设：`screenCanvasEnvironment(width, height)` 生成 1 单位 = 1 个 Pixi 逻辑像素的正交视图（相机位于 z = -1000，朝向 +Z），与下文的 `screenParticleEnvironment` 配套。
+
 World Canvas 保留源世界布局，沿用 `displayMatrix`；Overlay / Camera 的根布局由显示环境驱动。Sorting Layer 顺序优先读取包内 Renderer 的层 ID 与序号；缺失时使用宿主 `renderEnvironment.sortingLayers`，默认层始终为 0，仍无法确定时明确报错。额外 UI 顶点通道不改变当前已核验、只消费位置 / 颜色 / UV 的无光照配方。
 
 ```ts
@@ -318,6 +329,20 @@ effect.setParticleEnvironment({
   softParticles: { depthTexture: sceneDepthTexture },
 });
 ```
+
+二维宿主可用预设省去样板配置：`screenParticleEnvironment(overrides?)` 返回无雾、Unity 默认重力、`fixedDeltaSeconds: 0.02`、视点 `[0, 0, -1000]` 的环境，`overrides` 覆盖其中任意字段；`stationaryRigidbodyVelocities(pack)` 为包声明的每个 Rigidbody 槽提供零速度：
+
+```ts
+const particleEnvironment = screenParticleEnvironment({
+  rigidbodyVelocities: stationaryRigidbodyVelocities(pack),
+});
+const effect = await runtime.instantiate(pack, {
+  particleEnvironment,
+  canvasEnvironment: screenCanvasEnvironment(app.screen.width, app.screen.height),
+});
+```
+
+预设仅是常用起点：重力使用 Unity 默认值而非包内数据，需要其他取值时请覆盖。
 
 `gravity` 是宿主提供的 Unity 世界空间加速度，单位与粒子的位置和速度一致；当包中的 `gravityMultiplier` 非零时必须提供它。Natsume 不使用隐含的 Unity 默认重力。
 

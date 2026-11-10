@@ -1,6 +1,10 @@
 import { Application, Mesh, extensions } from 'pixi.js';
 import {
+  FixedStepClock,
   NatsumePlugin,
+  screenCanvasEnvironment,
+  screenParticleEnvironment,
+  stationaryRigidbodyVelocities,
   type NatsumeRuntime,
   type EffectPack,
   type EffectInstance,
@@ -42,7 +46,7 @@ let app: Application | undefined,
 let initializing: Promise<void> | undefined;
 let observer: ResizeObserver | undefined;
 let frame = 0;
-let physicsAccumulator = 0;
+const physicsClock = new FixedStepClock();
 let centerX = 0,
   centerY = 0,
   scale = 1;
@@ -82,12 +86,9 @@ async function init(): Promise<void> {
         if (!effect || effect.destroyed) return;
         try {
           const deltaSeconds = ticker.deltaMS / 1000;
-          physicsAccumulator += deltaSeconds;
-          const count = Math.min(8, Math.floor(physicsAccumulator / 0.02));
-          physicsAccumulator -= count * 0.02;
           effect.update(deltaSeconds, {
             unscaledDeltaSeconds: ticker.elapsedMS / 1000,
-            physicsSteps: Array<number>(count).fill(0.02),
+            physicsSteps: physicsClock.advance(deltaSeconds),
           });
           if (++frame % 8 === 0) stats();
         } catch (error) {
@@ -231,58 +232,23 @@ export function clearPreview(): void {
 }
 
 function canvasEnvironment() {
-  const width = app!.screen.width,
-    height = app!.screen.height;
-  return {
-    displays: { 0: { width, height } },
-    mainCamera: {
-      viewMatrix: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, -1, 0, 0, 0, -1000, 1],
-      projectionMatrix: [
-        2 / width,
-        0,
-        0,
-        0,
-        0,
-        2 / height,
-        0,
-        0,
-        0,
-        0,
-        -2 / 1999.9,
-        0,
-        0,
-        0,
-        -2000.1 / 1999.9,
-        1,
-      ],
-    },
-  };
+  return screenCanvasEnvironment(app!.screen.width, app!.screen.height);
 }
 
 export async function showPreview(pack: EffectPack, signal: AbortSignal): Promise<void> {
   await init();
   if (signal.aborted) return;
-  rigidbodyVelocities = Object.fromEntries(
-    pack.components.flatMap((component) => {
-      const data = component.data;
-      return data && 'main' in data && data.main?.hostRigidbodyVelocitySlot
-        ? [[data.main.hostRigidbodyVelocitySlot, [0, 0, 0] as const]]
-        : [];
-    }),
-  );
+  rigidbodyVelocities = stationaryRigidbodyVelocities(pack);
   const created = await runtime!.instantiate(pack, {
     seed: 12345,
     renderEnvironment: { globalMipBias: 0, sortingLayers },
     canvasEnvironment: canvasEnvironment(),
     cameraEnvironment: { targetDisplay: 0, width: app!.screen.width, height: app!.screen.height },
     parentLayout: { width: app!.screen.width, height: app!.screen.height },
-    particleEnvironment: {
+    particleEnvironment: screenParticleEnvironment({
       rigidbodyVelocities,
-      fog: { mode: 'none' },
-      fixedDeltaSeconds: 0.02,
-      viewPosition: [0, 0, -1000],
       gravity: [0, gravityY, 0],
-    },
+    }),
   });
   if (signal.aborted) {
     created.destroy();
@@ -290,7 +256,7 @@ export async function showPreview(pack: EffectPack, signal: AbortSignal): Promis
   }
   clearPreview();
   effect = created;
-  physicsAccumulator = 0;
+  physicsClock.reset();
   app!.stage.addChild(effect.container);
   effect.onAnimationEvent((event) => {
     log(

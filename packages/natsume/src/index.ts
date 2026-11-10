@@ -26,6 +26,12 @@ export { type LayoutSize } from './runtime/scene.js';
 export { type PlaybackState, type AnimationTarget } from './runtime/simulation.js';
 export { type Diagnostic } from './runtime/emitter.js';
 export { NatsumePlugin } from './application-plugin.js';
+export { FixedStepClock } from './fixed-step-clock.js';
+export {
+  screenCanvasEnvironment,
+  screenParticleEnvironment,
+  stationaryRigidbodyVelocities,
+} from './screen-environment.js';
 export { type ParticleEnvironment, type ParticleFog } from './rendering/particle-environment.js';
 export type {
   ParticleLightState,
