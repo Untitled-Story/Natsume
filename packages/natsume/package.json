@@ -1,6 +1,6 @@
 {
   "name": "@untitled-story/natsume",
-  "version": "1.0.0-alpha.1",
+  "version": "1.0.0-alpha.2",
   "description": "Runs Unity particle effects, animation and Timeline in the browser on PixiJS v8 and WebGL2",
   "keywords": [
     "pixi",
