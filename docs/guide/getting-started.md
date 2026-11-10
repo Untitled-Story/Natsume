@@ -6,7 +6,7 @@
 
 - PixiJS `^8.22.0`。
 - Pixi 渲染器必须使用 WebGL2。Natsume 在初始化时检查这一点，其他后端会直接报错。
-- 一个由 Noa 编译的 `.noap` 资源包。
+- 一个由 [Noa](https://github.com/Untitled-Story/Noa) 编译的 `.noap` 资源包。
 - 支持 `crypto.subtle` 的环境。加载时用它校验文件的 SHA-256，浏览器里通常需要 HTTPS 或 localhost。
 
 Natsume 目前是私有 workspace 包，没有发布到 npm。在 workspace 内部使用时，把它声明为依赖：

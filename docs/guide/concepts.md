@@ -45,7 +45,7 @@ Natsume 把"模拟和绘制"与"决定怎么摆放和驱动"分开。库负责�
 
 一个 Unity 特性是否可用，要分开看四件事：
 
-1. Noa 能否把它编译进资源包。
+1. [Noa](https://github.com/Untitled-Story/Noa) 能否把它编译进资源包。
 2. Natsume 能否读取这份数据。
 3. Natsume 能否执行它。
 4. 画面是否与 Unity 一致。

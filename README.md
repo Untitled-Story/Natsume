@@ -2,7 +2,7 @@
 
 Natsume 是一个基于 PixiJS v8 和 WebGL2、用纯 TypeScript 编写的 Web 特效运行库。
 
-它加载由 Noa 编译的 NOAP（Noa Package）资源包，解析场景层级、动画、粒子系统、材质和纹理，在浏览器中模拟和渲染 Unity 特效。Noa 负责资源编译，Natsume 负责运行和渲染。
+它加载由 [Noa](https://github.com/Untitled-Story/Noa) 编译的 NOAP（Noa Package）资源包，解析场景层级、动画、粒子系统、材质和纹理，在浏览器中模拟和渲染 Unity 特效。Noa 负责资源编译，Natsume 负责运行和渲染。
 
 ```text
 Unity Prefab → Noa → NOAP (Noa Package) → Natsume → PixiJS

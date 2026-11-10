@@ -37,7 +37,7 @@ const pack = await loadPack(url, {
 
 ### 支持的格式
 
-当前读取 NOAP v1、NOIR 1.0（`noa.effects/1.0`）和 NOMS 1.0（`noa.mesh/1.0`）。旧格式的包需要用新版 Noa 重新编译。详见[包格式](/reference/package-format)。
+当前读取 NOAP v1、NOIR 1.0（`noa.effects/1.0`）和 NOMS 1.0（`noa.mesh/1.0`）。旧格式的包需要用新版 [Noa](https://github.com/Untitled-Story/Noa) 重新编译。详见[包格式](/reference/package-format)。
 
 ## 查看包的内容
 

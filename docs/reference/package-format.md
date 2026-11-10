@@ -1,6 +1,6 @@
 # 包格式
 
-Natsume 读取由 Noa 编译的 NOAP（Noa Package）资源包。本页概述包的结构和 Natsume 接受的版本。包的完整定义由 Noa 维护，Natsume 仓库的 `packages/natsume/schemas/` 保存了所使用的模式文件，并在 `provenance.json` 中记录了它们的来源和哈希。
+Natsume 读取由 [Noa](https://github.com/Untitled-Story/Noa) 编译的 NOAP（Noa Package）资源包。本页概述包的结构和 Natsume 接受的版本。包的完整定义由 Noa 维护，Natsume 仓库的 `packages/natsume/schemas/` 保存了所使用的模式文件，并在 `provenance.json` 中记录了它们的来源和哈希。
 
 ## 接受的版本
 

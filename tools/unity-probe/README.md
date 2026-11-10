@@ -86,7 +86,7 @@ pnpm probe:unity --prefab-layout # 原始 prefab 布局
 
 原始 HDR 对照另设 `NATSUME_SOURCE_HDR` 为恢复的 EXR 绝对路径；EXR 所在目录的上一级放置同名 `.texture.bin` / `.texture.json`，保存原始压缩数据与 Texture2D 元数据。缺少这些输入时探针仍测合成 HALF 纹理，完整源材质浏览器验收则要求原始 ASTC 记录。内置纹理另测 7 级 mip，以及两种颜色空间、三种尺寸和三种 mip bias 的 18 组采样。
 
-`--noise-fit` 需要先准备 `data/unity-baselines/noise-fit-input.json`。`--prefab-layout` 默认使用相邻 Noa 项目的 `data/scenario/effect/kirakira_01_rip/`；可通过 `NATSUME_PREFAB_SOURCE` 指定其他同结构资源目录。
+`--noise-fit` 需要先准备 `data/unity-baselines/noise-fit-input.json`。`--prefab-layout` 默认使用相邻 [Noa](https://github.com/Untitled-Story/Noa) 项目的 `data/scenario/effect/kirakira_01_rip/`；可通过 `NATSUME_PREFAB_SOURCE` 指定其他同结构资源目录。
 
 `--job-workers N` 指定 Unity 后台工作线程数。共享子发射器在并行更新时存在重跑差异，只有 `--job-workers 0` 可更新该模式的回归基准。设置 `NATSUME_SHARED_MARKERS=1` 可给两个父系统添加左右位置标记；输出保留子粒子位置和种子以追踪来源。
 
