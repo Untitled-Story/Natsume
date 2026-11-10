@@ -1,4 +1,4 @@
-import type { EffectInstance, NatsumeNode, RenderOffset } from 'natsume';
+import type { EffectInstance, NatsumeNode, RenderOffset } from '@untitled-story/natsume';
 
 /** Preview hypothesis: render each outermost visible emitter at its parent's origin.
  * Particle state, nested pair offsets and clip depth remain authored values.

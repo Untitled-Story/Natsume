@@ -11,7 +11,7 @@
     "dev": "pnpm --filter natsume-playground dev",
     "build": "pnpm -r build",
     "typecheck": "tsc --noEmit && pnpm -r typecheck",
-    "test": "pnpm --filter natsume test",
+    "test": "pnpm --filter @untitled-story/natsume test",
     "test:browser": "playwright test",
     "docs:api": "typedoc",
     "docs:dev": "pnpm docs:api && vitepress dev docs",
@@ -20,7 +20,7 @@
     "lint": "eslint packages tools docs *.ts *.js",
     "format": "prettier --write packages tools docs *.ts *.js *.json pnpm-workspace.yaml",
     "format:check": "prettier --check packages tools docs *.ts *.js *.json pnpm-workspace.yaml",
-    "generate": "pnpm --filter natsume generate",
+    "generate": "pnpm --filter @untitled-story/natsume generate",
     "probe:unity": "node tools/unity-probe/probe-unity.mjs",
     "benchmark": "node tools/benchmarks/benchmark-particles.mjs",
     "benchmark:preview": "node tools/benchmarks/benchmark-preview.mjs"

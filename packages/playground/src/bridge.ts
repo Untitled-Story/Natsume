@@ -1,4 +1,4 @@
-import type { NatsumeRuntime, ScriptDeclaration, ScriptIdentity } from 'natsume';
+import type { NatsumeRuntime, ScriptDeclaration, ScriptIdentity } from '@untitled-story/natsume';
 import { log } from './console.js';
 
 interface Declaration extends ScriptDeclaration {

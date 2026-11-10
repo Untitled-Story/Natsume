@@ -100,7 +100,7 @@ pnpm lint
 pnpm format:check
 pnpm test
 pnpm test:browser
-pnpm build && pnpm --filter natsume check:declarations
+pnpm build && pnpm --filter @untitled-story/natsume check:declarations
 ```
 
 最后一条构建运行库，并用严格的库检查对生成的类型声明做类型检查，防止声明引用了已被移除的内部类型。

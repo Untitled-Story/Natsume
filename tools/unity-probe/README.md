@@ -103,7 +103,7 @@ pnpm exec playwright test scene-materials.spec.ts
 
 ```sh
 node tools/unity-probe/compile-controller-packages.mjs
-pnpm --filter natsume exec vitest run tests/animator-controller-native.test.ts tests/animator-controller.test.ts
+pnpm --filter @untitled-story/natsume exec vitest run tests/animator-controller-native.test.ts tests/animator-controller.test.ts
 ```
 
 编译器默认取相邻 Noa 的 `target/debug/noa`，可用 `NOA_BIN` 指定。原生数据、独立编译源与 `.noap` 输出均留在忽略目录；缺少原生数据时仅跳过原生回放，普通控制器测试仍执行。
@@ -136,7 +136,7 @@ export UNITY_TIMELINE_PACKAGE=/absolute/path/to/com.unity.timeline
 node tools/unity-probe/probe-timeline.mjs
 node tools/unity-probe/compile-timeline-packages.mjs
 node tools/unity-probe/probe-timeline.mjs --playback
-pnpm --filter natsume exec vitest run tests/timeline-native.test.ts tests/timeline-playback-native.test.ts
+pnpm --filter @untitled-story/natsume exec vitest run tests/timeline-native.test.ts tests/timeline-playback-native.test.ts
 ```
 
 编译步骤默认使用相邻 Noa 仓库的 `target/debug/noa`，可用 `NOA_BIN` 指定。探针把 Timeline Runtime 复制到独立本地工程，不修改通用探针工程或添加 Natsume 运行依赖；编译器通过原生 MonoScript 身份表识别轨道。覆盖非空轨道求值、停止恢复、共享粒子目标，以及实际 PlayerLoop 的时钟、循环与事件顺序。

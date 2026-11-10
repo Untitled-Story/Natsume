@@ -9,7 +9,7 @@ import {
   type EffectPack,
   type EffectInstance,
   type BehaviorHandle,
-} from 'natsume';
+} from '@untitled-story/natsume';
 import { log } from './console.js';
 import { OverlayView } from './overlay.js';
 import { SceneMesh } from '../../natsume/src/rendering/scene-mesh.js';

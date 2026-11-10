@@ -1,4 +1,4 @@
-import { loadPack, type EffectPack } from 'natsume';
+import { loadPack, type EffectPack } from '@untitled-story/natsume';
 import './style.css';
 import { showPreview, clearPreview, readPreviewSortingLayers } from './preview.js';
 import { log } from './console.js';

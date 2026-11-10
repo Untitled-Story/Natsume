@@ -230,7 +230,7 @@ importers:
 
   packages/playground:
     dependencies:
-      natsume:
+      '@untitled-story/natsume':
         specifier: workspace:*
         version: link:../natsume
       pixi.js:

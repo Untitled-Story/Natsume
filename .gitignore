@@ -16,3 +16,6 @@ playwright-report/
 .env.*
 !.env.example
 *.log
+
+# Copied from the repository root by prepack
+/packages/natsume/LICENSE

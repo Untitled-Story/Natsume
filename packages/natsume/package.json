@@ -1,12 +1,30 @@
 {
-  "name": "natsume",
-  "version": "0.0.0",
-  "private": true,
+  "name": "@untitled-story/natsume",
+  "version": "1.0.0-alpha.1",
+  "description": "Runs Unity particle effects, animation and Timeline in the browser on PixiJS v8 and WebGL2",
+  "keywords": [
+    "pixi",
+    "pixijs",
+    "unity",
+    "particles",
+    "vfx",
+    "webgl2",
+    "timeline",
+    "animation"
+  ],
+  "homepage": "https://github.com/Untitled-Story/Natsume#readme",
+  "bugs": {
+    "url": "https://github.com/Untitled-Story/Natsume/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Untitled-Story/Natsume.git",
+    "directory": "packages/natsume"
+  },
   "license": "Apache-2.0",
   "type": "module",
-  "engines": {
-    "node": ">=24"
-  },
+  "main": "./dist/natsume.js",
+  "types": "./dist/index.d.ts",
   "files": [
     "dist"
   ],
@@ -16,12 +34,16 @@
       "import": "./dist/natsume.js"
     }
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "vite build && tsc -p tsconfig.build.json",
     "check:declarations": "node scripts/check-declarations.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "generate": "node scripts/generate.mjs"
+    "generate": "node scripts/generate.mjs",
+    "prepack": "node scripts/prepack.mjs"
   },
   "dependencies": {
     "fflate": "0.8.3",
