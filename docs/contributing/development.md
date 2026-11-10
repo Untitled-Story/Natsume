@@ -106,3 +106,20 @@ pnpm build && pnpm --filter @untitled-story/natsume check:declarations
 最后一条构建运行库，并用严格的库检查对生成的类型声明做类型检查，防止声明引用了已被移除的内部类型。
 
 较慢的原生对照用例在并行运行时可能超过默认的超时，可以单独运行，或用 `--timeout` 加大超时。
+
+## 发布
+
+发布由推送版本标签触发（`.github/workflows/release.yaml`）：
+
+1. 修改 `packages/natsume/package.json` 里的 `version`，提交。
+2. 创建与版本一致的标签 `v<version>`，例如 `v1.0.0-alpha.2`，并推送。
+
+工作流先核对标签与 `version` 一致，然后依次执行类型检查、单元测试、构建和声明检查，通过后发布到 npm，并创建 GitHub Release。
+
+版本号带 `-alpha`、`-beta` 或 `-rc` 后缀时，npm 的 dist-tag 是 `prerelease`，GitHub Release 标记为预发布。其他版本使用 `latest`。所以安装预发布版本需要显式指定：
+
+```sh
+npm install @untitled-story/natsume@prerelease pixi.js
+```
+
+日常的拉取请求和 `main` 分支由 `ci.yaml` 检查：类型、lint、格式、单元测试、构建、声明和文档构建，以及浏览器回归测试。依赖本地 Unity 测量数据的对照用例在 CI 里会被跳过。
