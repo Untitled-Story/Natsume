@@ -4,6 +4,25 @@ import { exrImageSize, isOpenExr } from './loader/exr-pixels.js';
 import type { DocumentT } from './format/generated/noa/ir/document.js';
 import type { MeshT } from './format/generated/noa/mesh/mesh.js';
 import { ComponentData } from './format/generated/noa/ir/component-data.js';
+import type { ComponentT } from './format/generated/noa/ir/component.js';
+import type { AnimatorT } from './format/generated/noa/ir/animator.js';
+import type { CameraT } from './format/generated/noa/ir/camera.js';
+import type { CanvasT } from './format/generated/noa/ir/canvas.js';
+import type { CanvasGroupT } from './format/generated/noa/ir/canvas-group.js';
+import type { CanvasRendererT } from './format/generated/noa/ir/canvas-renderer.js';
+import type { CustomComponentT } from './format/generated/noa/ir/custom-component.js';
+import type { MeshFilterT } from './format/generated/noa/ir/mesh-filter.js';
+import type { MeshRendererT } from './format/generated/noa/ir/mesh-renderer.js';
+import type { ParticleRendererT } from './format/generated/noa/ir/particle-renderer.js';
+import type { ParticleSystemT } from './format/generated/noa/ir/particle-system.js';
+import type { PlayableDirectorT } from './format/generated/noa/ir/playable-director.js';
+import type { RectLayoutT } from './format/generated/noa/ir/rect-layout.js';
+import type { RectMask2DT } from './format/generated/noa/ir/rect-mask2-d.js';
+import type { SpriteMaskT } from './format/generated/noa/ir/sprite-mask.js';
+import type { SpriteRendererT } from './format/generated/noa/ir/sprite-renderer.js';
+import type { UIImageT } from './format/generated/noa/ir/uiimage.js';
+import type { UIMaskT } from './format/generated/noa/ir/uimask.js';
+import type { UnityComponentT } from './format/generated/noa/ir/unity-component.js';
 import type { Manifest } from './loader/manifest.js';
 
 export type DeepReadonly<T> = T extends (...args: never[]) => unknown
@@ -18,6 +37,34 @@ export function freeze<T>(value: T): DeepReadonly<T> {
   }
   return value as DeepReadonly<T>;
 }
+
+interface ComponentDataTypes {
+  RectLayout: RectLayoutT;
+  Camera: CameraT;
+  ParticleSystem: ParticleSystemT;
+  ParticleRenderer: ParticleRendererT;
+  CustomComponent: CustomComponentT;
+  Animator: AnimatorT;
+  MeshRenderer: MeshRendererT;
+  SpriteRenderer: SpriteRendererT;
+  SpriteMask: SpriteMaskT;
+  Canvas: CanvasT;
+  CanvasRenderer: CanvasRendererT;
+  MeshFilter: MeshFilterT;
+  UIImage: UIImageT;
+  UIMask: UIMaskT;
+  RectMask2D: RectMask2DT;
+  CanvasGroup: CanvasGroupT;
+  PlayableDirector: PlayableDirectorT;
+  UnityComponent: UnityComponentT;
+}
+/** Source component type names, matching the keys of describe().components. */
+export type ComponentType = Exclude<keyof typeof ComponentData, 'NONE'>;
+/** A package component whose data is narrowed to the requested type. */
+export type PackComponent<K extends ComponentType = ComponentType> = Omit<
+  DeepReadonly<ComponentT>,
+  'data'
+> & { readonly data: DeepReadonly<ComponentDataTypes[K]> };
 
 /** Immutable inspection data; no renderer, camera, or runtime instance is created. */
 export class EffectPack {
@@ -65,6 +112,26 @@ export class EffectPack {
   }
   findNodes(name: string) {
     return this.nodes.filter((node) => node.name === name);
+  }
+  /** Matches slash-separated node names from a scene root, e.g. "Root/Effect/Spark". */
+  findNodesByPath(path: string) {
+    let matches = this.nodes.filter((node) => node.parentId === 0);
+    for (const [index, name] of path.split('/').entries()) {
+      if (index > 0) {
+        const parents = new Set(matches.map((node) => node.id));
+        matches = this.nodes.filter((node) => parents.has(node.parentId));
+      }
+      matches = matches.filter((node) => node.name === name);
+    }
+    return matches;
+  }
+  /** Returns components of one type, optionally limited to a node, with typed data. */
+  findComponents<K extends ComponentType>(type: K, nodeId?: number): readonly PackComponent<K>[] {
+    const dataType = ComponentData[type];
+    return this.components.filter(
+      (component) =>
+        component.dataType === dataType && (nodeId === undefined || component.nodeId === nodeId),
+    ) as readonly PackComponent[] as readonly PackComponent<K>[];
   }
   getMesh(id: number) {
     this.#assertAlive();

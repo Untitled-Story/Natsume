@@ -1,5 +1,5 @@
 export { NatsumeError, type ErrorCode } from './errors.js';
-export { EffectPack, type DeepReadonly } from './pack.js';
+export { EffectPack, type DeepReadonly, type ComponentType, type PackComponent } from './pack.js';
 export { loadPack, type LoadOptions } from './loader/load.js';
 export { type LoadLimits } from './loader/zip.js';
 export {
