@@ -29,7 +29,7 @@ export interface ScriptDeclaration {
   /** Exact serialized field names; checked without running the factory. */
   readonly animatedFields?: Readonly<Record<string, ScriptFieldType>>;
 }
-/** @internal Shared by preflight and instance bindings. */
+/** Resolves an animated script field's declared type; shared by preflight and instance bindings. */
 export type ScriptFieldResolver = (
   component: R<CustomComponentT>,
   name: string,

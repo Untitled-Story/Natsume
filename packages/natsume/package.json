@@ -18,6 +18,7 @@
   },
   "scripts": {
     "build": "vite build && tsc -p tsconfig.build.json",
+    "check:declarations": "node scripts/check-declarations.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "generate": "node scripts/generate.mjs"
