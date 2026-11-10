@@ -5,7 +5,6 @@ export default defineConfig({
   title: 'Natsume',
   description: '基于 PixiJS 与 WebGL2 的 Unity 特效 Web 运行库',
   lang: 'zh-CN',
-  base: process.env.DOCS_BASE ?? '/',
   cleanUrls: true,
   lastUpdated: true,
   themeConfig: {

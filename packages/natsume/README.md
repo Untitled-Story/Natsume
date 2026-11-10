@@ -24,6 +24,6 @@ effect.play();
 app.ticker.add((ticker) => effect.update(ticker.deltaMS / 1000));
 ```
 
-Most packs also need environment inputs such as gravity, view position and display size. See the [documentation](https://untitled-story.github.io/Natsume/) for guides, supported features and the API reference, and the [repository](https://github.com/Untitled-Story/Natsume) for development setup.
+Most packs also need environment inputs such as gravity, view position and display size. See the [documentation](https://natsume.untitled-story.org/) for guides, supported features and the API reference, and the [repository](https://github.com/Untitled-Story/Natsume) for development setup.
 
 Licensed under the Apache License 2.0.

@@ -39,8 +39,6 @@ jobs:
         uses: actions/configure-pages@v6
 
       - name: Build docs
-        env:
-          DOCS_BASE: /Natsume/
         run: pnpm docs:build
 
       - name: Upload artifact

@@ -122,6 +122,6 @@ pnpm build && pnpm --filter @untitled-story/natsume check:declarations
 npm install @untitled-story/natsume@prerelease pixi.js
 ```
 
-文档站由 `docs.yaml` 在 `main` 分支有推送时构建并部署到 GitHub Pages，地址是 <https://untitled-story.github.io/Natsume/>。仓库的 Settings → Pages 里，Source 需要选择 GitHub Actions。构建时通过 `DOCS_BASE` 环境变量把站点的基础路径设为 `/Natsume/`，本地预览不设置，使用 `/`。
+文档站由 `docs.yaml` 在 `main` 分支有推送时构建并部署到 GitHub Pages，地址是 <https://natsume.untitled-story.org/>。仓库的 Settings → Pages 里，Source 需要选择 GitHub Actions。站点使用自定义域名，部署在域名根路径，所以不需要设置基础路径。
 
 日常的拉取请求和 `main` 分支由 `ci.yaml` 检查：类型、lint、格式、单元测试、构建、声明和文档构建，以及浏览器回归测试。依赖本地 Unity 测量数据的对照用例在 CI 里会被跳过。

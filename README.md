@@ -42,7 +42,7 @@ app.ticker.add((ticker) => effect.update(ticker.deltaMS / 1000));
 
 ## 文档
 
-在线文档：<https://untitled-story.github.io/Natsume/>。文档源码位于 `docs/`，使用 VitePress 构建，本地预览：
+在线文档：<https://natsume.untitled-story.org/>。文档源码位于 `docs/`，使用 VitePress 构建，本地预览：
 
 ```sh
 pnpm install --frozen-lockfile
